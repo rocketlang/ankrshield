@@ -1,17 +1,12 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "baseUrl": ".",
-    "paths": {
-      "@ankrshield/core": ["../core/src"],
-      "@ankrshield/tracker-db": ["../tracker-db/src"]
-    }
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true
   },
   "include": ["src/**/*"],
-  "references": [
-    { "path": "../core" },
-    { "path": "../tracker-db" }
-  ]
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

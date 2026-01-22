@@ -1,7 +1,7 @@
 {
   "name": "@ankrshield/privacy-engine",
   "version": "0.1.0",
-  "description": "Privacy scoring and intelligence engine",
+  "description": "Tracker classification, vendor attribution, and privacy risk scoring",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,19 +14,34 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "vitest",
+    "test": "tsx scripts/run-tests.ts",
+    "import:trackers": "tsx scripts/import-trackers.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "clean": "rm -rf dist"
   },
+  "keywords": [
+    "privacy",
+    "tracker",
+    "classification",
+    "vendor-attribution",
+    "risk-scoring"
+  ],
   "dependencies": {
     "@ankrshield/core": "workspace:*",
-    "@ankrshield/tracker-db": "workspace:*"
+    "@prisma/client": "^5.22.0",
+    "ioredis": "^5.3.2",
+    "tldts": "^6.1.3"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "typescript": "^5.9.3",
-    "vitest": "^1.2.0"
+    "vitest": "^1.2.0",
+    "tsx": "^4.7.0",
+    "eslint": "^8.56.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
