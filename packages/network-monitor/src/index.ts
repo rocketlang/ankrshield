@@ -1,6 +1,23 @@
 /**
  * @ankrshield/network-monitor
- * Platform-specific network traffic monitoring
+ * Cross-platform network traffic monitoring with app attribution and privacy analysis
  */
 
-export * from './monitor';
+// Types
+export * from './types';
+
+// Monitors
+export * from './monitor/base-monitor';
+export * from './monitor/linux-monitor';
+export * from './monitor/windows-monitor';
+export * from './monitor/macos-monitor';
+export * from './monitor/factory';
+
+// Parsers
+export * from './capture/tls-parser';
+
+// Classification
+export * from './classification/app-resolver';
+
+// Legacy exports
+export { NetworkMonitor, NetworkFlow } from './monitor';
