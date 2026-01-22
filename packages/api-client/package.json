@@ -1,0 +1,32 @@
+{
+  "name": "@ankrshield/api-client",
+  "version": "0.1.0",
+  "description": "GraphQL client for ankrshield API",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@ankrshield/core": "workspace:*",
+    "graphql": "^16.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.9.3",
+    "vitest": "^1.2.0"
+  }
+}

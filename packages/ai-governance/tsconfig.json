@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@ankrshield/core": ["../core/src"],
+      "@ankrshield/policy-engine": ["../policy-engine/src"]
+    }
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../core" },
+    { "path": "../policy-engine" }
+  ]
+}

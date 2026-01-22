@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@ankrshield/core": ["../../packages/core/src"],
+      "@ankrshield/config": ["../../packages/config/src"]
+    }
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/config" }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "paths": {
+      "@ankrshield/core": ["../../packages/core/src"],
+      "@ankrshield/api-client": ["../../packages/api-client/src"],
+      "@ankrshield/ui": ["../../packages/ui/src"],
+      "@ankrshield/config": ["../../packages/config/src"]
+    }
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/api-client" },
+    { "path": "../../packages/ui" },
+    { "path": "../../packages/config" }
+  ]
+}

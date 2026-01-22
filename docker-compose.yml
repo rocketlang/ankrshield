@@ -1,0 +1,114 @@
+version: '3.9'
+
+services:
+  # PostgreSQL 15 with TimescaleDB and pgvector
+  postgres:
+    image: timescale/timescaledb-ha:pg15-latest
+    container_name: ankrshield-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ankrshield
+      POSTGRES_USER: ankrshield
+      POSTGRES_PASSWORD: ankrshield_dev_password
+      POSTGRES_INITDB_ARGS: '-E UTF8 --locale=en_US.UTF-8'
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ankrshield']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ankrshield-network
+
+  # PostgreSQL Test Database
+  postgres-test:
+    image: timescale/timescaledb-ha:pg15-latest
+    container_name: ankrshield-postgres-test
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ankrshield_test
+      POSTGRES_USER: ankrshield
+      POSTGRES_PASSWORD: ankrshield_test_password
+      POSTGRES_INITDB_ARGS: '-E UTF8 --locale=en_US.UTF-8'
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ankrshield']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ankrshield-network
+    profiles:
+      - test
+
+  # Redis 7 for caching and pub/sub
+  redis:
+    image: redis:7-alpine
+    container_name: ankrshield-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ankrshield_redis_password
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '--raw', 'incr', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ankrshield-network
+
+  # pgAdmin (optional, for database management)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: ankrshield-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@ankrshield.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - '5050:80'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - ankrshield-network
+    profiles:
+      - tools
+
+  # Redis Commander (optional, for Redis management)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: ankrshield-redis-commander
+    restart: unless-stopped
+    environment:
+      REDIS_HOSTS: local:redis:6379:0:ankrshield_redis_password
+    ports:
+      - '8081:8081'
+    networks:
+      - ankrshield-network
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+    driver: local
+  postgres_test_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  ankrshield-network:
+    driver: bridge

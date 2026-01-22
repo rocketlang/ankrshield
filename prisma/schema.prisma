@@ -1,0 +1,499 @@
+// ankrshield Prisma Schema
+// Documentation: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions", "fullTextSearch", "views"]
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
+  output          = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [uuid_ossp(map: "uuid-ossp"), pgcrypto, pg_trgm, btree_gin, btree_gist]
+  // timescaledb and vector extensions will be added when Docker setup is complete
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum SubscriptionTier {
+  FREE
+  FREEMIUM
+  PREMIUM
+  PRO
+  FAMILY
+  ENTERPRISE
+  SUPER
+
+  @@map("subscription_tier")
+}
+
+enum DeviceType {
+  WINDOWS
+  MACOS
+  LINUX
+  IOS
+  ANDROID
+  BROWSER
+  GATEWAY
+
+  @@map("device_type")
+}
+
+enum ThreatLevel {
+  SAFE
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@map("threat_level")
+}
+
+enum AIAgentType {
+  CHATGPT
+  CLAUDE
+  COPILOT
+  GEMINI
+  MIDJOURNEY
+  ELEVENLABS
+  OTHER
+
+  @@map("ai_agent_type")
+}
+
+enum PolicyAction {
+  ALLOW
+  BLOCK
+  NOTIFY
+  PROMPT
+
+  @@map("policy_action")
+}
+
+enum TrackerCategory {
+  ADVERTISING
+  ANALYTICS
+  SOCIAL_MEDIA
+  TELEMETRY
+  MALWARE
+  CDN
+  FINGERPRINTING
+  CRYPTOMINING
+  OTHER
+}
+
+enum EventType {
+  DNS_QUERY
+  DNS_BLOCKED
+  NETWORK_REQUEST
+  NETWORK_BLOCKED
+  AI_FILE_ACCESS
+  AI_CLIPBOARD
+  AI_NETWORK
+  AI_BLOCKED
+  POLICY_VIOLATION
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+// ============================================================================
+// USER & AUTHENTICATION
+// ============================================================================
+
+model User {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  email     String   @unique
+  name      String?
+  password  String // hashed with bcrypt
+  emailVerified DateTime?
+
+  // Subscription
+  tier      SubscriptionTier @default(FREE)
+  stripeCustomerId String? @unique
+  stripeSubscriptionId String?
+  subscriptionExpiresAt DateTime?
+
+  // Settings
+  privacyLevel  Int @default(5) @db.SmallInt // 1-10 scale
+  enabledFeatures Json @default("{}")
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastLoginAt DateTime?
+
+  // Relations
+  sessions     Session[]
+  devices      Device[]
+  policies     Policy[]
+  privacyScores PrivacyScore[]
+  alerts       Alert[]
+
+  @@index([email])
+  @@index([tier])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId    String   @db.Uuid
+  token     String   @unique
+  refreshToken String? @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// ============================================================================
+// DEVICES
+// ============================================================================
+
+model Device {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId    String   @db.Uuid
+  name      String // User-assigned name like "John's MacBook"
+  deviceType DeviceType
+
+  // Device identification
+  hostname  String?
+  macAddress String?
+  ipAddress String?
+
+  // Device info
+  osVersion String?
+  appVersion String?
+
+  // Status
+  isActive  Boolean @default(true)
+  lastSeenAt DateTime @default(now())
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  networkEvents NetworkEvent[]
+  aiActivities AIActivity[]
+
+  @@index([userId])
+  @@index([deviceType])
+  @@index([isActive])
+  @@index([lastSeenAt])
+  @@map("devices")
+}
+
+// ============================================================================
+// NETWORK MONITORING (Time-Series)
+// ============================================================================
+
+// This will be converted to a TimescaleDB hypertable
+model NetworkEvent {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  timestamp DateTime @default(now()) @db.Timestamptz
+
+  // Device info
+  deviceId  String   @db.Uuid
+  userId    String   @db.Uuid
+
+  // Event details
+  eventType EventType
+  domain    String
+  ip        String?
+  port      Int?     @db.SmallInt
+  protocol  String?  // HTTP, HTTPS, DNS, QUIC, etc.
+
+  // Classification
+  trackerId String?  @db.Uuid
+  isBlocked Boolean  @default(false)
+  blockedBy String?  // "policy", "blocklist", "ai"
+
+  // Network details
+  bytesIn   Int      @default(0)
+  bytesOut  Int      @default(0)
+  duration  Int?     // milliseconds
+
+  // Metadata
+  processName String?
+  processPath String?
+  sni       String?  // TLS SNI
+
+  // Relations
+  device    Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  tracker   Tracker? @relation(fields: [trackerId], references: [id])
+
+  @@index([timestamp(sort: Desc)]) // Critical for time-series queries
+  @@index([deviceId, timestamp(sort: Desc)])
+  @@index([userId, timestamp(sort: Desc)])
+  @@index([domain])
+  @@index([trackerId])
+  @@index([isBlocked])
+  @@index([eventType])
+  @@map("network_events")
+}
+
+// ============================================================================
+// TRACKERS & BLOCKLISTS
+// ============================================================================
+
+model Tracker {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  domain    String   @unique
+
+  // Classification
+  category  TrackerCategory
+  vendor    String?  // "Google", "Facebook", "Amazon", etc.
+  threatLevel ThreatLevel @default(MEDIUM)
+
+  // Metadata
+  description String?
+  sources   String[] // Which blocklists include this tracker
+
+  // Statistics (denormalized for performance)
+  blockedCount Int @default(0)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastSeenAt DateTime @default(now())
+
+  // Relations
+  networkEvents NetworkEvent[]
+
+  @@index([domain])
+  @@index([category])
+  @@index([vendor])
+  @@index([threatLevel])
+  @@map("trackers")
+}
+
+// ============================================================================
+// POLICIES
+// ============================================================================
+
+model Policy {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId    String   @db.Uuid
+  name      String
+  description String?
+
+  // Policy configuration
+  isEnabled Boolean  @default(true)
+  priority  Int      @default(0) @db.SmallInt // Higher priority = executes first
+
+  // Conditions (JSON for flexibility)
+  conditions Json // { "domains": ["*.facebook.com"], "categories": ["ADVERTISING"], "threatLevel": "HIGH" }
+
+  // Actions
+  action    PolicyAction
+  notifyUser Boolean @default(false)
+  logEvent  Boolean  @default(true)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isEnabled])
+  @@index([priority])
+  @@map("policies")
+}
+
+// ============================================================================
+// AI AGENT MONITORING
+// ============================================================================
+
+model AIAgent {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name      String
+  agentType AIAgentType
+
+  // Identification
+  processNames String[] // Patterns to match processes
+  domains   String[]  // Domains this agent connects to
+  executablePaths String[] // Executable file paths
+
+  // Metadata
+  vendor    String?
+  version   String?
+  description String?
+
+  // Status
+  isVerified Boolean @default(false) // Verified by ankrshield team
+  isActive  Boolean @default(true)
+
+  // Risk assessment
+  riskScore Int @default(50) @db.SmallInt // 0-100
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  lastSeenAt DateTime?
+
+  // Relations
+  activities AIActivity[]
+
+  @@index([agentType])
+  @@index([isVerified])
+  @@index([isActive])
+  @@index([riskScore])
+  @@map("ai_agents")
+}
+
+model AIActivity {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  timestamp DateTime @default(now()) @db.Timestamptz
+
+  // Agent info
+  agentId   String   @db.Uuid
+  deviceId  String   @db.Uuid
+
+  // Activity details
+  activityType String // "FILE_READ", "FILE_WRITE", "CLIPBOARD", "NETWORK", etc.
+  resource  String?  // File path, URL, clipboard content hash
+
+  // Classification
+  isBlocked Boolean  @default(false)
+  blockedReason String?
+
+  // Metadata
+  metadata  Json?
+
+  // Relations
+  agent     AIAgent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  device    Device @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([timestamp(sort: Desc)])
+  @@index([agentId, timestamp(sort: Desc)])
+  @@index([deviceId, timestamp(sort: Desc)])
+  @@index([activityType])
+  @@index([isBlocked])
+  @@map("ai_activities")
+}
+
+// ============================================================================
+// PRIVACY SCORING (Aggregated Metrics)
+// ============================================================================
+
+model PrivacyScore {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId    String   @db.Uuid
+  timestamp DateTime @default(now()) @db.Timestamptz
+
+  // Overall score (0-100)
+  overallScore Int @db.SmallInt
+
+  // Component scores
+  networkScore Int @db.SmallInt
+  dnsScore    Int @db.SmallInt
+  appScore    Int @db.SmallInt
+  aiScore     Int @db.SmallInt
+
+  // Statistics (for the time period)
+  totalRequests Int @default(0)
+  blockedRequests Int @default(0)
+  allowedRequests Int @default(0)
+  trackersBlocked Int @default(0)
+
+  // Comparison
+  previousScore Int? @db.SmallInt
+  scoreChange Int? @db.SmallInt
+
+  // Period type
+  period    String @default("daily") // "hourly", "daily", "weekly", "monthly"
+
+  // Relations
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, timestamp(sort: Desc)])
+  @@index([period])
+  @@map("privacy_scores")
+}
+
+// ============================================================================
+// ALERTS & NOTIFICATIONS
+// ============================================================================
+
+model Alert {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId    String   @db.Uuid
+  timestamp DateTime @default(now())
+
+  // Alert details
+  severity  AlertSeverity
+  title     String
+  message   String
+  category  String // "PRIVACY_BREACH", "HIGH_RISK_TRACKER", "AI_SUSPICIOUS", etc.
+
+  // Status
+  isRead    Boolean @default(false)
+  isDismissed Boolean @default(false)
+
+  // Metadata
+  metadata  Json?
+  actionUrl String?
+
+  // Relations
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, timestamp(sort: Desc)])
+  @@index([severity])
+  @@index([isRead])
+  @@map("alerts")
+}
+
+// ============================================================================
+// ANALYTICS (Denormalized for performance)
+// ============================================================================
+
+// This model is for pre-computed analytics
+model DailyStats {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId    String   @db.Uuid
+  date      DateTime @db.Date
+
+  // Request stats
+  totalRequests Int @default(0)
+  blockedRequests Int @default(0)
+  dnsQueries   Int @default(0)
+  dnsBlocked   Int @default(0)
+
+  // Tracker stats
+  uniqueTrackers Int @default(0)
+  trackersBlocked Int @default(0)
+  topTracker   String?
+  topCategory  String?
+
+  // Device stats
+  activeDevices Int @default(0)
+
+  // AI stats
+  aiActivities Int @default(0)
+  aiBlocked   Int @default(0)
+
+  @@unique([userId, date])
+  @@index([userId, date(sort: Desc)])
+  @@map("daily_stats")
+}

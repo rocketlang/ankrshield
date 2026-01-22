@@ -1,0 +1,36 @@
+{
+  "name": "@ankrshield/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ankrshield desktop application (Electron)",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "electron-forge start",
+    "build": "tsc && electron-forge make",
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "clean": "rm -rf dist out"
+  },
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.0",
+    "electron-updater": "^6.1.7"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.2.0",
+    "@electron-forge/maker-deb": "^7.2.0",
+    "@electron-forge/maker-dmg": "^7.2.0",
+    "@electron-forge/maker-rpm": "^7.2.0",
+    "@electron-forge/maker-squirrel": "^7.2.0",
+    "@electron-forge/maker-zip": "^7.2.0",
+    "@types/node": "^20.11.0",
+    "electron": "^28.1.4",
+    "typescript": "^5.9.3",
+    "vitest": "^1.2.0"
+  }
+}

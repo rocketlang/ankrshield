@@ -1,0 +1,31 @@
+{
+  "name": "@ankrshield/network-monitor",
+  "version": "0.1.0",
+  "description": "Platform-specific network traffic monitoring",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@ankrshield/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.9.3",
+    "vitest": "^1.2.0"
+  }
+}

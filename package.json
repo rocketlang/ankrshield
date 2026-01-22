@@ -45,10 +45,16 @@
     "db:generate": "pnpm --filter @ankrshield/api prisma generate",
     "db:studio": "pnpm --filter @ankrshield/api prisma studio",
     "db:seed": "pnpm --filter @ankrshield/api prisma db seed",
+    "db:setup": "bash scripts/db-setup.sh",
+    "db:test": "node scripts/test-db-connection.js",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
     "clean": "pnpm -r run clean && rm -rf node_modules",
     "prepare": "husky install"
   },
   "devDependencies": {
+    "@prisma/client": "^5.22.0",
     "@types/node": "^20.11.0",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
@@ -59,7 +65,11 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "husky": "^8.0.3",
     "lint-staged": "^15.2.0",
+    "pg": "^8.11.3",
     "prettier": "^3.2.0",
+    "prisma": "^5.22.0",
+    "redis": "^4.6.12",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^1.2.0"
   },
@@ -67,5 +77,8 @@
     "overrides": {
       "typescript": "^5.9.3"
     }
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   }
 }

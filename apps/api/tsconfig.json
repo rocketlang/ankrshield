@@ -1,0 +1,33 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "strict": false,
+    "skipLibCheck": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@ankrshield/core": ["../../packages/core/src"],
+      "@ankrshield/config": ["../../packages/config/src"],
+      "@ankrshield/dns-resolver": ["../../packages/dns-resolver/src"],
+      "@ankrshield/network-monitor": ["../../packages/network-monitor/src"],
+      "@ankrshield/privacy-engine": ["../../packages/privacy-engine/src"],
+      "@ankrshield/policy-engine": ["../../packages/policy-engine/src"],
+      "@ankrshield/ai-governance": ["../../packages/ai-governance/src"],
+      "@ankrshield/tracker-db": ["../../packages/tracker-db/src"],
+      "@ankrshield/crypto": ["../../packages/crypto/src"]
+    }
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/config" },
+    { "path": "../../packages/dns-resolver" },
+    { "path": "../../packages/network-monitor" },
+    { "path": "../../packages/privacy-engine" },
+    { "path": "../../packages/policy-engine" },
+    { "path": "../../packages/ai-governance" },
+    { "path": "../../packages/tracker-db" },
+    { "path": "../../packages/crypto" }
+  ]
+}
