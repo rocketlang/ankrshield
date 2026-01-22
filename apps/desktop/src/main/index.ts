@@ -1,0 +1,84 @@
+/**
+ * Main Process Entry Point
+ * Electron main process for ankrshield desktop application
+ */
+
+import { app, BrowserWindow } from 'electron';
+import { createTray } from './tray';
+import { createMainWindow } from './window';
+import { setupIPC } from './ipc';
+import { setupAutoLaunch } from './auto-launch';
+import { setupAutoUpdater } from './updater';
+import { NotificationService } from './notifications';
+import './types';
+
+// Handle creating/removing shortcuts on Windows when installing/uninstalling
+if (require('electron-squirrel-startup')) {
+  app.quit();
+}
+
+// Global references
+export const notificationService = new NotificationService();
+
+/**
+ * App ready handler
+ */
+app.whenReady().then(async () => {
+  console.log('ankrshield desktop starting...');
+
+  // Setup IPC handlers
+  setupIPC();
+
+  // Setup auto-launch
+  await setupAutoLaunch();
+
+  // Create system tray
+  createTray();
+
+  // Create main window
+  createMainWindow();
+
+  // Setup auto-updater
+  setupAutoUpdater();
+
+  console.log('ankrshield desktop ready');
+});
+
+/**
+ * All windows closed handler
+ */
+app.on('window-all-closed', () => {
+  // On macOS, apps stay active until user quits explicitly
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+/**
+ * Activate handler (macOS)
+ */
+app.on('activate', () => {
+  // On macOS, re-create window when dock icon is clicked
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createMainWindow();
+  }
+});
+
+/**
+ * Before quit handler
+ */
+app.on('before-quit', () => {
+  // Set flag so window close doesn't prevent quit
+  (app as any).isQuitting = true;
+});
+
+/**
+ * Handle uncaught exceptions
+ */
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught exception:', error);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled rejection:', reason);
+});

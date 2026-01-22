@@ -7,7 +7,10 @@
     "paths": {
       "@ankrshield/core": ["../../packages/core/src"],
       "@ankrshield/config": ["../../packages/config/src"]
-    }
+    },
+    "skipLibCheck": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
   },
   "include": ["src/**/*"],
   "references": [
