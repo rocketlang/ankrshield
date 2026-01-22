@@ -19,5 +19,11 @@ export * from './capture/tls-parser';
 // Classification
 export * from './classification/app-resolver';
 
+// Integration
+export * from './integration/dns-correlator';
+export * from './integration/tracker-enricher';
+export * from './integration/privacy-scorer';
+export * from './integration/network-privacy-monitor';
+
 // Legacy exports
 export { NetworkMonitor, NetworkFlow } from './monitor';
