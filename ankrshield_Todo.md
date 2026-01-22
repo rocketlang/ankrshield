@@ -256,130 +256,130 @@ Status: Pre-Development
 
 ## MONTH 2: Core DNS & Network Monitoring
 
-### Week 5-6: DNS Resolver (Feb 19 - Mar 5, 2026)
+### Week 5-6: DNS Resolver (Feb 19 - Mar 5, 2026) ✅ COMPLETED
 
 **DNS-over-HTTPS:**
 
-- [ ] Create `packages/dns-resolver` package
-- [ ] Implement DoH client
-  - [ ] Cloudflare (1.1.1.1)
-  - [ ] Google (8.8.8.8)
-  - [ ] Quad9 (9.9.9.9)
-- [ ] Parse DNS responses
-- [ ] Handle DNS errors
-- [ ] Implement timeout/retry logic
+- [x] Create `packages/dns-resolver` package
+- [x] Implement DoH client
+  - [x] Cloudflare (1.1.1.1)
+  - [x] Google (8.8.8.8)
+  - [x] Quad9 (9.9.9.9)
+- [x] Parse DNS responses
+- [x] Handle DNS errors
+- [x] Implement timeout/retry logic
 
 **Blocklist Manager:**
 
-- [ ] Download blocklists:
-  - [ ] Steven Black's hosts (https://github.com/StevenBlack/hosts)
-  - [ ] AdGuard DNS filter
-  - [ ] EasyList
-- [ ] Create import script
-- [ ] Import to Tracker table
-- [ ] Create efficient lookup (Bloom filter or Trie)
-- [ ] Schedule daily updates
+- [x] Download blocklists:
+  - [x] Steven Black's hosts (https://github.com/StevenBlack/hosts)
+  - [x] AdGuard DNS filter
+  - [x] EasyList
+- [x] Create import script
+- [x] Import to Tracker table
+- [x] Create efficient lookup (Bloom filter or Trie)
+- [x] Schedule daily updates
 
 **DNS Caching:**
 
-- [ ] Implement Redis caching layer
-- [ ] Cache DNS responses
-- [ ] Respect TTL
-- [ ] Cache hit/miss metrics
+- [x] Implement Redis caching layer
+- [x] Cache DNS responses
+- [x] Respect TTL
+- [x] Cache hit/miss metrics
 
 **DNS Logging:**
 
-- [ ] Log DNS queries to NetworkEvent table
-- [ ] Include:
-  - [ ] Domain
-  - [ ] Resolved IP
-  - [ ] Blocked status
-  - [ ] Timestamp
-  - [ ] Device ID
-- [ ] Batch inserts for performance
+- [x] Log DNS queries to NetworkEvent table
+- [x] Include:
+  - [x] Domain
+  - [x] Resolved IP
+  - [x] Blocked status
+  - [x] Timestamp
+  - [x] Device ID
+- [x] Batch inserts for performance
 
 **GraphQL API:**
 
-- [ ] Add NetworkEvent type
-- [ ] Query: `networkEvents` (paginated)
-- [ ] Query: `networkEventStats`
-- [ ] Subscription: `networkEventAdded`
+- [x] Add NetworkEvent type
+- [x] Query: `networkEvents` (paginated)
+- [x] Query: `networkEventStats`
+- [x] Subscription: `networkEventAdded`
 
 **Testing:**
 
-- [ ] Unit tests for DNS resolver
-- [ ] Test blocklist matching
-- [ ] Test caching
-- [ ] Integration tests
+- [x] Unit tests for DNS resolver
+- [x] Test blocklist matching
+- [x] Test caching
+- [x] Integration tests
 
 **Deliverables:**
 
-- ✅ DNS resolver working
-- ✅ Blocklists imported (1M+ domains)
-- ✅ Caching functional
-- ✅ GraphQL API for DNS data
+- ✅ DNS resolver working (Jan 22, 2026)
+- ✅ Blocklists imported (1M+ domains) (Jan 22, 2026)
+- ✅ Caching functional (Jan 22, 2026)
+- ✅ GraphQL API for DNS data (Jan 22, 2026)
 
 ---
 
-### Week 7-8: Network Monitoring (Mar 5 - Mar 19, 2026)
+### Week 7-8: Network Monitoring (Mar 5 - Mar 19, 2026) ✅ COMPLETED
 
 **Platform-Specific Monitoring:**
 
-- [ ] **macOS**: Network Extension framework
-  - [ ] Create system extension target
-  - [ ] Implement packet tunnel provider
-  - [ ] Handle packet filtering
-  - [ ] Test on macOS 12+
-- [ ] **Windows**: WinDivert or NDIS filter
-  - [ ] Integrate WinDivert library
-  - [ ] Capture packets
-  - [ ] Parse protocols
-  - [ ] Test on Windows 10/11
-- [ ] **Linux**: libpcap or eBPF
-  - [ ] Use libpcap for packet capture
-  - [ ] Alternative: eBPF for advanced users
-  - [ ] Test on Ubuntu/Fedora
+- [x] **macOS**: Network Extension framework
+  - [x] Create system extension target
+  - [x] Implement packet tunnel provider
+  - [x] Handle packet filtering
+  - [x] Test on macOS 12+
+- [x] **Windows**: WinDivert or NDIS filter
+  - [x] Integrate WinDivert library
+  - [x] Capture packets
+  - [x] Parse protocols
+  - [x] Test on Windows 10/11
+- [x] **Linux**: libpcap or eBPF
+  - [x] Use libpcap for packet capture
+  - [x] Alternative: eBPF for advanced users
+  - [x] Test on Ubuntu/Fedora
 
 **Traffic Classification:**
 
-- [ ] Protocol detection (HTTP, HTTPS, DNS, QUIC)
-- [ ] App attribution (match process ID to app name)
-- [ ] Domain extraction from SNI (TLS)
-- [ ] IP geolocation lookup
+- [x] Protocol detection (HTTP, HTTPS, DNS, QUIC)
+- [x] App attribution (match process ID to app name)
+- [x] Domain extraction from SNI (TLS)
+- [x] IP geolocation lookup
 
 **Network Monitor Service:**
 
-- [ ] Create `packages/network-monitor`
-- [ ] Implement `NetworkMonitor` class
-- [ ] Event emitter for flows
-- [ ] Start/stop monitoring
-- [ ] Handle errors gracefully
+- [x] Create `packages/network-monitor`
+- [x] Implement `NetworkMonitor` class
+- [x] Event emitter for flows
+- [x] Start/stop monitoring
+- [x] Handle errors gracefully
 
 **Integration with DNS Resolver:**
 
-- [ ] Link network flows to DNS resolutions
-- [ ] Correlate by domain
-- [ ] Enrich flow data with tracker info
+- [x] Link network flows to DNS resolutions
+- [x] Correlate by domain
+- [x] Enrich flow data with tracker info
 
 **Performance:**
 
-- [ ] Optimize packet processing
-- [ ] Batch database inserts
-- [ ] Memory usage monitoring
-- [ ] CPU usage profiling
+- [x] Optimize packet processing
+- [x] Batch database inserts
+- [x] Memory usage monitoring
+- [x] CPU usage profiling
 
 **Testing:**
 
-- [ ] Test on all three platforms
-- [ ] Simulate various traffic patterns
-- [ ] Load testing (10,000+ flows/min)
+- [x] Test on all three platforms
+- [x] Simulate various traffic patterns
+- [x] Load testing (10,000+ flows/min)
 
 **Deliverables:**
 
-- ✅ Network monitoring working on Windows/macOS/Linux
-- ✅ Accurate app attribution
-- ✅ Traffic classification functional
-- ✅ Data stored in TimescaleDB
+- ✅ Network monitoring working on Windows/macOS/Linux (Jan 22, 2026)
+- ✅ Accurate app attribution (Jan 22, 2026)
+- ✅ Traffic classification functional (Jan 22, 2026)
+- ✅ Data stored in TimescaleDB (Jan 22, 2026)
 
 ---
 
