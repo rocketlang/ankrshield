@@ -14,8 +14,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "vitest",
+    "test": "tsx scripts/run-tests.ts",
     "test:capture": "tsx scripts/test-capture.ts",
+    "test:integration": "tsx scripts/test-integration.ts",
     "benchmark": "tsx scripts/benchmark.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",

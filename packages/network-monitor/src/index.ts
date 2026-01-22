@@ -15,9 +15,11 @@ export * from './monitor/factory';
 
 // Parsers
 export * from './capture/tls-parser';
+export * from './capture/http-parser';
 
 // Classification
 export * from './classification/app-resolver';
+export * from './classification/geo-lookup';
 
 // Integration
 export * from './integration/dns-correlator';
