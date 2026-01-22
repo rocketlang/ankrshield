@@ -1,0 +1,71 @@
+{
+  "name": "ankrshield",
+  "version": "0.1.0-alpha",
+  "private": true,
+  "description": "Your Personal Shield for the AI Era - Digital trust, privacy & AI-era security platform",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rocketlang/ankrshield.git"
+  },
+  "keywords": [
+    "privacy",
+    "security",
+    "ai-security",
+    "vpn",
+    "dns-blocking",
+    "tracker-blocking",
+    "ai-agent-monitoring",
+    "pegasus-detection",
+    "spyware-detection"
+  ],
+  "author": "ankrshield Team",
+  "license": "TBD",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "dev:api": "pnpm --filter @ankrshield/api dev",
+    "dev:web": "pnpm --filter @ankrshield/web dev",
+    "dev:desktop": "pnpm --filter @ankrshield/desktop dev",
+    "build": "pnpm -r run build",
+    "build:api": "pnpm --filter @ankrshield/api build",
+    "build:web": "pnpm --filter @ankrshield/web build",
+    "lint": "pnpm -r run lint",
+    "lint:fix": "pnpm -r run lint:fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "test": "pnpm -r run test",
+    "test:watch": "pnpm -r run test:watch",
+    "test:coverage": "pnpm -r run test:coverage",
+    "typecheck": "pnpm -r run typecheck",
+    "db:migrate": "pnpm --filter @ankrshield/api prisma migrate dev",
+    "db:push": "pnpm --filter @ankrshield/api prisma db push",
+    "db:generate": "pnpm --filter @ankrshield/api prisma generate",
+    "db:studio": "pnpm --filter @ankrshield/api prisma studio",
+    "db:seed": "pnpm --filter @ankrshield/api prisma db seed",
+    "clean": "pnpm -r run clean && rm -rf node_modules",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "eslint": "^8.56.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-react": "^7.33.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.9.3",
+    "vitest": "^1.2.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "typescript": "^5.9.3"
+    }
+  }
+}
