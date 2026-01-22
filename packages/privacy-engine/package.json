@@ -14,7 +14,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "tsx scripts/run-tests.ts",
+    "test": "tsx scripts/run-tests.ts && tsx scripts/test-privacy-scoring.ts",
+    "test:basic": "tsx scripts/run-tests.ts",
+    "test:scoring": "tsx scripts/test-privacy-scoring.ts",
     "import:trackers": "tsx scripts/import-trackers.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts",
