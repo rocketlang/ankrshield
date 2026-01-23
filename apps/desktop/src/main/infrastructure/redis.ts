@@ -200,7 +200,9 @@ class RedisManager {
     } catch (error) {
       console.error('[Redis] Disconnect failed:', error);
       // Force disconnect
-      this.client.disconnect();
+      if (this.client) {
+        this.client.disconnect();
+      }
       this.client = null;
       this.status = RedisStatus.DISCONNECTED;
     }

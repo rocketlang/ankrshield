@@ -135,12 +135,11 @@ export class PrivacyService {
       await this.prisma.privacyScore.create({
         data: {
           userId: userInfo.userId,
-          deviceId: userInfo.deviceId,
-          totalScore: score.totalScore,
+          overallScore: score.totalScore,
           networkScore: score.networkScore,
           dnsScore: score.dnsScore,
           appScore: score.appScore,
-          level: score.level,
+          aiScore: 0, // Default value for now
         },
       });
 
@@ -176,11 +175,11 @@ export class PrivacyService {
             return {
               userId: latestDbScore.userId,
               timestamp: latestDbScore.timestamp,
-              totalScore: latestDbScore.totalScore,
+              totalScore: latestDbScore.overallScore,
               networkScore: latestDbScore.networkScore,
               dnsScore: latestDbScore.dnsScore,
               appScore: latestDbScore.appScore,
-              level: latestDbScore.level,
+              level: this.calculateLevel(latestDbScore.overallScore),
             };
           }
         }
@@ -244,13 +243,13 @@ export class PrivacyService {
             orderBy: { timestamp: 'asc' },
             select: {
               timestamp: true,
-              totalScore: true,
+              overallScore: true,
             },
           });
 
           return scores.map((s) => ({
             timestamp: s.timestamp,
-            score: s.totalScore,
+            score: s.overallScore,
           }));
         }
       }
@@ -348,22 +347,37 @@ export class PrivacyService {
             where: {
               userId: userInfo.userId,
               timestamp: { gte: sevenDaysAgo },
-              eventType: PrismaEventType.NETWORK_CONNECTION,
+              eventType: PrismaEventType.NETWORK_REQUEST,
             },
             _count: { domain: true },
-            _sum: { isBlocked: true },
             orderBy: { _count: { domain: 'desc' } },
             take: limit,
           });
 
-          return topDomains.map((d) => ({
-            domain: d.domain,
-            category: 'unknown', // TODO: Get from DomainClassifier
-            vendor: undefined,
-            connections: d._count.domain,
-            blocked: d._sum.isBlocked || 0,
-            riskScore: 50, // TODO: Calculate risk score
-          }));
+          // Get blocked count for each domain separately
+          const domainsWithBlocked = await Promise.all(
+            topDomains.map(async (d) => {
+              const blockedCount = await this.prisma!.networkEvent.count({
+                where: {
+                  userId: userInfo.userId,
+                  domain: d.domain,
+                  timestamp: { gte: sevenDaysAgo },
+                  isBlocked: true,
+                },
+              });
+
+              return {
+                domain: d.domain,
+                category: 'unknown', // TODO: Get from DomainClassifier
+                vendor: undefined,
+                connections: d._count.domain,
+                blocked: blockedCount,
+                riskScore: 50, // TODO: Calculate risk score
+              };
+            })
+          );
+
+          return domainsWithBlocked;
         }
       }
 
@@ -422,14 +436,14 @@ export class PrivacyService {
               where: {
                 userId: userInfo.userId,
                 timestamp: { gte: sevenDaysAgo },
-                eventType: PrismaEventType.NETWORK_CONNECTION,
+                eventType: PrismaEventType.NETWORK_REQUEST,
               },
             }),
             this.prisma.networkEvent.count({
               where: {
                 userId: userInfo.userId,
                 timestamp: { gte: sevenDaysAgo },
-                eventType: PrismaEventType.NETWORK_CONNECTION,
+                eventType: PrismaEventType.NETWORK_REQUEST,
                 isBlocked: true,
               },
             }),
@@ -437,7 +451,7 @@ export class PrivacyService {
               where: {
                 userId: userInfo.userId,
                 timestamp: { gte: sevenDaysAgo },
-                eventType: PrismaEventType.NETWORK_CONNECTION,
+                eventType: PrismaEventType.NETWORK_REQUEST,
               },
               distinct: ['domain'],
             }),
@@ -559,6 +573,17 @@ export class PrivacyService {
     this.initialized = false;
 
     console.log('[PrivacyService] Cleaned up');
+  }
+
+  /**
+   * Calculate privacy level from score
+   */
+  private calculateLevel(score: number): string {
+    if (score >= 80) return 'critical';
+    if (score >= 60) return 'poor';
+    if (score >= 40) return 'fair';
+    if (score >= 20) return 'good';
+    return 'excellent';
   }
 
   /**

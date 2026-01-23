@@ -63,8 +63,7 @@ app.whenReady().then(async () => {
 
     // Show error notification
     notificationService.showError(
-      'Initialization Failed',
-      'ankrshield failed to start. Please check the logs.'
+      'Initialization Failed: ankrshield failed to start. Please check the logs.'
     );
 
     // Exit with error code

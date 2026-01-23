@@ -97,7 +97,7 @@ export class NetworkService {
       this.monitor = await createNetworkMonitor();
 
       // Listen for network flows
-      this.monitor.on('flow', (flow: NetworkFlow) => {
+      this.monitor.on('flow', (flow) => {
         this.handleNetworkFlow(flow).catch((error) => {
           console.error('[NetworkService] Error handling flow:', error);
         });
@@ -116,14 +116,13 @@ export class NetworkService {
   /**
    * Handle incoming network flow
    */
-  private async handleNetworkFlow(flow: NetworkFlow): Promise<void> {
+  private async handleNetworkFlow(flow: any): Promise<void> {
     try {
       const destinationIP = flow.destinationIp || '0.0.0.0';
-      const port = flow.destinationPort || 0;
       const protocol = flow.protocol || 'TCP';
 
-      // Try DNS correlation (IP -> domain)
-      let domain = this.dnsCache.get(destinationIP) || destinationIP;
+      // Try DNS correlation or use provided domain
+      let domain = flow.domain || this.dnsCache.get(destinationIP) || destinationIP;
 
       // TODO: Add tracker detection using privacy-engine
       const isBlocked = false; // Real blocking logic here
@@ -131,14 +130,14 @@ export class NetworkService {
       // Create network event
       const event: NetworkEvent = {
         id: `event-${Date.now()}-${Math.random()}`,
-        timestamp: new Date(),
+        timestamp: flow.timestamp || new Date(),
         sourceIP: flow.sourceIp || '0.0.0.0',
         destinationIP,
         destinationDomain: domain,
         protocol,
-        port,
-        bytesIn: flow.bytesReceived || 0,
-        bytesOut: flow.bytesSent || 0,
+        port: 0, // Not available in simple NetworkFlow
+        bytesIn: 0, // Not available in simple NetworkFlow
+        bytesOut: 0, // Not available in simple NetworkFlow
         blocked: isBlocked,
       };
 
@@ -154,10 +153,9 @@ export class NetworkService {
         this.eventBatch.push({
           deviceId: userInfo?.deviceId || 'unknown',
           userId: userInfo?.userId || 'unknown',
-          eventType: PrismaEventType.NETWORK_CONNECTION,
+          eventType: PrismaEventType.NETWORK_REQUEST,
           domain,
           ip: destinationIP,
-          port,
           protocol,
           isBlocked,
           blockedBy: isBlocked ? 'policy' : null,
@@ -171,10 +169,13 @@ export class NetworkService {
 
       // Emit event for real-time updates
       eventBus.emit(EventType.NETWORK_FLOW, {
+        flowId: event.id,
+        sourceIp: event.sourceIP,
+        destinationIp: destinationIP,
         domain,
-        ip: destinationIP,
         protocol,
-        blocked: isBlocked,
+        bytesIn: event.bytesIn,
+        bytesOut: event.bytesOut,
       });
     } catch (error) {
       console.error('[NetworkService] Error handling flow:', error);
@@ -243,7 +244,7 @@ export class NetworkService {
       if (this.prisma) {
         const events = await this.prisma.networkEvent.findMany({
           where: {
-            eventType: PrismaEventType.NETWORK_CONNECTION,
+            eventType: PrismaEventType.NETWORK_REQUEST,
           },
           orderBy: { timestamp: 'desc' },
           take: limit,
@@ -285,14 +286,14 @@ export class NetworkService {
         const [total, blocked] = await Promise.all([
           this.prisma.networkEvent.count({
             where: {
-              eventType: PrismaEventType.NETWORK_CONNECTION,
+              eventType: PrismaEventType.NETWORK_REQUEST,
               userId: userInfo?.userId,
               timestamp: { gte: oneDayAgo },
             },
           }),
           this.prisma.networkEvent.count({
             where: {
-              eventType: PrismaEventType.NETWORK_CONNECTION,
+              eventType: PrismaEventType.NETWORK_REQUEST,
               userId: userInfo?.userId,
               isBlocked: true,
               timestamp: { gte: oneDayAgo },
@@ -336,7 +337,11 @@ export class NetworkService {
     console.log(`[NetworkService] Protection ${enabled ? 'enabled' : 'disabled'}`);
 
     // Emit event
-    eventBus.emit(EventType.PROTECTION_TOGGLED, { enabled });
+    eventBus.emit(EventType.PROTECTION_TOGGLED, {
+      enabled,
+      service: 'network',
+      timestamp: new Date()
+    });
   }
 
   /**

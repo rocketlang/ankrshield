@@ -334,7 +334,7 @@ export function registerIPCHandlers(): void {
 
       // Cleanup services
       await privacyService.close();
-      await dnsService.close();
+      await dnsService.cleanup();
       await networkService.close();
 
       app.quit();
