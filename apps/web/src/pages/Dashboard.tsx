@@ -3,7 +3,7 @@
  */
 
 import { useQuery } from '@apollo/client';
-import { Shield, Activity, Block, TrendingUp } from 'lucide-react';
+import { Shield, Activity, Blocks, TrendingUp } from 'lucide-react';
 import ContentWrapper from '../components/layout/ContentWrapper';
 import Card, { CardHeader, CardBody } from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
@@ -11,7 +11,7 @@ import Alert from '../components/ui/Alert';
 import { ME_QUERY, PRIVACY_SCORES_QUERY, NETWORK_EVENTS_QUERY } from '../graphql/queries';
 
 export default function Dashboard() {
-  const { data: userData, loading: userLoading } = useQuery(ME_QUERY);
+  const { data: userData } = useQuery(ME_QUERY);
   const { data: scoresData, loading: scoresLoading } = useQuery(PRIVACY_SCORES_QUERY, {
     variables: { limit: 1, period: 'daily' },
   });
@@ -39,7 +39,7 @@ export default function Dashboard() {
     {
       label: 'Blocked Requests',
       value: latestScore?.blockedRequests || 0,
-      icon: <Block className="w-8 h-8 text-red-400" />,
+      icon: <Blocks className="w-8 h-8 text-red-400" />,
       color: 'bg-red-900/20',
     },
     {
