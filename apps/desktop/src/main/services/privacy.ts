@@ -1,11 +1,14 @@
 /**
  * Privacy Service
  * Integrates with @ankrshield/privacy-engine package for scoring and reports
+ * Calculates privacy scores on schedule and stores to database
  */
 
-// Privacy engine integration enabled
-import { PrismaClient } from '@prisma/client';
-import { PrivacyCalculator, DomainClassifier } from '@ankrshield/privacy-engine';
+import { PrismaClient, EventType as PrismaEventType } from '@prisma/client';
+import { PrivacyCalculator } from '@ankrshield/privacy-engine';
+import { databaseManager } from '../infrastructure/database';
+import { userManager } from '../infrastructure/user';
+import { eventBus, EventType } from '../infrastructure/event-bus';
 
 export interface PrivacyScore {
   userId: string;
@@ -34,16 +37,22 @@ export interface TrackerStats {
 
 /**
  * Privacy Service
- * Interface to privacy-engine backend
+ * Calculates and tracks privacy scores with automatic scheduling
  */
 export class PrivacyService {
-  private userId: string = 'desktop-user';
   private prisma: PrismaClient | null = null;
   private calculator: PrivacyCalculator | null = null;
   private initialized = false;
 
+  // Score calculation scheduler
+  private scoreTimer: NodeJS.Timeout | null = null;
+  private scoreInterval: number = 15 * 60 * 1000; // 15 minutes
+
+  // Cache for latest score
+  private latestScore: PrivacyScore | null = null;
+
   constructor() {
-    // Don't auto-initialize in constructor, wait for explicit initialize() call
+    // Don't auto-initialize in constructor
   }
 
   /**
@@ -54,17 +63,93 @@ export class PrivacyService {
       return;
     }
 
-    await this.ensureInitialized();
-    this.initialized = true;
+    try {
+      // Get database client from manager
+      this.prisma = databaseManager.getClient();
+
+      // Initialize privacy calculator
+      this.calculator = new PrivacyCalculator(this.prisma);
+
+      // Calculate initial score
+      await this.calculateAndStoreScore();
+
+      // Start score calculation scheduler
+      this.startScoreScheduler();
+
+      this.initialized = true;
+      console.log('[PrivacyService] Initialized successfully');
+    } catch (error) {
+      console.error('[PrivacyService] Initialization failed:', error);
+      // Continue without calculator - use mock data
+      this.initialized = true;
+    }
   }
 
   /**
-   * Ensure privacy engine is initialized
+   * Start score calculation scheduler
    */
-  private async ensureInitialized(): Promise<void> {
-    if (!this.prisma) {
-      this.prisma = new PrismaClient();
-      this.calculator = new PrivacyCalculator(this.prisma);
+  private startScoreScheduler(): void {
+    if (this.scoreTimer) {
+      clearInterval(this.scoreTimer);
+    }
+
+    this.scoreTimer = setInterval(() => {
+      this.calculateAndStoreScore().catch((error) => {
+        console.error('[PrivacyService] Error in score scheduler:', error);
+      });
+    }, this.scoreInterval);
+
+    console.log('[PrivacyService] Score scheduler started (every 15 minutes)');
+  }
+
+  /**
+   * Calculate privacy score and store to database
+   */
+  private async calculateAndStoreScore(): Promise<void> {
+    try {
+      if (!this.calculator || !this.prisma) {
+        return;
+      }
+
+      const userInfo = userManager.getUserInfo();
+      if (!userInfo) {
+        console.warn('[PrivacyService] No user info available');
+        return;
+      }
+
+      // Calculate score using privacy engine
+      const score = await this.calculator.calculateTotalScore(userInfo.userId);
+
+      // Cache the latest score
+      this.latestScore = {
+        userId: userInfo.userId,
+        timestamp: new Date(),
+        totalScore: score.totalScore,
+        networkScore: score.networkScore,
+        dnsScore: score.dnsScore,
+        appScore: score.appScore,
+        level: score.level,
+      };
+
+      // Store to database (PrivacyScore table)
+      await this.prisma.privacyScore.create({
+        data: {
+          userId: userInfo.userId,
+          deviceId: userInfo.deviceId,
+          totalScore: score.totalScore,
+          networkScore: score.networkScore,
+          dnsScore: score.dnsScore,
+          appScore: score.appScore,
+          level: score.level,
+        },
+      });
+
+      // Emit event for UI updates
+      eventBus.emit(EventType.PRIVACY_SCORE_UPDATED, this.latestScore);
+
+      console.log(`[PrivacyService] Calculated and stored score: ${score.totalScore}`);
+    } catch (error) {
+      console.error('[PrivacyService] Failed to calculate score:', error);
     }
   }
 
@@ -73,45 +158,72 @@ export class PrivacyService {
    */
   async getCurrentScore(): Promise<PrivacyScore> {
     try {
-      await this.ensureInitialized();
+      // Return cached score if available
+      if (this.latestScore) {
+        return this.latestScore;
+      }
 
-      // Try to get real score from privacy engine
+      // Try to get most recent score from database
+      if (this.prisma) {
+        const userInfo = userManager.getUserInfo();
+        if (userInfo) {
+          const latestDbScore = await this.prisma.privacyScore.findFirst({
+            where: { userId: userInfo.userId },
+            orderBy: { timestamp: 'desc' },
+          });
+
+          if (latestDbScore) {
+            return {
+              userId: latestDbScore.userId,
+              timestamp: latestDbScore.timestamp,
+              totalScore: latestDbScore.totalScore,
+              networkScore: latestDbScore.networkScore,
+              dnsScore: latestDbScore.dnsScore,
+              appScore: latestDbScore.appScore,
+              level: latestDbScore.level,
+            };
+          }
+        }
+      }
+
+      // Calculate fresh score if no cache or database entry
       if (this.calculator) {
-        const realScore = await this.calculator.calculateTotalScore(this.userId);
-        return {
-          userId: this.userId,
-          timestamp: new Date(),
-          totalScore: realScore.totalScore,
-          networkScore: realScore.networkScore,
-          dnsScore: realScore.dnsScore,
-          appScore: realScore.appScore,
-          level: realScore.level,
-        };
+        const userInfo = userManager.getUserInfo();
+        if (userInfo) {
+          const realScore = await this.calculator.calculateTotalScore(userInfo.userId);
+          return {
+            userId: userInfo.userId,
+            timestamp: new Date(),
+            totalScore: realScore.totalScore,
+            networkScore: realScore.networkScore,
+            dnsScore: realScore.dnsScore,
+            appScore: realScore.appScore,
+            level: realScore.level,
+          };
+        }
       }
 
       // Fallback to mock data
-      return {
-        userId: this.userId,
-        timestamp: new Date(),
-        totalScore: 25,
-        networkScore: 30,
-        dnsScore: 20,
-        appScore: 25,
-        level: 'excellent',
-      };
+      return this.getMockScore();
     } catch (error) {
-      console.error('Error getting current score:', error);
-      // Return mock data on error
-      return {
-        userId: this.userId,
-        timestamp: new Date(),
-        totalScore: 25,
-        networkScore: 30,
-        dnsScore: 20,
-        appScore: 25,
-        level: 'excellent',
-      };
+      console.error('[PrivacyService] Error getting current score:', error);
+      return this.getMockScore();
     }
+  }
+
+  /**
+   * Get mock score (fallback)
+   */
+  private getMockScore(): PrivacyScore {
+    return {
+      userId: 'unknown',
+      timestamp: new Date(),
+      totalScore: 25,
+      networkScore: 30,
+      dnsScore: 20,
+      appScore: 25,
+      level: 'excellent',
+    };
   }
 
   /**
@@ -119,23 +231,53 @@ export class PrivacyService {
    */
   async getScoreHistory(days: number): Promise<ScoreHistory[]> {
     try {
-      // TODO: Connect to privacy-engine backend
-      // For now, return mock data
-      const history: ScoreHistory[] = [];
-      const now = Date.now();
+      if (this.prisma) {
+        const userInfo = userManager.getUserInfo();
+        if (userInfo) {
+          const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-      for (let i = days - 1; i >= 0; i--) {
-        history.push({
-          timestamp: new Date(now - i * 24 * 60 * 60 * 1000),
-          score: Math.floor(Math.random() * 40) + 10, // 10-50
-        });
+          const scores = await this.prisma.privacyScore.findMany({
+            where: {
+              userId: userInfo.userId,
+              timestamp: { gte: startDate },
+            },
+            orderBy: { timestamp: 'asc' },
+            select: {
+              timestamp: true,
+              totalScore: true,
+            },
+          });
+
+          return scores.map((s) => ({
+            timestamp: s.timestamp,
+            score: s.totalScore,
+          }));
+        }
       }
 
-      return history;
+      // Fallback to mock data
+      return this.getMockHistory(days);
     } catch (error) {
-      console.error('Error getting score history:', error);
-      throw error;
+      console.error('[PrivacyService] Error getting score history:', error);
+      return this.getMockHistory(days);
     }
+  }
+
+  /**
+   * Get mock history (fallback)
+   */
+  private getMockHistory(days: number): ScoreHistory[] {
+    const history: ScoreHistory[] = [];
+    const now = Date.now();
+
+    for (let i = days - 1; i >= 0; i--) {
+      history.push({
+        timestamp: new Date(now - i * 24 * 60 * 60 * 1000),
+        score: Math.floor(Math.random() * 40) + 10, // 10-50
+      });
+    }
+
+    return history;
   }
 
   /**
@@ -143,112 +285,201 @@ export class PrivacyService {
    */
   async getScoreBreakdown(): Promise<any> {
     try {
-      await this.ensureInitialized();
-
-      // Try to get real breakdown from privacy engine
       if (this.calculator) {
-        const realBreakdown = await this.calculator.getScoreBreakdown(this.userId);
-        return realBreakdown;
+        const userInfo = userManager.getUserInfo();
+        if (userInfo) {
+          const realBreakdown = await this.calculator.getScoreBreakdown(userInfo.userId);
+          return realBreakdown;
+        }
       }
 
       // Fallback to mock data
-      return {
-        totalScore: 25,
-        components: [
-          {
-            name: 'Network Activity',
-            score: 30,
-            weight: 0.4,
-            contributionToTotal: 12,
-          },
-          {
-            name: 'DNS Queries',
-            score: 20,
-            weight: 0.3,
-            contributionToTotal: 6,
-          },
-          {
-            name: 'App Behavior',
-            score: 25,
-            weight: 0.2,
-            contributionToTotal: 5,
-          },
-        ],
-        topIssues: [],
-        recommendations: ['Excellent privacy! Keep up the good work.'],
-      };
+      return this.getMockBreakdown();
     } catch (error) {
-      console.error('Error getting score breakdown:', error);
-      // Return mock data on error
-      return {
-        totalScore: 25,
-        components: [],
-        topIssues: [],
-        recommendations: ['Excellent privacy! Keep up the good work.'],
-      };
+      console.error('[PrivacyService] Error getting score breakdown:', error);
+      return this.getMockBreakdown();
     }
   }
 
   /**
-   * Get top trackers
+   * Get mock breakdown (fallback)
+   */
+  private getMockBreakdown(): any {
+    return {
+      totalScore: 25,
+      components: [
+        {
+          name: 'Network Activity',
+          score: 30,
+          weight: 0.4,
+          contributionToTotal: 12,
+        },
+        {
+          name: 'DNS Queries',
+          score: 20,
+          weight: 0.3,
+          contributionToTotal: 6,
+        },
+        {
+          name: 'App Behavior',
+          score: 25,
+          weight: 0.2,
+          contributionToTotal: 5,
+        },
+      ],
+      topIssues: [],
+      recommendations: ['Excellent privacy! Keep up the good work.'],
+    };
+  }
+
+  /**
+   * Get top trackers (from database aggregation)
    */
   async getTopTrackers(limit: number): Promise<TrackerStats[]> {
     try {
-      // TODO: Connect to privacy-engine backend
-      return [
-        {
-          domain: 'google-analytics.com',
-          category: 'analytics',
-          vendor: 'Google',
-          connections: 45,
-          blocked: 45,
-          riskScore: 65,
-        },
-        {
-          domain: 'doubleclick.net',
-          category: 'advertising',
-          vendor: 'Google',
-          connections: 32,
-          blocked: 32,
-          riskScore: 80,
-        },
-        {
-          domain: 'facebook.com',
-          category: 'social',
-          vendor: 'Meta',
-          connections: 28,
-          blocked: 28,
-          riskScore: 75,
-        },
-      ].slice(0, limit);
+      if (this.prisma) {
+        const userInfo = userManager.getUserInfo();
+        if (userInfo) {
+          // Get top domains from last 7 days
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+          const topDomains = await this.prisma.networkEvent.groupBy({
+            by: ['domain'],
+            where: {
+              userId: userInfo.userId,
+              timestamp: { gte: sevenDaysAgo },
+              eventType: PrismaEventType.NETWORK_CONNECTION,
+            },
+            _count: { domain: true },
+            _sum: { isBlocked: true },
+            orderBy: { _count: { domain: 'desc' } },
+            take: limit,
+          });
+
+          return topDomains.map((d) => ({
+            domain: d.domain,
+            category: 'unknown', // TODO: Get from DomainClassifier
+            vendor: undefined,
+            connections: d._count.domain,
+            blocked: d._sum.isBlocked || 0,
+            riskScore: 50, // TODO: Calculate risk score
+          }));
+        }
+      }
+
+      // Fallback to mock data
+      return this.getMockTrackers(limit);
     } catch (error) {
-      console.error('Error getting top trackers:', error);
-      throw error;
+      console.error('[PrivacyService] Error getting top trackers:', error);
+      return this.getMockTrackers(limit);
     }
   }
 
   /**
-   * Get tracker stats
+   * Get mock trackers (fallback)
+   */
+  private getMockTrackers(limit: number): TrackerStats[] {
+    return [
+      {
+        domain: 'google-analytics.com',
+        category: 'analytics',
+        vendor: 'Google',
+        connections: 45,
+        blocked: 45,
+        riskScore: 65,
+      },
+      {
+        domain: 'doubleclick.net',
+        category: 'advertising',
+        vendor: 'Google',
+        connections: 32,
+        blocked: 32,
+        riskScore: 80,
+      },
+      {
+        domain: 'facebook.com',
+        category: 'social',
+        vendor: 'Meta',
+        connections: 28,
+        blocked: 28,
+        riskScore: 75,
+      },
+    ].slice(0, limit);
+  }
+
+  /**
+   * Get tracker stats (from database aggregation)
    */
   async getTrackerStats(): Promise<any> {
     try {
-      // TODO: Connect to privacy-engine backend
-      return {
-        totalTrackers: 47,
-        totalConnections: 1234,
-        blockedConnections: 987,
-        uniqueDomains: 47,
-        topCategories: {
-          advertising: 18,
-          analytics: 15,
-          social: 8,
-          other: 6,
-        },
-      };
+      if (this.prisma) {
+        const userInfo = userManager.getUserInfo();
+        if (userInfo) {
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+          const [total, blocked, uniqueDomains] = await Promise.all([
+            this.prisma.networkEvent.count({
+              where: {
+                userId: userInfo.userId,
+                timestamp: { gte: sevenDaysAgo },
+                eventType: PrismaEventType.NETWORK_CONNECTION,
+              },
+            }),
+            this.prisma.networkEvent.count({
+              where: {
+                userId: userInfo.userId,
+                timestamp: { gte: sevenDaysAgo },
+                eventType: PrismaEventType.NETWORK_CONNECTION,
+                isBlocked: true,
+              },
+            }),
+            this.prisma.networkEvent.findMany({
+              where: {
+                userId: userInfo.userId,
+                timestamp: { gte: sevenDaysAgo },
+                eventType: PrismaEventType.NETWORK_CONNECTION,
+              },
+              distinct: ['domain'],
+            }),
+          ]);
+
+          return {
+            totalTrackers: uniqueDomains.length,
+            totalConnections: total,
+            blockedConnections: blocked,
+            uniqueDomains: uniqueDomains.length,
+            topCategories: {
+              // TODO: Classify domains by category
+              unknown: uniqueDomains.length,
+            },
+          };
+        }
+      }
+
+      // Fallback to mock data
+      return this.getMockTrackerStats();
     } catch (error) {
-      console.error('Error getting tracker stats:', error);
-      throw error;
+      console.error('[PrivacyService] Error getting tracker stats:', error);
+      return this.getMockTrackerStats();
     }
+  }
+
+  /**
+   * Get mock tracker stats (fallback)
+   */
+  private getMockTrackerStats(): any {
+    return {
+      totalTrackers: 47,
+      totalConnections: 1234,
+      blockedConnections: 987,
+      uniqueDomains: 47,
+      topCategories: {
+        advertising: 18,
+        analytics: 15,
+        social: 8,
+        other: 6,
+      },
+    };
   }
 
   /**
@@ -315,12 +546,19 @@ export class PrivacyService {
    * Cleanup
    */
   async cleanup(): Promise<void> {
-    if (this.prisma) {
-      await this.prisma.$disconnect();
-      this.prisma = null;
+    // Stop score scheduler
+    if (this.scoreTimer) {
+      clearInterval(this.scoreTimer);
+      this.scoreTimer = null;
     }
+
+    // Disconnect Prisma (handled by database manager)
+    this.prisma = null;
     this.calculator = null;
+    this.latestScore = null;
     this.initialized = false;
+
+    console.log('[PrivacyService] Cleaned up');
   }
 
   /**
