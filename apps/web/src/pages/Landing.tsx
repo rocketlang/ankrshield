@@ -481,13 +481,20 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* Statistics */}
+        {/* Project Status - Honest Facts */}
         <section className="mt-32 mb-20">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">Project Status</h2>
+            <p className="text-gray-400">Honest facts about where we are</p>
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-12 max-w-5xl mx-auto">
-            <StatCard number="2M+" label="Trackers Blocked" />
-            <StatCard number="100%" label="Open Source" />
-            <StatCard number="0" label="Data Collected" />
-            <StatCard number="FREE" label="Forever" />
+            <StatCard number="v0.1" label="Alpha Version" />
+            <StatCard number="GPL-3.0" label="License" />
+            <StatCard number="Local" label="Data Storage" />
+            <StatCard number="$0" label="Cost" />
+          </div>
+          <div className="mt-8 text-center text-sm text-gray-500">
+            <p>Early stage project • Code will be open sourced • No users yet • Actively developing</p>
           </div>
         </section>
 
