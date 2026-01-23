@@ -9,6 +9,7 @@ import { prisma } from './graphql/builder';
 import type { Context } from './graphql/builder';
 import securityPlugin from './plugins/security';
 import authPlugin from './plugins/auth';
+import { startMonitor, stopMonitor, getMonitor } from './monitor/traffic-monitor';
 
 const fastify = Fastify({
   logger: {
@@ -101,6 +102,32 @@ const start = async () => {
       }
     });
 
+    // Live traffic monitoring endpoint
+    fastify.get('/monitor/stats', async () => {
+      const monitor = getMonitor();
+      if (!monitor) {
+        return {
+          error: 'Monitor not running',
+          stats: null,
+        };
+      }
+
+      const stats = await monitor.getStats();
+      return {
+        monitor: 'active',
+        period: 'last 24 hours',
+        stats: {
+          totalRequests: parseInt(stats.total_requests),
+          blockedRequests: parseInt(stats.blocked_requests),
+          allowedRequests: parseInt(stats.allowed_requests),
+          blockRate: stats.total_requests > 0
+            ? ((parseInt(stats.blocked_requests) / parseInt(stats.total_requests)) * 100).toFixed(1) + '%'
+            : '0%',
+        },
+        timestamp: new Date().toISOString(),
+      };
+    });
+
     // Start server
     const port = parseInt(process.env.PORT || '4250', 10);
     const host = process.env.HOST || '0.0.0.0';
@@ -112,6 +139,11 @@ const start = async () => {
     if (process.env.NODE_ENV !== 'production') {
       fastify.log.info(`🎮 GraphiQL playground: http://${host}:${port}/graphiql`);
     }
+
+    // Start traffic monitor
+    startMonitor();
+    fastify.log.info(`🔍 Traffic monitor started - capturing live tracking attempts`);
+    fastify.log.info(`📈 Monitor stats: http://${host}:${port}/monitor/stats`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -123,6 +155,7 @@ const signals = ['SIGINT', 'SIGTERM'];
 signals.forEach((signal) => {
   process.on(signal, async () => {
     fastify.log.info(`Received ${signal}, closing server...`);
+    stopMonitor();
     await fastify.close();
     await prisma.$disconnect();
     process.exit(0);

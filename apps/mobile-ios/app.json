@@ -1,0 +1,7 @@
+{
+  "name": "ankrshield",
+  "displayName": "ankrshield",
+  "version": "0.1.0",
+  "description": "Privacy & AI Security for Mobile",
+  "platforms": ["ios", "android"]
+}

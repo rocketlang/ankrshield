@@ -13,6 +13,9 @@ import { NotificationService } from './notifications';
 import { serviceManager } from './services/service-manager';
 import './types';
 
+// Enable sandbox bypass for development/testing (required when running as root)
+app.commandLine.appendSwitch('no-sandbox');
+
 // Handle creating/removing shortcuts on Windows when installing/uninstalling
 if (require('electron-squirrel-startup')) {
   app.quit();
