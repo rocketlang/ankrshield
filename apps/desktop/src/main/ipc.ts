@@ -4,10 +4,10 @@
  */
 
 import { ipcMain } from 'electron';
-import { PrivacyService } from './services/privacy';
-import { NetworkService } from './services/network';
-import { DNSService } from './services/dns';
-import { updatePrivacyScore, updateProtectionStatus } from './tray';
+import { PrivacyService } from './services/privacy.js';
+import { NetworkService } from './services/network.js';
+import { DNSService } from './services/dns.js';
+import { updatePrivacyScore, updateProtectionStatus } from './tray.js';
 
 // Service instances
 const privacyService = new PrivacyService();

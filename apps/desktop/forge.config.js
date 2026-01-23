@@ -14,6 +14,8 @@ export default {
     extraResource: [
       // Include any extra resources here
     ],
+    // Electron launch args for development (needed when running as root)
+    executableArgs: ['--no-sandbox'],
     osxSign: {
       // macOS code signing (for production)
       identity: process.env.APPLE_IDENTITY,

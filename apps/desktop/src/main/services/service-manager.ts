@@ -3,16 +3,16 @@
  * Orchestrates service lifecycle with dependency management
  */
 
-import { configManager } from '../config';
-import { databaseManager } from '../infrastructure/database';
-import { redisManager } from '../infrastructure/redis';
-import { userManager } from '../infrastructure/user';
-import { permissionManager } from '../infrastructure/permissions';
-import { eventBus, EventType } from '../infrastructure/event-bus';
-import { settingsService } from './settings';
-import { DNSService } from './dns';
-import { NetworkService } from './network';
-import { PrivacyService } from './privacy';
+import { configManager } from '../config.js';
+import { databaseManager } from '../infrastructure/database.js';
+import { redisManager } from '../infrastructure/redis.js';
+import { userManager } from '../infrastructure/user.js';
+import { permissionManager } from '../infrastructure/permissions.js';
+import { eventBus, EventType } from '../infrastructure/event-bus.js';
+import { settingsService } from './settings.js';
+import { DNSService } from './dns.js';
+import { NetworkService } from './network.js';
+import { PrivacyService } from './privacy.js';
 
 export enum ServiceStatus {
   STOPPED = 'stopped',

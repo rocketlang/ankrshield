@@ -6,11 +6,11 @@
 
 import { DNSResolver } from '@ankrshield/dns-resolver';
 import type { DNSResolverConfig } from '@ankrshield/dns-resolver';
-import { databaseManager } from '../infrastructure/database';
-import { redisManager } from '../infrastructure/redis';
-import { userManager } from '../infrastructure/user';
-import { eventBus, EventType } from '../infrastructure/event-bus';
-import { configManager } from '../config';
+import { databaseManager } from '../infrastructure/database.js';
+import { redisManager } from '../infrastructure/redis.js';
+import { userManager } from '../infrastructure/user.js';
+import { eventBus, EventType } from '../infrastructure/event-bus.js';
+import { configManager } from '../config.js';
 import { EventType as PrismaEventType } from '@prisma/client';
 
 export interface DNSQuery {

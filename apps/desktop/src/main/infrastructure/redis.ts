@@ -1,5 +1,5 @@
 import Redis, { RedisOptions } from 'ioredis';
-import { configManager } from '../config';
+import { configManager } from '../config.js';
 
 /**
  * Redis connection states

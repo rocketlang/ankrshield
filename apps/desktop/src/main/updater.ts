@@ -5,7 +5,7 @@
 
 import { autoUpdater } from 'electron-updater';
 import { app } from 'electron';
-import { notificationService } from './index';
+import { notificationService } from './index.js';
 
 let updateCheckInterval: NodeJS.Timeout | null = null;
 

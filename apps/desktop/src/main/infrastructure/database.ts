@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { configManager } from '../config';
+import { configManager } from '../config.js';
 
 /**
  * Database connection states

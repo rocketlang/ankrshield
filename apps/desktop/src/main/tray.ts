@@ -5,8 +5,8 @@
 
 import { app, Tray, Menu, nativeImage } from 'electron';
 import * as path from 'path';
-import { showMainWindow, toggleMainWindow } from './window';
-import { checkForUpdates } from './updater';
+import { showMainWindow, toggleMainWindow } from './window.js';
+import { checkForUpdates } from './updater.js';
 
 let tray: Tray | null = null;
 let privacyScore = 0;

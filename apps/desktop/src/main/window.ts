@@ -5,7 +5,7 @@
 
 import { app, BrowserWindow, shell, screen } from 'electron';
 import * as path from 'path';
-import { settingsService } from './services/settings';
+import { settingsService } from './services/settings.js';
 
 let mainWindow: BrowserWindow | null = null;
 

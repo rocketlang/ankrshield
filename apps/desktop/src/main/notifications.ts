@@ -5,7 +5,7 @@
 
 import { Notification } from 'electron';
 import * as path from 'path';
-import { showMainWindow } from './window';
+import { showMainWindow } from './window.js';
 
 export interface NotificationOptions {
   silent?: boolean;

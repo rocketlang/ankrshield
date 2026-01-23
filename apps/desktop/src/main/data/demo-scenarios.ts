@@ -3,7 +3,7 @@
  * Pre-built realistic scenarios showing tracking across different environments
  */
 
-import type { DemoScenario, DemoEvent } from '../types/demo';
+import type { DemoScenario, DemoEvent } from '../types/demo.js';
 
 /**
  * Generate realistic tracking events for a given scenario

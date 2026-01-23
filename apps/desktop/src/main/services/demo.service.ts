@@ -10,8 +10,8 @@ import type {
   DemoEvent,
   DemoStats,
   DemoCompany,
-} from '../types/demo';
-import { demoScenarios } from '../data/demo-scenarios';
+} from '../types/demo.js';
+import { demoScenarios } from '../data/demo-scenarios.js';
 
 export class DemoModeService extends EventEmitter {
   private isActive: boolean = false;

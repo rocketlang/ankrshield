@@ -4,14 +4,13 @@
  */
 
 import { app, BrowserWindow } from 'electron';
-import { createTray } from './tray';
-import { createMainWindow } from './window';
-import { setupIPC } from './ipc';
-import { setupAutoLaunch } from './auto-launch';
-import { setupAutoUpdater } from './updater';
-import { NotificationService } from './notifications';
-import { serviceManager } from './services/service-manager';
-import './types';
+import { createTray } from './tray.js';
+import { createMainWindow } from './window.js';
+import { setupIPC } from './ipc.js';
+import { setupAutoLaunch } from './auto-launch.js';
+import { setupAutoUpdater } from './updater.js';
+import { NotificationService } from './notifications.js';
+import { serviceManager } from './services/service-manager.js';
 
 // Enable sandbox bypass for development/testing (required when running as root)
 app.commandLine.appendSwitch('no-sandbox');

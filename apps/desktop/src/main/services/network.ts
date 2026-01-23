@@ -7,9 +7,9 @@
 import { PrismaClient, EventType as PrismaEventType } from '@prisma/client';
 import { createNetworkMonitor } from '@ankrshield/network-monitor';
 import type { BaseNetworkMonitor, NetworkFlow } from '@ankrshield/network-monitor';
-import { databaseManager } from '../infrastructure/database';
-import { userManager } from '../infrastructure/user';
-import { eventBus, EventType } from '../infrastructure/event-bus';
+import { databaseManager } from '../infrastructure/database.js';
+import { userManager } from '../infrastructure/user.js';
+import { eventBus, EventType } from '../infrastructure/event-bus.js';
 
 export interface NetworkEvent {
   id: string;

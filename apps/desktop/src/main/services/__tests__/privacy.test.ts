@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PrivacyService } from '../privacy';
+import { PrivacyService } from '../privacy.js';
 
 describe('PrivacyService', () => {
   let service: PrivacyService;
