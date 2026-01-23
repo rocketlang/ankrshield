@@ -14,20 +14,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getScoreHistory: (days: number) => ipcRenderer.invoke('get-score-history', days),
   getScoreBreakdown: () => ipcRenderer.invoke('get-score-breakdown'),
 
+  // Protection Status
+  getProtectionStatus: () => ipcRenderer.invoke('get-protection-status'),
+  getDnsProtectionStatus: () => ipcRenderer.invoke('get-dns-protection-status'),
+  toggleProtection: (enabled: boolean) => ipcRenderer.invoke('toggle-protection', enabled),
+
   // Network Monitoring
   getNetworkEvents: (limit: number) => ipcRenderer.invoke('get-network-events', limit),
   getNetworkStats: () => ipcRenderer.invoke('get-network-stats'),
-  toggleProtection: (enabled: boolean) => ipcRenderer.invoke('toggle-protection', enabled),
 
   // DNS
-  getDNSStats: () => ipcRenderer.invoke('get-dns-stats'),
-  getDNSQueries: (limit: number) => ipcRenderer.invoke('get-dns-queries', limit),
+  getDnsStats: () => ipcRenderer.invoke('get-dns-stats'),
+  getDnsQueries: (limit: number) => ipcRenderer.invoke('get-dns-queries', limit),
 
   // Trackers
   getTopTrackers: (limit: number) => ipcRenderer.invoke('get-top-trackers', limit),
   getTrackerStats: () => ipcRenderer.invoke('get-tracker-stats'),
 
-  // Settings
+  // Settings (individual getters/setters)
+  settingsGet: (key: string) => ipcRenderer.invoke('settings:get', key),
+  settingsSet: (key: string, value: any) => ipcRenderer.invoke('settings:set', key, value),
+  settingsGetAll: () => ipcRenderer.invoke('settings:getAll'),
+  settingsReset: () => ipcRenderer.invoke('settings:reset'),
+
+  // Settings (legacy - full object)
   getSettings: () => ipcRenderer.invoke('get-settings'),
   updateSettings: (settings: any) => ipcRenderer.invoke('update-settings', settings),
 
@@ -57,22 +67,47 @@ contextBridge.exposeInMainWorld('electronAPI', {
  * Type definitions for renderer process
  */
 export interface ElectronAPI {
+  // Privacy Score
   getPrivacyScore: () => Promise<any>;
   getScoreHistory: (days: number) => Promise<any[]>;
   getScoreBreakdown: () => Promise<any>;
+
+  // Protection Status
+  getProtectionStatus: () => Promise<boolean>;
+  getDnsProtectionStatus: () => Promise<boolean>;
+  toggleProtection: (enabled: boolean) => Promise<any>;
+
+  // Network Monitoring
   getNetworkEvents: (limit: number) => Promise<any[]>;
   getNetworkStats: () => Promise<any>;
-  toggleProtection: (enabled: boolean) => Promise<any>;
-  getDNSStats: () => Promise<any>;
-  getDNSQueries: (limit: number) => Promise<any[]>;
+
+  // DNS
+  getDnsStats: () => Promise<any>;
+  getDnsQueries: (limit: number) => Promise<any[]>;
+
+  // Trackers
   getTopTrackers: (limit: number) => Promise<any[]>;
   getTrackerStats: () => Promise<any>;
+
+  // Settings (individual)
+  settingsGet: (key: string) => Promise<any>;
+  settingsSet: (key: string, value: any) => Promise<void>;
+  settingsGetAll: () => Promise<any>;
+  settingsReset: () => Promise<void>;
+
+  // Settings (legacy)
   getSettings: () => Promise<any>;
   updateSettings: (settings: any) => Promise<any>;
+
+  // Notifications
   showNotification: (title: string, body: string) => void;
+
+  // Reports
   generateDailyReport: (date: Date) => Promise<any>;
   generateWeeklyReport: (startDate: Date) => Promise<any>;
   generateMonthlyReport: (month: number, year: number) => Promise<any>;
+
+  // Events
   onPrivacyScoreUpdate: (callback: (score: any) => void) => void;
   onProtectionToggled: (callback: (enabled: boolean) => void) => void;
   onTrackerBlocked: (callback: (data: any) => void) => void;

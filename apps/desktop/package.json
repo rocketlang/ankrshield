@@ -2,24 +2,49 @@
   "name": "@ankrshield/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "ankrshield desktop application (Electron)",
-  "type": "module",
+  "description": "Privacy protection for your digital life - FREE tier desktop app",
+  "author": {
+    "name": "ankrshield Team",
+    "email": "hello@ankrshield.com",
+    "url": "https://ankrshield.com"
+  },
+  "homepage": "https://ankrshield.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ankrshield/ankrshield"
+  },
+  "license": "GPL-3.0",
   "main": "dist/main.js",
   "scripts": {
-    "dev": "electron-forge start",
-    "build": "tsc && electron-forge make",
+    "dev": "concurrently \"vite\" \"electron-forge start\"",
+    "dev:renderer": "vite",
+    "dev:main": "electron-forge start",
+    "build": "npm run build:renderer && npm run build:main",
+    "build:renderer": "vite build",
+    "build:main": "tsc",
     "start": "electron-forge start",
-    "package": "electron-forge package",
-    "make": "electron-forge make",
+    "package": "npm run build && electron-forge package",
+    "make": "npm run build && electron-forge make",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "clean": "rm -rf dist out"
   },
   "dependencies": {
+    "@ankrshield/dns-resolver": "workspace:*",
+    "@ankrshield/network-monitor": "workspace:*",
+    "@ankrshield/privacy-engine": "workspace:*",
+    "@prisma/client": "^5.22.0",
     "electron-squirrel-startup": "^1.0.0",
-    "electron-updater": "^6.1.7"
+    "electron-store": "^11.0.2",
+    "electron-updater": "^6.1.7",
+    "ioredis": "^5.3.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.21.0",
+    "recharts": "^2.10.3",
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.2.0",
@@ -28,9 +53,18 @@
     "@electron-forge/maker-rpm": "^7.2.0",
     "@electron-forge/maker-squirrel": "^7.2.0",
     "@electron-forge/maker-zip": "^7.2.0",
+    "@electron-forge/plugin-auto-unpack-natives": "^7.11.1",
     "@types/node": "^20.11.0",
+    "@types/react": "^18.2.46",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "autoprefixer": "^10.4.23",
+    "concurrently": "^8.2.2",
     "electron": "^28.1.4",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.9.3",
+    "vite": "^5.0.10",
     "vitest": "^1.2.0"
   }
 }

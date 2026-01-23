@@ -12,7 +12,8 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["src/**/*"],
+  "include": ["src/main.ts", "src/preload.ts", "src/main/**/*", "src/preload/**/*"],
+  "exclude": ["src/renderer/**/*", "node_modules", "dist"],
   "references": [
     { "path": "../../packages/core" },
     { "path": "../../packages/config" }

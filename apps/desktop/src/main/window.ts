@@ -3,8 +3,9 @@
  * Creates and manages the main application window
  */
 
-import { app, BrowserWindow, shell } from 'electron';
+import { app, BrowserWindow, shell, screen } from 'electron';
 import * as path from 'path';
+import { settingsService } from './services/settings';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -19,10 +20,16 @@ function isDev(): boolean {
  * Create main application window
  */
 export function createMainWindow(): BrowserWindow {
+  // Restore window state from settings
+  const savedState = settingsService.getWindowState();
+  const windowState = validateWindowState(savedState);
+
   // Create the browser window
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: windowState.width,
+    height: windowState.height,
+    x: windowState.x,
+    y: windowState.y,
     minWidth: 800,
     minHeight: 600,
     title: 'ankrshield',
@@ -50,9 +57,29 @@ export function createMainWindow(): BrowserWindow {
 
   // Show window when ready
   mainWindow.once('ready-to-show', () => {
+    // Restore maximized state
+    if (windowState.isMaximized && mainWindow) {
+      mainWindow.maximize();
+    }
     mainWindow?.show();
     mainWindow?.focus();
   });
+
+  // Save window state on resize and move (debounced)
+  let saveTimeout: NodeJS.Timeout | null = null;
+  const debouncedSave = () => {
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+    }
+    saveTimeout = setTimeout(() => {
+      saveWindowState();
+    }, 500); // Save after 500ms of no changes
+  };
+
+  mainWindow.on('resize', debouncedSave);
+  mainWindow.on('move', debouncedSave);
+  mainWindow.on('maximize', () => saveWindowState());
+  mainWindow.on('unmaximize', () => saveWindowState());
 
   // Open external links in browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -136,14 +163,66 @@ export function saveWindowState(): void {
   const bounds = mainWindow.getBounds();
   const isMaximized = mainWindow.isMaximized();
 
-  // Store in user data (could use electron-store or similar)
-  app.emit('save-window-state', { bounds, isMaximized });
+  settingsService.saveWindowState({
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
+    isMaximized,
+  });
 }
 
 /**
- * Restore window state (from persistence)
+ * Validate window state to ensure it's visible on available displays
  */
-export function restoreWindowState(): void {
-  // Load from user data (could use electron-store or similar)
-  // For now, use defaults
+function validateWindowState(state: any): {
+  width: number;
+  height: number;
+  x?: number;
+  y?: number;
+  isMaximized: boolean;
+} {
+  // Default values
+  const defaults = {
+    width: 1200,
+    height: 800,
+    isMaximized: false,
+  };
+
+  if (!state || typeof state !== 'object') {
+    return defaults;
+  }
+
+  // Use saved dimensions
+  const windowState = {
+    width: state.width || defaults.width,
+    height: state.height || defaults.height,
+    x: state.x,
+    y: state.y,
+    isMaximized: state.isMaximized || defaults.isMaximized,
+  };
+
+  // Validate that window is visible on at least one display
+  if (windowState.x !== undefined && windowState.y !== undefined) {
+    const displays = screen.getAllDisplays();
+    const isVisible = displays.some((display) => {
+      const { x, y, width, height } = display.bounds;
+      return (
+        windowState.x! >= x &&
+        windowState.y! >= y &&
+        windowState.x! < x + width &&
+        windowState.y! < y + height
+      );
+    });
+
+    // If window is off-screen, center it on primary display
+    if (!isVisible) {
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { width, height } = primaryDisplay.workAreaSize;
+      windowState.x = Math.floor((width - windowState.width) / 2);
+      windowState.y = Math.floor((height - windowState.height) / 2);
+    }
+  }
+
+  return windowState;
 }

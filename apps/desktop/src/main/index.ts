@@ -10,6 +10,7 @@ import { setupIPC } from './ipc';
 import { setupAutoLaunch } from './auto-launch';
 import { setupAutoUpdater } from './updater';
 import { NotificationService } from './notifications';
+import { serviceManager } from './services/service-manager';
 import './types';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling
@@ -26,22 +27,46 @@ export const notificationService = new NotificationService();
 app.whenReady().then(async () => {
   console.log('ankrshield desktop starting...');
 
-  // Setup IPC handlers
-  setupIPC();
+  try {
+    // Initialize all services (database, DNS, network, privacy)
+    await serviceManager.initialize();
 
-  // Setup auto-launch
-  await setupAutoLaunch();
+    // Get service health status
+    const health = serviceManager.getHealthSummary();
+    console.log('Service health:', health.healthy ? '✓ Healthy' : '⚠ Degraded');
+    health.services.forEach((s) => {
+      const emoji = s.status === 'running' ? '✓' : s.status === 'degraded' ? '⚠' : '✗';
+      console.log(`  ${emoji} ${s.name}: ${s.status} ${s.message ? `(${s.message})` : ''}`);
+    });
 
-  // Create system tray
-  createTray();
+    // Setup IPC handlers (requires services to be initialized)
+    setupIPC();
 
-  // Create main window
-  createMainWindow();
+    // Setup auto-launch
+    await setupAutoLaunch();
 
-  // Setup auto-updater
-  setupAutoUpdater();
+    // Create system tray
+    createTray();
 
-  console.log('ankrshield desktop ready');
+    // Create main window
+    createMainWindow();
+
+    // Setup auto-updater
+    setupAutoUpdater();
+
+    console.log('ankrshield desktop ready');
+  } catch (error) {
+    console.error('Failed to initialize ankrshield:', error);
+
+    // Show error notification
+    notificationService.showError(
+      'Initialization Failed',
+      'ankrshield failed to start. Please check the logs.'
+    );
+
+    // Exit with error code
+    app.exit(1);
+  }
 });
 
 /**
@@ -67,9 +92,18 @@ app.on('activate', () => {
 /**
  * Before quit handler
  */
-app.on('before-quit', () => {
+app.on('before-quit', async () => {
   // Set flag so window close doesn't prevent quit
   (app as any).isQuitting = true;
+
+  // Cleanup all services
+  console.log('Shutting down services...');
+  try {
+    await serviceManager.shutdown();
+    console.log('Services shutdown complete');
+  } catch (error) {
+    console.error('Error shutting down services:', error);
+  }
 });
 
 /**
