@@ -261,6 +261,12 @@ export default function LiveThreats() {
                 OFFLINE
               </div>
             )}
+            <a
+              href="/evidence"
+              className="text-xs text-purple-500 hover:text-purple-300 border border-purple-800 rounded px-2 py-1 transition-colors"
+            >
+              ⚖️ Evidence
+            </a>
             <a href="/" className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
               ← Home
             </a>

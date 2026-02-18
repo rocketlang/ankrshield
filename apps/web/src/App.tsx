@@ -9,6 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Analytics from './pages/Analytics';
 import Dashboard from './pages/Dashboard';
 import Devices from './pages/Devices';
+import EvidenceReport from './pages/EvidenceReport';
 import Landing from './pages/Landing';
 import LiveThreats from './pages/LiveThreats';
 import Login from './pages/Login';
@@ -23,6 +24,7 @@ function App() {
         {/* Public Routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/live" element={<LiveThreats />} />
+        <Route path="/evidence" element={<EvidenceReport />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
