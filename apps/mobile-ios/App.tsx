@@ -3,18 +3,21 @@
  * React Native Application for iOS
  */
 
-import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import React from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { HomeScreen } from './src/screens/HomeScreen';
-import { DashboardScreen } from './src/screens/DashboardScreen';
-import { SettingsScreen } from './src/screens/SettingsScreen';
+
 import { ActivityScreen } from './src/screens/ActivityScreen';
-import { WarriorScreen } from './src/screens/WarriorScreen';
-import { ThreatAlertsScreen } from './src/screens/ThreatAlertsScreen';
 import { AgentManagerScreen } from './src/screens/AgentManagerScreen';
+import { AndroidMonitorScreen } from './src/screens/AndroidMonitorScreen';
+import { DashboardScreen } from './src/screens/DashboardScreen';
+import { HomeScreen } from './src/screens/HomeScreen';
+import { LiveThreatsScreen } from './src/screens/LiveThreatsScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
 import { SpywareScanScreen } from './src/screens/SpywareScanScreen';
+import { ThreatAlertsScreen } from './src/screens/ThreatAlertsScreen';
+import { WarriorScreen } from './src/screens/WarriorScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -37,11 +40,7 @@ function App(): React.JSX.Element {
             },
           }}
         >
-          <Stack.Screen
-            name="Home"
-            component={HomeScreen}
-            options={{ title: 'ankrshield' }}
-          />
+          <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'ankrshield' }} />
           <Stack.Screen
             name="Dashboard"
             component={DashboardScreen}
@@ -76,6 +75,20 @@ function App(): React.JSX.Element {
             name="SpywareScan"
             component={SpywareScanScreen}
             options={{ title: 'Spyware Scan' }}
+          />
+          <Stack.Screen
+            name="LiveThreats"
+            component={LiveThreatsScreen}
+            options={{
+              title: 'Live Threats',
+              headerStyle: { backgroundColor: '#0f172a' },
+              headerTintColor: '#ef4444',
+            }}
+          />
+          <Stack.Screen
+            name="AndroidMonitor"
+            component={AndroidMonitorScreen}
+            options={{ title: 'App Scanner' }}
           />
         </Stack.Navigator>
       </NavigationContainer>

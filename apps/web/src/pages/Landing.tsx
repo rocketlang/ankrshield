@@ -1,640 +1,443 @@
 /**
- * Landing Page V3 - Honest, Verified Statistics, Real Claims
+ * Landing Page — ANKR Shield
+ * Your AI Security Guardian
  *
- * Changes from V2:
- * - Fixed statistics with verified research sources
- * - Removed "security audited" claim (not done yet)
- * - Removed "join thousands" claim (no users yet)
- * - Changed to "open source project" (will be open sourced)
- * - Updated threat stats with real research
- * - Added live demo on this VM option
+ * Features:
+ * - Hero section with shield icon and tagline
+ * - Stats bar with key metrics
+ * - 4 feature cards with gradient borders
+ * - How it works (3 steps)
+ * - CTA section with download + GitHub buttons
  */
 
 import { Link } from 'react-router-dom';
-import {
-  Shield,
-  Lock,
-  Eye,
-  Zap,
-  Download,
-  PlayCircle,
-  AlertTriangle,
-  CheckCircle,
-  TrendingUp,
-  Code,
-  MonitorPlay,
-  Laptop,
-  DollarSign,
-  Activity,
-  Server
-} from 'lucide-react';
 
-// Threat Card Component
-function ThreatCard({
-  icon,
-  title,
-  stat,
-  description,
-  source,
+// ─── Gradient border card wrapper ─────────────────────────────────────────────
+function GradientCard({
+  children,
+  className = '',
 }: {
-  icon: React.ReactNode;
-  title: string;
-  stat: string;
-  description: string;
-  source: string;
+  children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-red-500/30 hover:border-red-500/50 transition">
-      <div className="mb-4">{icon}</div>
-      <h3 className="text-2xl font-bold mb-2 text-red-400">{title}</h3>
-      <div className="text-3xl font-bold text-white mb-3">{stat}</div>
-      <p className="text-gray-300 mb-4 leading-relaxed">{description}</p>
-      <p className="text-xs text-gray-500 italic">{source}</p>
+    <div
+      className={`relative rounded-2xl p-[1px] bg-gradient-to-br from-blue-500 via-cyan-400 to-blue-700 ${className}`}
+    >
+      <div className="rounded-2xl bg-gray-900 h-full p-6">{children}</div>
     </div>
   );
 }
 
-// Protection Feature Card
-function ProtectionCard({
+// ─── Feature Card ──────────────────────────────────────────────────────────────
+function FeatureCard({
   icon,
   title,
-  features,
+  tagline,
+  bullets,
 }: {
-  icon: React.ReactNode;
+  icon: string;
   title: string;
-  features: string[];
+  tagline: string;
+  bullets: string[];
 }) {
   return (
-    <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-blue-500/30 hover:border-blue-500/50 transition">
-      <div className="mb-4">{icon}</div>
-      <h3 className="text-2xl font-bold mb-4 text-blue-400">{title}</h3>
-      <ul className="space-y-3">
-        {features.map((feature, index) => (
-          <li key={index} className="flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
-            <span className="text-gray-300">{feature}</span>
+    <GradientCard>
+      <div className="text-4xl mb-4">{icon}</div>
+      <h3 className="text-xl font-bold text-white mb-1">{title}</h3>
+      <p className="text-cyan-400 text-sm font-medium mb-4">{tagline}</p>
+      <ul className="space-y-2">
+        {bullets.map((bullet, i) => (
+          <li key={i} className="flex items-start gap-2 text-gray-300 text-sm">
+            <span className="mt-0.5 text-cyan-400 shrink-0">&#10003;</span>
+            <span>{bullet}</span>
           </li>
         ))}
       </ul>
-    </div>
+    </GradientCard>
   );
 }
 
-// Download Card
-function DownloadCard({
-  platform,
-  icon,
-  version,
-  size,
-  downloadUrl,
-}: {
-  platform: string;
-  icon: React.ReactNode;
-  version: string;
-  size: string;
-  downloadUrl: string;
-}) {
-  return (
-    <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-600 hover:border-blue-500 transition">
-      <div className="mb-4 flex justify-center">{icon}</div>
-      <h3 className="text-xl font-bold mb-2 text-center">{platform}</h3>
-      <p className="text-sm text-gray-400 mb-1 text-center">{version}</p>
-      <p className="text-sm text-gray-400 mb-4 text-center">{size}</p>
-      <a
-        href={downloadUrl}
-        className="block w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-center font-semibold transition"
-      >
-        Download
-      </a>
-    </div>
-  );
-}
-
-// Trust Card
-function TrustCard({
+// ─── Step Card (How it Works) ──────────────────────────────────────────────────
+function StepCard({
+  step,
   icon,
   title,
   description,
-  link,
 }: {
-  icon: React.ReactNode;
+  step: number;
+  icon: string;
   title: string;
   description: string;
-  link: string;
 }) {
   return (
-    <div className="bg-gray-800/50 backdrop-blur-lg rounded-xl p-6 border border-gray-600 hover:border-blue-500 transition">
-      <div className="mb-4">{icon}</div>
-      <h3 className="text-xl font-bold mb-3">{title}</h3>
-      <p className="text-gray-300 mb-4 leading-relaxed">{description}</p>
-      <a
-        href={link}
-        className="text-blue-400 hover:text-blue-300 text-sm font-semibold transition"
-      >
-        Learn More →
-      </a>
-    </div>
-  );
-}
-
-// Stat Card
-function StatCard({ number, label }: { number: string; label: string }) {
-  return (
-    <div className="text-center">
-      <div className="text-5xl md:text-6xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-        {number}
+    <div className="flex flex-col items-center text-center">
+      {/* Step number + connector line */}
+      <div className="relative flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-cyan-400 text-white text-2xl font-bold mb-4 shadow-lg shadow-blue-500/30">
+        {step}
       </div>
-      <div className="text-gray-400 text-lg">{label}</div>
+      <div className="text-3xl mb-3">{icon}</div>
+      <h4 className="text-lg font-semibold text-white mb-2">{title}</h4>
+      <p className="text-gray-400 text-sm leading-relaxed max-w-xs">{description}</p>
     </div>
   );
 }
 
+// ─── Stat Pill ─────────────────────────────────────────────────────────────────
+function StatPill({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 text-sm text-gray-300">
+      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+      {label}
+    </span>
+  );
+}
+
+// ─── Main Landing Page ─────────────────────────────────────────────────────────
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-gray-900 text-white">
-      {/* Header */}
-      <header className="container mx-auto px-4 py-6 sticky top-0 bg-gray-900/80 backdrop-blur-lg z-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Shield className="w-8 h-8 text-blue-400" />
-            <span className="text-2xl font-bold">ankrshield</span>
+    <div className="min-h-screen bg-gray-950 text-white font-sans">
+      {/* ── Navigation ── */}
+      <nav className="sticky top-0 z-50 bg-gray-950/80 backdrop-blur-md border-b border-gray-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">🛡️</span>
+            <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+              ankrshield
+            </span>
           </div>
-          <div className="space-x-4 flex items-center">
+          <div className="hidden md:flex items-center gap-8">
             <a
-              href="#demo"
-              className="px-4 py-2 text-gray-300 hover:text-white transition"
+              href="#features"
+              className="text-sm text-gray-400 hover:text-white transition-colors"
             >
-              Try Demo
+              Features
             </a>
             <a
-              href="#download"
-              className="px-4 py-2 text-gray-300 hover:text-white transition"
+              href="#how-it-works"
+              className="text-sm text-gray-400 hover:text-white transition-colors"
             >
-              Download
+              How it Works
             </a>
+            <a
+              href="https://github.com/rocketlang-private/ankrshield"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-gray-400 hover:text-white transition-colors"
+            >
+              GitHub
+            </a>
+          </div>
+          <div className="flex items-center gap-3">
             <Link
               to="/login"
-              className="px-4 py-2 text-gray-300 hover:text-white transition"
+              className="text-sm text-gray-300 hover:text-white transition-colors px-4 py-2"
             >
-              Login
+              Sign in
             </Link>
             <Link
               to="/register"
-              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition"
+              className="text-sm font-medium bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white px-4 py-2 rounded-lg transition-all shadow-md shadow-blue-500/20"
             >
               Get Started
             </Link>
           </div>
         </div>
-      </header>
+      </nav>
 
-      {/* Hero Section */}
-      <main className="container mx-auto px-4 py-20">
-        <div className="text-center max-w-5xl mx-auto">
-          <div className="inline-block px-4 py-2 bg-red-900/30 border border-red-500/50 rounded-full mb-6">
-            <span className="text-red-400 font-semibold">🚨 Your Privacy is Under Attack</span>
-          </div>
-
-          <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-            Your Personal Shield for the AI Era
-          </h1>
-
-          <p className="text-xl md:text-2xl text-gray-300 mb-8 leading-relaxed">
-            <span className="text-red-400 font-bold">98.6% of websites</span> have trackers.
-            AI companies scrape your data for training. Data brokers sell your profile for{' '}
-            <span className="text-red-400 font-bold">$700/year</span>.
-            <br />
-            <span className="text-blue-400 font-bold">Take back control. Right now.</span>
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-            <a
-              href="#demo"
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg text-lg font-semibold transition transform hover:scale-105 shadow-lg"
-            >
-              <PlayCircle className="w-6 h-6" />
-              Try Live Demo
-            </a>
-            <a
-              href="#download"
-              className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-lg font-semibold transition transform hover:scale-105"
-            >
-              <Download className="w-6 h-6" />
-              Download Free
-            </a>
-          </div>
-
-          {/* Trust Badges */}
-          <div className="flex flex-wrap justify-center gap-6 text-sm text-gray-400">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-400" />
-              <span>Open Source Project</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-400" />
-              <span>Zero Data Collection</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-400" />
-              <span>Local-First Privacy</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-400" />
-              <span>FREE Forever</span>
-            </div>
-          </div>
+      {/* ── Hero Section ── */}
+      <section className="relative overflow-hidden">
+        {/* Background glow effects */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-3xl" />
+          <div className="absolute top-20 right-0 w-96 h-96 bg-cyan-500/5 rounded-full blur-3xl" />
+          <div className="absolute top-40 left-0 w-72 h-72 bg-blue-800/10 rounded-full blur-3xl" />
         </div>
 
-        {/* The Threats Are REAL */}
-        <section className="mt-32 mb-20">
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-20 text-center">
+          {/* Shield icon */}
+          <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-400/20 border border-blue-500/30 mb-8 shadow-xl shadow-blue-500/10">
+            <span className="text-5xl">🛡️</span>
+          </div>
+
+          {/* Headline */}
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight mb-6 leading-tight">
+            <span className="bg-gradient-to-r from-white via-blue-100 to-white bg-clip-text text-transparent">
+              ANKR Shield
+            </span>
+            <br />
+            <span className="text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+              Your AI Security Guardian
+            </span>
+          </h1>
+
+          {/* Subheadline */}
+          <p className="text-lg sm:text-xl text-gray-400 max-w-2xl mx-auto mb-10 leading-relaxed">
+            Defend your devices from nation-state spyware, AI-powered attack chains, and privacy
+            breaches — with 8 autonomous AI agents watching 24/7.
+          </p>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+            <a
+              href="#download"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white font-semibold px-8 py-4 rounded-xl transition-all shadow-lg shadow-blue-500/30 text-base"
+            >
+              <span>📥</span> Download the App
+            </a>
+            <a
+              href="https://github.com/rocketlang-private/ankrshield"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-gray-800 hover:bg-gray-700 text-white font-semibold px-8 py-4 rounded-xl transition-all border border-gray-700 hover:border-gray-500 text-base"
+            >
+              <span>🐙</span> View on GitHub
+            </a>
+          </div>
+
+          {/* Threat alert badge */}
+          <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-full px-4 py-2 text-sm text-red-400 font-medium">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+            Pegasus · Candiru · Predator · FinFisher — actively detected
+          </div>
+        </div>
+      </section>
+
+      {/* ── Stats Bar ── */}
+      <section className="border-y border-gray-800 bg-gray-900/50 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+          <div className="flex flex-wrap items-center justify-center gap-6 sm:gap-10">
+            <StatPill label="8 AI Agents Monitored" />
+            <span className="hidden sm:block w-px h-4 bg-gray-700" />
+            <StatPill label="Pegasus / Candiru / Predator Detection" />
+            <span className="hidden sm:block w-px h-4 bg-gray-700" />
+            <StatPill label="Real-time Threat Intelligence" />
+            <span className="hidden sm:block w-px h-4 bg-gray-700" />
+            <StatPill label="DNS-level Privacy Blocking" />
+            <span className="hidden sm:block w-px h-4 bg-gray-700" />
+            <StatPill label="AI Governance Enforcement" />
+          </div>
+        </div>
+      </section>
+
+      {/* ── Feature Cards ── */}
+      <section id="features" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
+        <div className="text-center mb-16">
+          <h2 className="text-4xl font-bold text-white mb-4">
+            Four Layers of AI-Powered Protection
+          </h2>
+          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+            Each shield layer runs independently as an autonomous agent, correlating signals across
+            your entire infrastructure in real time.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <FeatureCard
+            icon="⚔️"
+            title="AI Warrior"
+            tagline="LLM-Powered Threat Correlation"
+            bullets={[
+              'Detects multi-stage attack chains across AI agents',
+              'Natural language threat explanation',
+              'Cross-agent signal correlation with LLM reasoning',
+              'Automated incident triage and escalation',
+              'Adversarial prompt injection detection',
+            ]}
+          />
+          <FeatureCard
+            icon="🔬"
+            title="Spyware Detector"
+            tagline="Nation-State Spyware Defense"
+            bullets={[
+              'IOC database from Amnesty International',
+              'Citizen Lab threat feed integration',
+              'Pegasus, Candiru, Predator detection',
+              'FinFisher and RCS surveillance signals',
+              'Real-time C2 domain reputation checks',
+            ]}
+          />
+          <FeatureCard
+            icon="🔒"
+            title="Privacy Shield"
+            tagline="Network-Level Privacy Guardian"
+            bullets={[
+              'DNS-level tracker and ad blocking',
+              'Deep packet network traffic analysis',
+              'Fingerprinting and pixel tracker elimination',
+              'TLS certificate anomaly detection',
+              'Geo-based data exfiltration alerts',
+            ]}
+          />
+          <FeatureCard
+            icon="🤖"
+            title="AI Governance"
+            tagline="Scope Enforcement for AI Tools"
+            bullets={[
+              'ChatGPT, Claude, Copilot scope control',
+              'Cursor AI and Gemini activity monitoring',
+              'Data exfiltration prevention via AI prompts',
+              'Policy-based AI tool access control',
+              'Audit log for all AI interactions',
+            ]}
+          />
+        </div>
+      </section>
+
+      {/* ── How It Works ── */}
+      <section id="how-it-works" className="relative py-24 bg-gray-900/40">
+        {/* Background decoration */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <div className="absolute bottom-0 left-1/3 w-96 h-96 bg-blue-600/5 rounded-full blur-3xl" />
+        </div>
+
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              The Threats Are <span className="text-red-400">REAL</span>
-            </h2>
-            <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-              This isn't fear-mongering. These are verified statistics from peer-reviewed research.
+            <h2 className="text-4xl font-bold text-white mb-4">How It Works</h2>
+            <p className="text-gray-400 text-lg max-w-xl mx-auto">
+              Up and running in minutes. ANKR Shield integrates with your existing infrastructure
+              without disruption.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            <ThreatCard
-              icon={<Eye className="w-12 h-12 text-red-400" />}
-              title="Tracking is Everywhere"
-              stat="98.6% of websites have trackers"
-              description="Ad networks, analytics tools, and social media pixels follow you across every website. The average U.S. website has 23 trackers, while some have over 45."
-              source="Source: Health Affairs (2022), NordVPN (2025)"
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
+            {/* Connector lines (desktop only) */}
+            <div className="hidden md:block absolute top-7 left-1/3 right-1/3 h-px bg-gradient-to-r from-blue-500/50 to-cyan-400/50" />
+
+            <StepCard
+              step={1}
+              icon="🖥️"
+              title="Install on Your Server"
+              description="Deploy the ANKR Shield agent on your server or VM in under 5 minutes using our single-line installer script. Supports Linux, macOS, and Docker."
             />
-            <ThreatCard
-              icon={<AlertTriangle className="w-12 h-12 text-orange-400" />}
-              title="AI Training on Your Data"
-              stat="Major AI models trained on web scrapes"
-              description="ChatGPT, Claude, Bard, and other AI systems are trained on massive web scrapes. Your social media posts, blog comments, and public profiles are part of AI training datasets—without your explicit consent."
-              source="Source: Common Crawl, OpenAI/Anthropic disclosures"
+            <StepCard
+              step={2}
+              icon="📱"
+              title="Connect Your Devices"
+              description="Register your phones, laptops, and workstations via the dashboard. Each device gets a unique identity token for tamper-proof attribution."
             />
-            <ThreatCard
-              icon={<DollarSign className="w-12 h-12 text-yellow-400" />}
-              title="Your Data is Big Business"
-              stat="$323 billion data broker industry"
-              description="Companies like Acxiom, Epsilon, and Oracle collect 1,500+ data points about you. They sell your profile to advertisers, insurers, employers, and governments. You have zero control and get zero compensation."
-              source="Source: Market.us (2024), Proton (2025)"
+            <StepCard
+              step={3}
+              icon="🤖"
+              title="AI Monitors 24/7"
+              description="Eight autonomous AI agents immediately begin correlating threats, blocking spyware, and enforcing your privacy policies — completely in the background."
             />
           </div>
+        </div>
+      </section>
 
-          <div className="mt-12 text-center">
-            <div className="inline-block px-6 py-3 bg-red-900/20 border border-red-500/30 rounded-lg">
-              <p className="text-gray-300">
-                <span className="text-red-400 font-bold">98.6%</span> of websites track you |
-                <span className="text-red-400 font-bold">1,500+ data points</span> collected about you |
-                <span className="text-red-400 font-bold">$700/year</span> your data is worth |
-                <span className="text-red-400 font-bold">$0.0005</span> what you get paid (nothing)
-              </p>
-              <p className="text-xs text-gray-500 mt-2">
-                Sources: Health Affairs, WebFX, Proton
-              </p>
+      {/* ── Trust / Research Sources ── */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold text-white mb-3">Built on Verified Threat Research</h2>
+          <p className="text-gray-400 max-w-xl mx-auto">
+            Our IOC databases and detection signatures are sourced from the world's leading security
+            research organizations.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { icon: '🏛️', name: 'Amnesty International', label: 'Security Lab' },
+            { icon: '🔭', name: 'Citizen Lab', label: 'University of Toronto' },
+            { icon: '📡', name: 'Access Now', label: 'Digital Security Helpline' },
+            { icon: '🛡️', name: 'EFF', label: 'Electronic Frontier Foundation' },
+          ].map((org) => (
+            <div
+              key={org.name}
+              className="bg-gray-900 border border-gray-800 rounded-xl p-5 text-center hover:border-gray-600 transition-colors"
+            >
+              <div className="text-3xl mb-2">{org.icon}</div>
+              <div className="text-white font-semibold text-sm">{org.name}</div>
+              <div className="text-gray-500 text-xs mt-1">{org.label}</div>
             </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── CTA Section ── */}
+      <section
+        id="download"
+        className="relative overflow-hidden py-24 bg-gradient-to-br from-blue-950 via-gray-950 to-cyan-950"
+      >
+        {/* Decorative glow */}
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-blue-600/10 rounded-full blur-3xl" />
+        </div>
+
+        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="text-5xl mb-6">🛡️</div>
+          <h2 className="text-4xl sm:text-5xl font-extrabold text-white mb-4 tracking-tight">
+            Protect Yourself Now
+          </h2>
+          <p className="text-gray-400 text-lg mb-10 max-w-xl mx-auto leading-relaxed">
+            Nation-state spyware targets activists, journalists, and executives every day. ANKR
+            Shield is your open-source defense layer.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <a
+              href="#"
+              className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white font-bold px-10 py-4 rounded-xl transition-all shadow-xl shadow-blue-500/30 text-lg"
+            >
+              <span>📥</span>
+              Download the App
+            </a>
+            <a
+              href="https://github.com/rocketlang-private/ankrshield"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-3 bg-transparent hover:bg-gray-800 text-white font-bold px-10 py-4 rounded-xl transition-all border border-gray-600 hover:border-gray-400 text-lg"
+            >
+              <span>🐙</span>
+              View GitHub
+            </a>
           </div>
-        </section>
 
-        {/* How ankrshield Protects You */}
-        <section className="mt-32 mb-20">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              How ankrshield <span className="text-blue-400">Protects You</span>
-            </h2>
-            <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-              Three layers of protection working together to secure your privacy.
-            </p>
-          </div>
+          <p className="mt-8 text-gray-600 text-sm">
+            Open source · No telemetry · Self-hosted · MIT License
+          </p>
+        </div>
+      </section>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            <ProtectionCard
-              icon={<Shield className="w-12 h-12 text-blue-400" />}
-              title="AI Agent Control"
-              features={[
-                'Monitor what AI tools access',
-                'Block unauthorized scraping',
-                'Fake data injection for scrapers',
-                'Real-time AI activity logs',
-              ]}
-            />
-            <ProtectionCard
-              icon={<Lock className="w-12 h-12 text-green-400" />}
-              title="Tracker Annihilation"
-              features={[
-                'Block 2M+ known trackers',
-                'DNS-level ad blocking',
-                'Cookie auto-deletion',
-                'Fingerprint randomization',
-              ]}
-            />
-            <ProtectionCard
-              icon={<Activity className="w-12 h-12 text-purple-400" />}
-              title="Real-time Intelligence"
-              features={[
-                'See every network request',
-                'Privacy score dashboard',
-                'Threat alert notifications',
-                'Detailed analytics',
-              ]}
-            />
-          </div>
-        </section>
-
-        {/* Live Demo Section */}
-        <section id="demo" className="mt-32 mb-20 scroll-mt-20">
-          <div className="max-w-4xl mx-auto bg-gradient-to-r from-blue-900/40 to-purple-900/40 rounded-2xl p-12 border border-blue-500/30">
-            <div className="text-center">
-              <MonitorPlay className="w-16 h-16 text-blue-400 mx-auto mb-6" />
-              <h2 className="text-4xl font-bold mb-4">Try It Now - No Install Required</h2>
-              <p className="text-xl text-gray-300 mb-8">
-                Experience ankrshield in demo mode. See trackers getting blocked in real-time.
-              </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                <Link
-                  to="/dashboard?demo=true"
-                  className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-xl text-lg font-bold transition transform hover:scale-105 shadow-2xl"
-                >
-                  <PlayCircle className="w-6 h-6" />
-                  Launch Web Demo
-                </Link>
-
-                <a
-                  href="http://localhost:4250/health"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 rounded-xl text-lg font-bold transition transform hover:scale-105 shadow-2xl"
-                >
-                  <Server className="w-6 h-6" />
-                  Live Protection (This Server)
-                </a>
-              </div>
-
-              <p className="text-sm text-gray-400">
-                Demo mode includes all features • No account required • Try for free •
-                See REAL protection working on this server
-              </p>
+      {/* ── Footer ── */}
+      <footer className="border-t border-gray-800 bg-gray-950 py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+            {/* Brand */}
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🛡️</span>
+              <span className="font-bold text-white tracking-tight">ankrshield</span>
+              <span className="text-gray-600 text-sm ml-2">— Your AI Security Guardian</span>
             </div>
-          </div>
-        </section>
 
-        {/* Download Section */}
-        <section id="download" className="mt-32 mb-20 scroll-mt-20">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">Download for Your Device</h2>
-            <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-              Available for all platforms. 100% Free. Forever.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <DownloadCard
-              platform="Windows"
-              icon={<Laptop className="w-12 h-12 text-blue-400" />}
-              version="v0.1.0-alpha"
-              size="45 MB"
-              downloadUrl="/downloads/ankrshield-windows.exe"
-            />
-            <DownloadCard
-              platform="macOS"
-              icon={<Laptop className="w-12 h-12 text-gray-400" />}
-              version="v0.1.0-alpha"
-              size="52 MB"
-              downloadUrl="/downloads/ankrshield-macos.dmg"
-            />
-            <DownloadCard
-              platform="Linux"
-              icon={<Laptop className="w-12 h-12 text-orange-400" />}
-              version="v0.1.0-alpha"
-              size="48 MB (AppImage)"
-              downloadUrl="/downloads/ankrshield-linux.AppImage"
-            />
-          </div>
-
-          <div className="mt-12 text-center">
-            <p className="text-gray-400">
-              Desktop apps are <strong>100% offline-capable</strong> • No internet required after install
-            </p>
-          </div>
-        </section>
-
-        {/* Why Trust ankrshield? */}
-        <section className="mt-32 mb-20">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              Why Trust <span className="text-blue-400">ankrshield</span>?
-            </h2>
-            <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-              Transparency, open source, and privacy-first design.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            <TrustCard
-              icon={<Code className="w-10 h-10 text-blue-400" />}
-              title="Open Source Project"
-              description="Every line of code will be public. Audit it yourself on GitHub. No hidden tracking or backdoors."
-              link="https://github.com/ankrshield/ankrshield"
-            />
-            <TrustCard
-              icon={<Lock className="w-10 h-10 text-green-400" />}
-              title="Zero Data Collection"
-              description="We don't track you. We can't—there's no backend analytics. Everything stays on your device."
-              link="/privacy-policy"
-            />
-            <TrustCard
-              icon={<Activity className="w-10 h-10 text-purple-400" />}
-              title="Live Demonstration"
-              description="See it working in real-time on this server. No fake demos—actual protection you can verify."
-              link="#demo"
-            />
-          </div>
-
-          <div className="mt-16 max-w-4xl mx-auto bg-blue-900/20 border border-blue-500/30 rounded-xl p-8">
-            <h3 className="text-2xl font-bold mb-6 text-center">Privacy Guarantee</h3>
-            <ul className="space-y-3 text-gray-300">
-              <li className="flex items-start gap-3">
-                <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0 mt-1" />
-                <span>
-                  <strong>No accounts required</strong> - Use the desktop app completely offline
-                </span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0 mt-1" />
-                <span>
-                  <strong>No telemetry</strong> - We never phone home or collect usage stats
-                </span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0 mt-1" />
-                <span>
-                  <strong>Local-first</strong> - All your data stays on your device, encrypted
-                </span>
-              </li>
-              <li className="flex items-start gap-3">
-                <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0 mt-1" />
-                <span>
-                  <strong>Free forever</strong> - No freemium tricks, no paid plans, no ads
-                </span>
-              </li>
-            </ul>
-          </div>
-        </section>
-
-        {/* Project Status - Honest Facts */}
-        <section className="mt-32 mb-20">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Project Status</h2>
-            <p className="text-gray-400">Honest facts about where we are</p>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-12 max-w-5xl mx-auto">
-            <StatCard number="v0.1" label="Alpha Version" />
-            <StatCard number="GPL-3.0" label="License" />
-            <StatCard number="Local" label="Data Storage" />
-            <StatCard number="$0" label="Cost" />
-          </div>
-          <div className="mt-8 text-center text-sm text-gray-500">
-            <p>Early stage project • Code will be open sourced • No users yet • Actively developing</p>
-          </div>
-        </section>
-
-        {/* Final CTA */}
-        <section className="mt-32 mb-20">
-          <div className="max-w-4xl mx-auto bg-gradient-to-r from-blue-900/40 to-purple-900/40 rounded-2xl p-12 border border-blue-500/30 text-center">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4">
-              Ready to Take Back Your Privacy?
-            </h2>
-            <p className="text-xl text-gray-300 mb-8">
-              Try the demo now or download the app. See real protection in action.
-            </p>
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <a
-                href="#demo"
-                className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg text-lg font-semibold transition transform hover:scale-105 shadow-lg"
-              >
-                <PlayCircle className="w-6 h-6" />
-                Try Demo Now
+            {/* Links */}
+            <div className="flex items-center gap-6 text-sm text-gray-500">
+              <a href="#features" className="hover:text-gray-300 transition-colors">
+                Features
               </a>
+              <a href="#how-it-works" className="hover:text-gray-300 transition-colors">
+                How it Works
+              </a>
+              <Link to="/login" className="hover:text-gray-300 transition-colors">
+                Sign in
+              </Link>
+              <Link to="/register" className="hover:text-gray-300 transition-colors">
+                Register
+              </Link>
               <a
-                href="#download"
-                className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-lg text-lg font-semibold transition transform hover:scale-105"
+                href="https://github.com/rocketlang-private/ankrshield"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-gray-300 transition-colors"
               >
-                <Download className="w-6 h-6" />
-                Download Free
+                GitHub
               </a>
             </div>
-          </div>
-        </section>
-      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-800 bg-gray-900/50">
-        <div className="container mx-auto px-4 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-            {/* About */}
-            <div>
-              <div className="flex items-center space-x-2 mb-4">
-                <Shield className="w-6 h-6 text-blue-400" />
-                <span className="text-xl font-bold">ankrshield</span>
-              </div>
-              <p className="text-gray-400 text-sm">
-                Your personal shield for the AI era. Open source privacy protection.
-              </p>
+            {/* Legal */}
+            <div className="text-xs text-gray-700">
+              &copy; {new Date().getFullYear()} ANKR Shield. Open Source.
             </div>
-
-            {/* Product */}
-            <div>
-              <h3 className="font-semibold mb-4">Product</h3>
-              <ul className="space-y-2 text-gray-400 text-sm">
-                <li>
-                  <a href="#demo" className="hover:text-white transition">
-                    Live Demo
-                  </a>
-                </li>
-                <li>
-                  <a href="#download" className="hover:text-white transition">
-                    Download
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-white transition">
-                    Features
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-white transition">
-                    Pricing (FREE)
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            {/* Trust */}
-            <div>
-              <h3 className="font-semibold mb-4">Trust</h3>
-              <ul className="space-y-2 text-gray-400 text-sm">
-                <li>
-                  <a
-                    href="https://github.com/ankrshield/ankrshield"
-                    className="hover:text-white transition"
-                  >
-                    GitHub
-                  </a>
-                </li>
-                <li>
-                  <a href="/privacy-policy" className="hover:text-white transition">
-                    Privacy Policy
-                  </a>
-                </li>
-                <li>
-                  <a href="/sources" className="hover:text-white transition">
-                    Research Sources
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-white transition">
-                    Open Source
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            {/* Resources */}
-            <div>
-              <h3 className="font-semibold mb-4">Resources</h3>
-              <ul className="space-y-2 text-gray-400 text-sm">
-                <li>
-                  <a href="#" className="hover:text-white transition">
-                    Blog
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-white transition">
-                    Documentation
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-white transition">
-                    Discord
-                  </a>
-                </li>
-                <li>
-                  <a href="#" className="hover:text-white transition">
-                    Contribute
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-800 pt-8 text-center text-gray-400 text-sm">
-            <p>
-              © 2026 ankrshield. Your Privacy, Your Control. Licensed under GPL-3.0.
-            </p>
-            <p className="mt-2">
-              Made with privacy-first principles. All statistics verified from peer-reviewed research.
-            </p>
           </div>
         </div>
       </footer>

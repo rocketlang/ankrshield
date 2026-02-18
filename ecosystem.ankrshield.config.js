@@ -1,6 +1,23 @@
 module.exports = {
   apps: [
     {
+      name: 'ankrshield-web',
+      script: 'npx',
+      args: 'vite preview --port 5250 --host 0.0.0.0',
+      cwd: '/root/ankrshield/apps/web',
+      env: {
+        NODE_ENV: 'production',
+        VITE_API_URL: 'http://localhost:4250',
+        VITE_WS_URL: 'ws://localhost:4250',
+      },
+      error_file: '/root/.pm2/logs/ankrshield-web-error.log',
+      out_file: '/root/.pm2/logs/ankrshield-web-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '200M',
+    },
+    {
       name: 'ankrshield-api',
       script: 'npx',
       args: 'tsx src/main.ts',

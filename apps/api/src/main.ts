@@ -2,16 +2,19 @@
  * ankrshield API Server with GraphQL
  */
 
+import os from 'node:os';
+
+import { SpywareScanner } from '@ankrshield/spyware-detector';
 import Fastify from 'fastify';
 import mercurius from 'mercurius';
-import { schema } from './graphql/schema';
+
 import { prisma } from './graphql/builder';
 import type { Context } from './graphql/builder';
-import securityPlugin from './plugins/security';
-import authPlugin from './plugins/auth';
+import { schema } from './graphql/schema';
 import { startMonitor, stopMonitor, getMonitor } from './monitor/traffic-monitor';
-import { startWarrior, stopWarrior } from './warrior/warrior-service';
-import { SpywareScanner } from '@ankrshield/spyware-detector';
+import authPlugin from './plugins/auth';
+import securityPlugin from './plugins/security';
+import { getWarrior, startWarrior, stopWarrior } from './warrior/warrior-service';
 
 const fastify = Fastify({
   logger: {
@@ -113,12 +116,199 @@ const start = async () => {
           enableProcessScan: opts.enableProcessScan !== false,
           enableFileScan: opts.enableFileScan !== false,
           enableDnsScan: opts.enableDnsScan !== false,
-          customIocs: Array.isArray(opts.customIocs) ? opts.customIocs as string[] : undefined,
+          customIocs: Array.isArray(opts.customIocs) ? (opts.customIocs as string[]) : undefined,
         });
         const result = await scanner.scan();
         return result;
       } catch (err: any) {
         return { error: err.message, scannedAt: new Date().toISOString(), isClean: null };
+      }
+    });
+
+    // ─── Live Threats endpoint ────────────────────────────────────────────────
+    // Lightweight endpoint polled every 5s by the mobile app.
+    // Returns real-time threat snapshot without a heavy spyware scan.
+    fastify.get('/warrior/threats/live', async () => {
+      const warrior = getWarrior();
+      const uptime = process.uptime();
+      const mem = process.memoryUsage();
+
+      // Collect recent attack chains (last 10)
+      const chains = warrior
+        .getAttackChains()
+        .slice(-10)
+        .reverse()
+        .map((c) => ({
+          id: c.id,
+          type: c.type,
+          score: c.threatScore,
+          narrative: c.narrative,
+          startTime: c.startTime,
+          eventCount: c.events.length,
+        }));
+
+      // Quarantined agents
+      const quarantined = warrior.getActiveQuarantinedAgents().map((q) => ({
+        agentId: q.agentId,
+        agentName: q.agentName,
+        reason: q.reason,
+        since: q.quarantinedAt,
+      }));
+
+      // Server health
+      const loadAvg = os.loadavg();
+      const totalMem = os.totalmem();
+      const freeMem = os.freemem();
+
+      const overallScore =
+        chains.length > 0 ? Math.round(chains.reduce((s, c) => s + c.score, 0) / chains.length) : 0;
+
+      return {
+        ok: true,
+        timestamp: new Date().toISOString(),
+        server: {
+          uptimeSeconds: Math.round(uptime),
+          loadAvg1m: Math.round(loadAvg[0] * 100) / 100,
+          memUsedMb: Math.round((totalMem - freeMem) / 1024 / 1024),
+          memTotalMb: Math.round(totalMem / 1024 / 1024),
+          heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
+          platform: os.platform(),
+          hostname: os.hostname(),
+        },
+        warrior: {
+          running: true,
+          overallThreatScore: overallScore,
+          attackChainsTotal: warrior.getAttackChains().length,
+          activeQuarantines: quarantined.length,
+          recentChains: chains,
+          quarantinedAgents: quarantined,
+        },
+      };
+    });
+
+    // ─── Android app threat report endpoint ───────────────────────────────────
+    // Mobile client POSTs a list of installed app package names + permissions.
+    // Server checks them against the IOC database and returns risk analysis.
+    fastify.post('/warrior/android-check', async (request) => {
+      try {
+        const body = (request.body ?? {}) as {
+          apps?: Array<{
+            packageName: string;
+            appName: string;
+            permissions: string[];
+            isSystemApp?: boolean;
+            installSource?: string;
+          }>;
+        };
+
+        if (!body.apps || !Array.isArray(body.apps)) {
+          return { error: 'apps array required', results: [] };
+        }
+
+        // Inline IOC check against known stalkerware packages
+        const KNOWN_BAD = new Set([
+          'com.flexispy.android',
+          'com.skysoft.newflexispy',
+          'com.thetruthspy.android',
+          'com.mspy.android',
+          'com.spyzie.android',
+          'com.clevguard.android',
+          'com.clevguard.kidsguard',
+          'com.clevguard.kidsguardpro',
+          'com.highstermobile',
+          'com.hoverwatch',
+          'com.spyhuman',
+          'com.ikeymonitor',
+          'com.lsdroid.cerberus',
+          'com.andro.rat',
+          'com.ahmyth.android',
+          'com.spynote',
+          'com.xnspy',
+          'com.cocospy.android',
+          'com.spyic.android',
+          'com.umobix',
+          'com.monitorminor',
+          'com.reptilicus',
+          'com.famcam.trackview',
+          'com.guestspy',
+          'com.thetruthspy',
+          'com.phonespector',
+          'com.spousespy',
+          'com.network.statistics',
+          'com.system.update.checker',
+          'com.remote.access.tool',
+          'com.phone.monitor.pro',
+          'com.call.recorder.hidden',
+          'com.hidden.spy.app',
+        ]);
+
+        const HIGH_RISK_COMBOS = [
+          {
+            perms: ['READ_SMS', 'READ_CONTACTS', 'ACCESS_FINE_LOCATION'],
+            reason: 'Reads SMS, contacts and tracks location',
+          },
+          {
+            perms: ['RECORD_AUDIO', 'ACCESS_BACKGROUND_LOCATION', 'READ_CONTACTS'],
+            reason: 'Background mic + location + contacts',
+          },
+          {
+            perms: ['RECORD_AUDIO', 'CAMERA', 'ACCESS_FINE_LOCATION'],
+            reason: 'Camera + mic + location',
+          },
+          {
+            perms: ['BIND_ACCESSIBILITY_SERVICE', 'READ_SMS', 'RECORD_AUDIO'],
+            reason: 'Accessibility abuse for keylogging',
+          },
+          {
+            perms: ['READ_CALL_LOG', 'PROCESS_OUTGOING_CALLS', 'RECORD_AUDIO'],
+            reason: 'Can monitor and record all calls',
+          },
+        ];
+
+        const results = body.apps.map((app) => {
+          const reasons: string[] = [];
+          let risk: 'clean' | 'suspicious' | 'high' | 'critical' = 'clean';
+
+          if (KNOWN_BAD.has(app.packageName)) {
+            risk = 'critical';
+            reasons.push('Package name is in known stalkerware database');
+          }
+
+          for (const combo of HIGH_RISK_COMBOS) {
+            const perms = app.permissions.map((p) => p.replace('android.permission.', ''));
+            if (combo.perms.every((p) => perms.includes(p))) {
+              reasons.push(combo.reason);
+              if (risk === 'clean') risk = 'suspicious';
+              if (reasons.length >= 2) risk = 'high';
+            }
+          }
+
+          return {
+            packageName: app.packageName,
+            appName: app.appName,
+            riskLevel: risk,
+            reasons,
+            flagged: risk !== 'clean',
+          };
+        });
+
+        const flagged = results.filter((r) => r.flagged);
+        return {
+          scannedAt: new Date().toISOString(),
+          total: results.length,
+          flaggedCount: flagged.length,
+          overallRisk: flagged.some((f) => f.riskLevel === 'critical')
+            ? 'critical'
+            : flagged.some((f) => f.riskLevel === 'high')
+              ? 'high'
+              : flagged.length > 0
+                ? 'suspicious'
+                : 'clean',
+          results,
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { error: msg, results: [] };
       }
     });
 
@@ -140,9 +330,12 @@ const start = async () => {
           totalRequests: parseInt(stats.total_requests),
           blockedRequests: parseInt(stats.blocked_requests),
           allowedRequests: parseInt(stats.allowed_requests),
-          blockRate: stats.total_requests > 0
-            ? ((parseInt(stats.blocked_requests) / parseInt(stats.total_requests)) * 100).toFixed(1) + '%'
-            : '0%',
+          blockRate:
+            stats.total_requests > 0
+              ? ((parseInt(stats.blocked_requests) / parseInt(stats.total_requests)) * 100).toFixed(
+                  1
+                ) + '%'
+              : '0%',
         },
         timestamp: new Date().toISOString(),
       };

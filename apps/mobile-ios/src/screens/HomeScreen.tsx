@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+
 import { PrivacyScoreCircle } from '../components/PrivacyScoreCircle';
 import { StatsCard } from '../components/StatsCard';
 import { PrivacyService } from '../services/PrivacyService';
@@ -80,26 +81,10 @@ export function HomeScreen({ navigation }: any) {
 
       {stats && (
         <View style={styles.statsGrid}>
-          <StatsCard
-            label="Trackers Blocked"
-            value={stats.trackersBlocked}
-            color="#4CAF50"
-          />
-          <StatsCard
-            label="Total Connections"
-            value={stats.totalConnections}
-            color="#2196F3"
-          />
-          <StatsCard
-            label="DNS Queries"
-            value={stats.dnsQueries}
-            color="#9C27B0"
-          />
-          <StatsCard
-            label="Active Connections"
-            value={stats.activeConnections}
-            color="#FF9800"
-          />
+          <StatsCard label="Trackers Blocked" value={stats.trackersBlocked} color="#4CAF50" />
+          <StatsCard label="Total Connections" value={stats.totalConnections} color="#2196F3" />
+          <StatsCard label="DNS Queries" value={stats.dnsQueries} color="#9C27B0" />
+          <StatsCard label="Active Connections" value={stats.activeConnections} color="#FF9800" />
         </View>
       )}
 
@@ -129,7 +114,21 @@ export function HomeScreen({ navigation }: any) {
           style={[styles.actionButton, styles.warriorButton]}
           onPress={() => navigation.navigate('Warrior')}
         >
-          <Text style={styles.actionButtonText}>⚔️  AI Warrior</Text>
+          <Text style={styles.actionButtonText}>⚔️ AI Warrior</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.liveButton]}
+          onPress={() => navigation.navigate('LiveThreats')}
+        >
+          <Text style={styles.actionButtonText}>🔴 Live Threats</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.scanButton]}
+          onPress={() => navigation.navigate('AndroidMonitor')}
+        >
+          <Text style={styles.actionButtonText}>🔍 App Scanner</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -198,6 +197,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a3a',
     borderWidth: 1,
     borderColor: '#3949AB',
+  },
+  liveButton: {
+    backgroundColor: '#1a0a0a',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  scanButton: {
+    backgroundColor: '#0a1a1a',
+    borderWidth: 1,
+    borderColor: '#0891b2',
   },
   actionButtonText: {
     color: '#fff',
