@@ -18,11 +18,13 @@
       },
       "package": "com.ankr.shield",
       "versionCode": 1,
-      "permissions": ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"]
+      "permissions": ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"],
+      "googleServicesFile": "./google-services.json"
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.ankr.shield"
+      "bundleIdentifier": "com.ankr.shield",
+      "buildNumber": "1"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -31,6 +33,7 @@
       "eas": {
         "projectId": "ankrshield"
       }
-    }
+    },
+    "owner": "ankrlabs"
   }
 }
