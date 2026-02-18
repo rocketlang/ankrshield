@@ -2,6 +2,7 @@
  * ankrshield API Server with GraphQL
  */
 
+import { execSync } from 'node:child_process';
 import os from 'node:os';
 
 import { SpywareScanner } from '@ankrshield/spyware-detector';
@@ -565,7 +566,138 @@ Date: ${now.toLocaleDateString('en-IN')}`;
       '/cmd',
     ];
 
-    const attackerLog: Array<{ ip: string; path: string; ua: string; at: string }> = [];
+    interface AttackerEntry {
+      ip: string;
+      path: string;
+      ua: string;
+      at: string;
+      abuseReported: boolean;
+      abuseReportId?: string;
+      blocked: boolean;
+      blockError?: string;
+    }
+
+    const attackerLog: AttackerEntry[] = [];
+    const blockedIps = new Set<string>();
+
+    // Private/loopback ranges — never report or block these
+    const isPrivateIp = (ip: string): boolean => {
+      return (
+        ip === 'unknown' ||
+        ip.startsWith('127.') ||
+        ip.startsWith('10.') ||
+        ip.startsWith('192.168.') ||
+        ip.startsWith('172.16.') ||
+        ip.startsWith('172.17.') ||
+        ip.startsWith('172.18.') ||
+        ip.startsWith('172.19.') ||
+        ip.startsWith('172.2') ||
+        ip.startsWith('172.30.') ||
+        ip.startsWith('172.31.') ||
+        ip === '::1' ||
+        ip.startsWith('fc') ||
+        ip.startsWith('fd')
+      );
+    };
+
+    // Map honeypot paths to AbuseIPDB categories
+    // https://www.abuseipdb.com/categories
+    const getAbuseCategory = (path: string): number[] => {
+      if (path.includes('wp-') || path.includes('admin') || path.includes('phpmyadmin')) {
+        return [21]; // Web App Attack
+      }
+      if (
+        path.includes('.env') ||
+        path.includes('config') ||
+        path.includes('credentials') ||
+        path.includes('secrets')
+      ) {
+        return [21, 15]; // Web App Attack + Hacking
+      }
+      if (
+        path.includes('shell') ||
+        path.includes('cmd') ||
+        path.includes('passwd') ||
+        path.includes('proc')
+      ) {
+        return [21, 15]; // Web App Attack + Hacking
+      }
+      return [14, 21]; // Port Scan + Web App Attack
+    };
+
+    // Report IP to AbuseIPDB
+    const reportToAbuseIPDB = async (
+      ip: string,
+      path: string
+    ): Promise<{ success: boolean; reportId?: string; error?: string }> => {
+      const apiKey = process.env.ABUSEIPDB_API_KEY;
+      if (!apiKey) return { success: false, error: 'ABUSEIPDB_API_KEY not set' };
+      if (isPrivateIp(ip)) return { success: false, error: 'private IP, skipped' };
+
+      try {
+        const categories = getAbuseCategory(path).join(',');
+        const comment =
+          `ANKR Shield honeypot triggered. Attacker probed: ${path}. ` +
+          `Automated scan/exploit attempt detected. ` +
+          `Reported by ANKR Shield AI security platform (ankr.in).`;
+
+        const body = new URLSearchParams({
+          ip,
+          categories,
+          comment,
+          timestamp: new Date().toISOString(),
+        });
+
+        const res = await fetch('https://api.abuseipdb.com/api/v2/report', {
+          method: 'POST',
+          headers: {
+            Key: apiKey,
+            Accept: 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: body.toString(),
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          return { success: false, error: `AbuseIPDB ${res.status}: ${text.slice(0, 100)}` };
+        }
+
+        const data = (await res.json()) as { data?: { abuseConfidenceScore?: number } };
+        const score = data?.data?.abuseConfidenceScore ?? 0;
+        const reportId = `abuse-${ip.replace(/\./g, '-')}-${Date.now()}`;
+        fastify.log.info({ ip, score }, '📡 AbuseIPDB report submitted');
+        return { success: true, reportId };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { success: false, error: msg };
+      }
+    };
+
+    // Block IP via iptables (Linux only)
+    const blockIpWithIptables = (ip: string): { blocked: boolean; error?: string } => {
+      if (isPrivateIp(ip)) return { blocked: false, error: 'private IP, skipped' };
+      if (blockedIps.has(ip)) return { blocked: true, error: 'already blocked' };
+
+      try {
+        // Check if rule already exists before adding
+        try {
+          execSync(`iptables -C INPUT -s ${ip} -j DROP 2>/dev/null`, { timeout: 3000 });
+          blockedIps.add(ip);
+          return { blocked: true, error: 'rule already existed' };
+        } catch {
+          // Rule doesn't exist — add it
+        }
+        execSync(`iptables -A INPUT -s ${ip} -j DROP`, { timeout: 3000 });
+        blockedIps.add(ip);
+        fastify.log.warn({ ip }, '🚫 IP blocked via iptables');
+        return { blocked: true };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        fastify.log.error({ ip, msg }, '⚠️  iptables block failed');
+        return { blocked: false, error: msg };
+      }
+    };
 
     const flashbackHtml = (ip: string, path: string, ua: string) => `<!DOCTYPE html>
 <html lang="en">
@@ -606,7 +738,7 @@ Date: ${now.toLocaleDateString('en-IN')}`;
   <div class="body">
     <div class="row">
       <div class="label">Status</div>
-      <div class="value red"><span class="pulse"></span> &nbsp;INTRUSION ATTEMPT LOGGED &amp; REPORTED</div>
+      <div class="value red"><span class="pulse"></span> &nbsp;INTRUSION ATTEMPT LOGGED · REPORTED TO ABUSEIPDB · IP BLOCKED</div>
     </div>
     <div class="row">
       <div class="label">Your IP Address</div>
@@ -654,20 +786,52 @@ Date: ${now.toLocaleDateString('en-IN')}`;
           request.socket.remoteAddress ??
           'unknown';
         const ua = (request.headers['user-agent'] as string) ?? 'unknown';
-        const entry = { ip, path: hPath, ua, at: new Date().toISOString() };
-        attackerLog.push(entry);
-        if (attackerLog.length > 500) attackerLog.shift(); // cap log
+
         fastify.log.warn({ honeypot: hPath, ip, ua }, '🍯 Honeypot hit — attacker fingerprinted');
-        return reply
+
+        // Build entry with pending status
+        const entry: AttackerEntry = {
+          ip,
+          path: hPath,
+          ua,
+          at: new Date().toISOString(),
+          abuseReported: false,
+          blocked: false,
+        };
+        attackerLog.push(entry);
+        if (attackerLog.length > 500) attackerLog.shift();
+
+        // Serve the flashback HTML immediately — don't wait for async actions
+        void reply
           .status(200)
           .header('Content-Type', 'text/html; charset=utf-8')
           .send(flashbackHtml(ip, hPath, ua));
+
+        // Fire-and-forget: report + block in background
+        setImmediate(() => {
+          // 1. Block via iptables (synchronous, fast)
+          const blockResult = blockIpWithIptables(ip);
+          entry.blocked = blockResult.blocked;
+          if (blockResult.error) entry.blockError = blockResult.error;
+
+          // 2. Report to AbuseIPDB (async)
+          void reportToAbuseIPDB(ip, hPath).then((result) => {
+            entry.abuseReported = result.success;
+            if (result.reportId) entry.abuseReportId = result.reportId;
+            if (!result.success) entry.blockError = result.error;
+            fastify.log.info(
+              { ip, abuseReported: result.success, blocked: entry.blocked },
+              '🛡️  Attacker response complete'
+            );
+          });
+        });
       });
     }
 
     // Endpoint for the live feed to show recent honeypot hits
     fastify.get('/warrior/honeypot-hits', async () => ({
       total: attackerLog.length,
+      blockedCount: blockedIps.size,
       recent: attackerLog.slice(-20).reverse(),
     }));
 

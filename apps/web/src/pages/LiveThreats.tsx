@@ -31,6 +31,10 @@ interface HoneypotHit {
   path: string;
   ua: string;
   at: string;
+  abuseReported: boolean;
+  abuseReportId?: string;
+  blocked: boolean;
+  blockError?: string;
 }
 
 interface LiveData {
@@ -226,7 +230,7 @@ export default function LiveThreats() {
       const json = (await liveRes.json()) as LiveData;
       setData(json);
       if (hitsRes.ok) {
-        const hitsJson = (await hitsRes.json()) as { recent: HoneypotHit[] };
+        const hitsJson = (await hitsRes.json()) as { recent: HoneypotHit[]; blockedCount: number };
         setHits(hitsJson.recent ?? []);
       }
       setError(null);
@@ -431,9 +435,30 @@ export default function LiveThreats() {
                           </div>
                         </div>
                         <p className="mt-2 text-gray-600 text-xs truncate">UA: {hit.ua}</p>
-                        <p className="mt-1 text-[10px] text-red-700">
-                          Warning served · Fingerprint logged · Reported to CERT-In
-                        </p>
+                        {/* Action badges */}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 border border-red-500/20 text-red-500">
+                            ⚠️ IDENTIFIED
+                          </span>
+                          {hit.abuseReported ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-orange-500/10 border border-orange-500/20 text-orange-400">
+                              📡 REPORTED TO ABUSEIPDB
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-gray-800 border border-gray-700 text-gray-500">
+                              📡 REPORTING…
+                            </span>
+                          )}
+                          {hit.blocked ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                              🚫 IP BLOCKED
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-gray-800 border border-gray-700 text-gray-500">
+                              🚫 {hit.blockError ?? 'BLOCKING…'}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
