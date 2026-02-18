@@ -6,7 +6,8 @@
  *   - APT group C2 infrastructure (Lazarus, APT41, Sandworm, Turla, APT28, APT33, Kimsuky)
  *   - Linux rootkits (BPFDoor, Symbiote, Reptile, Diamorphine, OrBit, HiddenWasp, XorDDoS)
  *   - CVE vulnerability detection (XZ Utils, DirtyPipe, PwnKit, DirtyCOW)
- *   - Live threat feeds (ThreatFox, Feodo Tracker — real-time APT IOCs)
+ *   - YARA binary pattern matching (11 rules: BPFDoor, Symbiote, OrBit, HiddenWasp, Lightning, XorDDoS, Reptile, Diamorphine, XZ backdoor, Turla, Lazarus)
+ *   - Live threat feeds (ThreatFox, Feodo Tracker, URLhaus, AlienVault OTX)
  */
 
 // ---------------------------------------------------------------------------
@@ -83,6 +84,9 @@ export { ProcessDetector } from './detectors/process-detector.js';
 export { FileArtifactDetector } from './detectors/file-detector.js';
 export { LinuxRootkitDetector } from './detectors/linux-rootkit-detector.js';
 export { CveDetector } from './detectors/cve-detector.js';
+export { YaraDetector } from './detectors/yara-detector.js';
+export { BUNDLED_YARA_RULES, RULE_METADATA } from './yara-rules.js';
+export type { YaraRuleMeta } from './yara-rules.js';
 export { LiveIocDetector, getActivelyExploitedCves } from './live-ioc-feed.js';
 
 // ---------------------------------------------------------------------------

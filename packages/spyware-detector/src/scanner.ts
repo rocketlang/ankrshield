@@ -17,6 +17,8 @@
  *   FileArtifactDetector    — spyware + rootkit file artifacts
  *   LinuxRootkitDetector    — LD_PRELOAD, kernel modules, raw sockets, hidden procs
  *   CveDetector             — XZ Utils, DirtyPipe, PwnKit, DirtyCOW
+ *   YaraDetector            — binary pattern matching (11 rules across 8 malware families)
+ *   LiveIocDetector         — ThreatFox, Feodo Tracker, URLhaus, AlienVault OTX
  */
 
 import { randomUUID } from 'crypto';
@@ -28,6 +30,7 @@ import { FileArtifactDetector } from './detectors/file-detector.js';
 import { LinuxRootkitDetector } from './detectors/linux-rootkit-detector.js';
 import { NetworkIOCDetector } from './detectors/network-detector.js';
 import { ProcessDetector } from './detectors/process-detector.js';
+import { YaraDetector } from './detectors/yara-detector.js';
 import { LiveIocDetector } from './live-ioc-feed.js';
 import type {
   ScanOptions,
@@ -48,6 +51,7 @@ const DEFAULT_OPTIONS: ScanOptions = {
   enableDnsScan: true,
   enableLinuxRootkitScan: true,
   enableCveScan: true,
+  enableYaraScan: true,
   customIocs: [],
 };
 
@@ -356,12 +360,22 @@ export class SpywareScanner extends EventEmitter {
       );
     }
 
-    // ── Live threat feeds (ThreatFox, Feodo Tracker — real-time APT IOCs) ──
+    // ── Live threat feeds (ThreatFox, Feodo Tracker, URLhaus, OTX) ──
     if (this.options.enableNetworkScan && recentDomains.length + recentIPs.length > 0) {
       tasks.push(
         Promise.resolve().then(async () => {
           const detector = new LiveIocDetector();
           return detector.scan(recentDomains, recentIPs);
+        })
+      );
+    }
+
+    // ── YARA binary pattern matching ──
+    if (this.options.enableYaraScan) {
+      tasks.push(
+        Promise.resolve().then(async () => {
+          const detector = new YaraDetector();
+          return detector.scan(this.options.yaraExtraPaths);
         })
       );
     }

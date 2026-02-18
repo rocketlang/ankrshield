@@ -479,6 +479,7 @@ export default function Landing() {
               '🔬 Symbiote rootkit · LD_PRELOAD hijack · BLOCKED',
               '💀 Lazarus Group SSH key exfil attempt · DPRK',
               '🌐 Turla Penguin C2 · FSB APT · Serpent backdoor',
+              '🧬 YARA match: BPFDoor_Linux_Backdoor @ /dev/shm/.init · confidence 90',
               '🚨 PwnKit exploit attempt · CVE-2021-4034 · BLOCKED',
             ])
             .flat()
@@ -536,11 +537,11 @@ export default function Landing() {
             accent="red"
             tagline="Kernel-Level Defense"
             bullets={[
+              'YARA binary scanning — 11 rules, 8 malware families',
               'BPFDoor · Symbiote · OrBit rootkit detection',
               'LD_PRELOAD hijack & library injection alerts',
               'Reptile · Diamorphine kernel module IOCs',
               '/proc filesystem manipulation detection',
-              'eBPF-based stealth process monitoring',
               'XZ Utils (CVE-2024-3094) supply chain defense',
             ]}
           />
@@ -597,11 +598,26 @@ export default function Landing() {
             <h2 className="text-4xl font-black text-white mt-4 mb-4">
               What's actually attacking your server
             </h2>
-            <p className="text-gray-400 max-w-2xl mx-auto">
+            <p className="text-gray-400 max-w-2xl mx-auto mb-6">
               Linux servers face the most sophisticated malware on the internet — rootkits that hide
               inside the kernel, backdoors that survive reboots, and nation-state implants that
               evade every antivirus. xShield AI tracks them all.
             </p>
+            {/* YARA badge */}
+            <div className="inline-flex items-center gap-3 bg-orange-500/10 border border-orange-500/30 rounded-xl px-5 py-3 text-sm">
+              <span className="text-2xl">🧬</span>
+              <div className="text-left">
+                <div className="text-orange-300 font-bold">YARA Binary Scanning Active</div>
+                <div className="text-gray-400 text-xs">
+                  11 pattern-matching rules scan /tmp, /dev/shm, /var/tmp and all known artifact
+                  paths — catches malware by binary content, not just filename or path.
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-orange-400 font-black font-mono text-xl">11</div>
+                <div className="text-gray-500 text-[10px]">rules</div>
+              </div>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-[#0a0f18] overflow-hidden">
@@ -864,11 +880,11 @@ export default function Landing() {
             heroLabel="Active botnet C2 IPs tracked live — Feodo Tracker + ThreatFox, refreshed every 5 min"
             accent="orange"
             vectors={[
+              { icon: '🧬', label: 'YARA binary pattern rules loaded', count: '11' },
               { icon: '🦠', label: 'Rootkit families with live behavioral IOCs', count: '8' },
               { icon: '🌐', label: 'APT groups with Linux C2 infrastructure', count: '7' },
               { icon: '🔍', label: '/proc · LD_PRELOAD · kernel module scanning', count: 'live' },
               { icon: '🚨', label: 'Critical kernel CVEs in active detection', count: '4' },
-              { icon: '🍯', label: 'SSH brute-force honeypot trap paths', count: '17+' },
             ]}
           />
           <PlatformShieldCard
@@ -1037,6 +1053,9 @@ export default function Landing() {
                       <div className="text-cyan-400">🔍 AbuseIPDB pre-screening active</div>
                       <div className="text-cyan-400">🐧 Linux rootkit IOC monitor active</div>
                       <div className="text-cyan-400">
+                        🧬 YARA scanner ready (11 rules / 8 families)
+                      </div>
+                      <div className="text-cyan-400">
                         🛰️ APT C2 domain watchlist loaded (47 groups)
                       </div>
                       <div className="text-gray-500 mt-2">─────────────────────────────</div>
@@ -1048,6 +1067,9 @@ export default function Landing() {
                       <div className="text-purple-300">🔍 Pre-block: 91.92.240.28 · score 92</div>
                       <div className="text-purple-300"> ISP: Frantech · Known bullet-proof</div>
                       <div className="text-purple-300">🌐 Access denied · 403 · pre-screened</div>
+                      <div className="text-gray-500">─────────────────────────────</div>
+                      <div className="text-orange-300">🧬 YARA: Symbiote_Linux_Rootkit matched</div>
+                      <div className="text-orange-300"> /tmp/.so.cache · conf 87 · QUARANTINE</div>
                       <div className="text-gray-500">─────────────────────────────</div>
                       <div className="text-red-300">💀 APT IOC match: bpfdoor beacon sig</div>
                       <div className="text-red-300"> Matches APT41 / Double Dragon TTPs</div>

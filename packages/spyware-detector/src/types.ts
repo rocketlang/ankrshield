@@ -51,7 +51,8 @@ export type SpywareIndicatorType =
   | 'kernel_module'
   | 'kernel_artifact'
   | 'cve_vulnerable'
-  | 'exploit_attempt';
+  | 'exploit_attempt'
+  | 'yara_match';
 
 /**
  * Overall detection severity level based on accumulated confidence:
@@ -176,7 +177,15 @@ export interface ScanOptions {
    * PwnKit (polkit), XZ Utils backdoor. */
   enableCveScan: boolean;
 
+  /** Run YARA binary pattern matching against staging directories (/tmp,
+   * /dev/shm, /var/tmp) and known rootkit artifact paths. Requires the
+   * `yara` binary to be installed (apt install yara). Linux-only. */
+  enableYaraScan: boolean;
+
   /** Optional list of additional IOC strings (domains or IPs) supplied by the
    * caller — merged with the built-in lists before scanning. */
   customIocs?: string[];
+
+  /** Optional list of additional file paths for the YARA scanner to inspect. */
+  yaraExtraPaths?: string[];
 }
