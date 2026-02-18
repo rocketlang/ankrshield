@@ -33,6 +33,7 @@
       "@ankrshield/ai-warrior": ["./packages/ai-warrior/src"],
       "@ankrshield/spyware-detector": ["./packages/spyware-detector/src"],
       "@ankrshield/android-monitor": ["./packages/android-monitor/src"],
+      "@ankrshield/risk-intelligence": ["./packages/risk-intelligence/src"],
       "@ankrshield/tracker-db": ["./packages/tracker-db/src"],
       "@ankrshield/crypto": ["./packages/crypto/src"]
     }

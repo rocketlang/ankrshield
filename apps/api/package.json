@@ -43,6 +43,7 @@
     "zod": "^3.25.76",
     "@ankrshield/ai-warrior": "workspace:*",
     "@ankrshield/ai-governance": "workspace:*",
+    "@ankrshield/risk-intelligence": "workspace:*",
     "@ankrshield/spyware-detector": "workspace:*",
     "@ankrshield/policy-engine": "workspace:*"
   },

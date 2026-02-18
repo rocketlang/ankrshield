@@ -359,6 +359,9 @@ export default function Landing() {
             <a href="#apt" className="hover:text-white transition-colors">
               APT Groups
             </a>
+            <a href="#risk" className="hover:text-white transition-colors">
+              Risk Intel
+            </a>
             <a href="#platforms" className="hover:text-white transition-colors">
               Platforms
             </a>
@@ -1158,6 +1161,190 @@ export default function Landing() {
                 <div className="text-gray-400 text-[10px] mt-0.5">{o.label}</div>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Digital Risk Intelligence ── */}
+      <section id="risk" className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
+        <div className="text-center mb-14">
+          <Badge color="red">Digital Risk Intelligence</Badge>
+          <h2 className="text-4xl font-black text-white mt-4 mb-4">
+            Know your exposure before attackers do
+          </h2>
+          <p className="text-gray-400 max-w-2xl mx-auto">
+            xShield continuously monitors your domain and server for breach records, exposed
+            services, phishing impostors, and IP reputation — the same intelligence used by
+            enterprise SOC teams, now free.
+          </p>
+        </div>
+
+        {/* Four intelligence pillars */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-16">
+          {[
+            {
+              icon: '🔍',
+              source: 'GreyNoise Community',
+              badge: 'FREE · No Auth',
+              title: 'IP Reputation',
+              desc: 'Classifies your server IP as malicious / benign / internet background noise against the global GreyNoise sensor network.',
+              accent: 'text-cyan-400',
+              border: 'border-cyan-500/30',
+              glow: 'bg-cyan-600/5',
+              facts: ['19M+ IPs tracked', 'Real-time classification', 'Scanner vs. threat actor'],
+            },
+            {
+              icon: '🌐',
+              source: 'Shodan',
+              badge: 'Free API Key',
+              title: 'Attack Surface',
+              desc: 'Enumerates every port and service your server exposes to the internet — and flags CVEs Shodan has already associated with them.',
+              accent: 'text-orange-400',
+              border: 'border-orange-500/30',
+              glow: 'bg-orange-600/5',
+              facts: ['Open port enumeration', 'Software version fingerprint', 'CVE correlation'],
+            },
+            {
+              icon: '💧',
+              source: 'Have I Been Pwned',
+              badge: 'FREE · Public List',
+              title: 'Breach Monitor',
+              desc: 'Checks whether your domain appears in any of the 900+ public breach records in the HIBP database — no paid subscription required.',
+              accent: 'text-purple-400',
+              border: 'border-purple-500/30',
+              glow: 'bg-purple-600/5',
+              facts: ['900+ breach records', 'Domain-level check', '14B+ pwned accounts indexed'],
+            },
+            {
+              icon: '🎣',
+              source: 'urlscan.io',
+              badge: 'FREE · No Auth',
+              title: 'Phishing & Typosquat',
+              desc: "Detects phishing pages and typosquatting domains targeting your brand. Generates 30+ domain variants and checks each against urlscan's verdict database.",
+              accent: 'text-rose-400',
+              border: 'border-rose-500/30',
+              glow: 'bg-rose-600/5',
+              facts: ['30+ typosquat variants', 'Malicious verdict check', 'Screenshot evidence'],
+            },
+          ].map((pillar) => (
+            <div
+              key={pillar.source}
+              className={`${pillar.glow} border ${pillar.border} rounded-2xl p-6 flex flex-col gap-4`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-3xl">{pillar.icon}</span>
+                <span className="text-[10px] font-bold text-gray-500 border border-white/10 rounded-full px-2.5 py-0.5 uppercase tracking-widest whitespace-nowrap">
+                  {pillar.badge}
+                </span>
+              </div>
+              <div>
+                <div
+                  className={`text-xs font-bold uppercase tracking-widest mb-1 ${pillar.accent}`}
+                >
+                  {pillar.source}
+                </div>
+                <div className="text-white font-black text-lg leading-tight">{pillar.title}</div>
+              </div>
+              <p className="text-gray-400 text-sm leading-relaxed flex-1">{pillar.desc}</p>
+              <ul className="space-y-1.5">
+                {pillar.facts.map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-xs text-gray-300">
+                    <span className={`${pillar.accent} text-[10px]`}>▶</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+
+        {/* Risk score visualiser card */}
+        <div className="border border-white/10 bg-white/[0.03] rounded-2xl p-8 md:p-12 flex flex-col md:flex-row items-center gap-10">
+          {/* Score gauge (static visual) */}
+          <div className="flex-shrink-0 flex flex-col items-center gap-3">
+            <div className="relative w-36 h-36">
+              <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
+                <circle cx="60" cy="60" r="48" fill="none" stroke="#1f2937" strokeWidth="12" />
+                <circle
+                  cx="60"
+                  cy="60"
+                  r="48"
+                  fill="none"
+                  stroke="url(#riskGrad)"
+                  strokeWidth="12"
+                  strokeLinecap="round"
+                  strokeDasharray={`${0.72 * 301.6} 301.6`}
+                />
+                <defs>
+                  <linearGradient id="riskGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#10b981" />
+                    <stop offset="50%" stopColor="#f59e0b" />
+                    <stop offset="100%" stopColor="#ef4444" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center rotate-90">
+                <span className="text-3xl font-black text-white font-mono">72</span>
+                <span className="text-[10px] text-orange-400 font-bold uppercase tracking-widest">
+                  HIGH
+                </span>
+              </div>
+            </div>
+            <div className="text-xs text-gray-500 text-center">Risk Score 0–100</div>
+          </div>
+
+          {/* Description */}
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-bold text-red-400 uppercase tracking-widest mb-2">
+              Composite Risk Score
+            </div>
+            <h3 className="text-2xl font-black text-white mb-3">
+              One number that summarises your entire threat exposure
+            </h3>
+            <p className="text-gray-400 text-sm leading-relaxed mb-6">
+              xShield aggregates signals from GreyNoise, Shodan, HIBP, and urlscan.io into a single
+              0–100 risk score. Each source contributes weighted risk factors — so a single critical
+              finding (malicious IP classification) doesn't get washed out by minor findings.
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {[
+                {
+                  level: 'Minimal',
+                  range: '0–14',
+                  color: 'text-emerald-400 border-emerald-500/40',
+                },
+                { level: 'Low', range: '15–34', color: 'text-cyan-400 border-cyan-500/40' },
+                { level: 'Medium', range: '35–54', color: 'text-yellow-400 border-yellow-500/40' },
+                { level: 'High', range: '55–74', color: 'text-orange-400 border-orange-500/40' },
+                { level: 'Critical', range: '75–100', color: 'text-red-400 border-red-500/40' },
+              ].map((l) => (
+                <span
+                  key={l.level}
+                  className={`text-xs font-bold px-3 py-1 rounded-full border font-mono ${l.color} bg-white/5`}
+                >
+                  {l.level} · {l.range}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* API snippet */}
+          <div className="flex-shrink-0 w-full md:w-64">
+            <div className="bg-black/60 border border-white/10 rounded-xl p-5 font-mono text-xs">
+              <div className="text-gray-500 mb-2"># REST API</div>
+              <div className="text-cyan-300">GET /risk/report</div>
+              <div className="text-gray-400"> ?domain=example.com</div>
+              <div className="text-gray-600 mt-3 mb-1">→ returns</div>
+              <div className="text-emerald-300">{'{'}</div>
+              <div className="text-gray-300 ml-2">
+                riskScore: <span className="text-orange-300">72</span>,
+              </div>
+              <div className="text-gray-300 ml-2">
+                riskLevel: <span className="text-yellow-300">"high"</span>,
+              </div>
+              <div className="text-gray-300 ml-2">factors: [...]</div>
+              <div className="text-emerald-300">{'}'}</div>
+            </div>
           </div>
         </div>
       </section>

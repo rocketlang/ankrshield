@@ -5,6 +5,7 @@
 import { execSync } from 'node:child_process';
 import os from 'node:os';
 
+import { runRiskEngine, scanIpWithGreyNoise } from '@ankrshield/risk-intelligence';
 import { SpywareScanner } from '@ankrshield/spyware-detector';
 import Fastify from 'fastify';
 import mercurius from 'mercurius';
@@ -1053,6 +1054,65 @@ Date: ${now.toLocaleDateString('en-IN')}`;
       blockedCount: blockedIps.size,
       recent: attackerLog.slice(-20).reverse(),
     }));
+
+    // ─── Risk Intelligence endpoints ─────────────────────────────────────────
+    // Full digital risk report for a domain (GreyNoise + Shodan + HIBP + urlscan)
+    fastify.get<{ Querystring: { domain?: string } }>('/risk/report', async (request, reply) => {
+      const domain = request.query.domain?.trim();
+      if (!domain) {
+        return reply.status(400).send({ error: 'domain query param required' });
+      }
+      try {
+        const report = await runRiskEngine({
+          domain,
+          shodanApiKey: process.env.SHODAN_API_KEY,
+        });
+        return report;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return reply.status(500).send({ error: msg });
+      }
+    });
+
+    // Quick risk score only (lighter than full report)
+    fastify.get<{ Querystring: { domain?: string } }>('/risk/score', async (request, reply) => {
+      const domain = request.query.domain?.trim();
+      if (!domain) {
+        return reply.status(400).send({ error: 'domain query param required' });
+      }
+      try {
+        const report = await runRiskEngine({
+          domain,
+          shodanApiKey: process.env.SHODAN_API_KEY,
+          enableUrlscan: false, // skip urlscan for quick score
+        });
+        return {
+          domain: report.domain,
+          serverIp: report.serverIp,
+          riskScore: report.riskScore,
+          riskLevel: report.riskLevel,
+          factorCount: report.factors.length,
+          durationMs: report.durationMs,
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return reply.status(500).send({ error: msg });
+      }
+    });
+
+    // GreyNoise classification for a single IP (useful for live threat feed)
+    fastify.get<{ Params: { ip: string } }>('/risk/ip/:ip', async (request, reply) => {
+      const { ip } = request.params;
+      if (!ip) return reply.status(400).send({ error: 'ip param required' });
+      try {
+        const result = await scanIpWithGreyNoise(ip);
+        if (!result) return { ip, classification: 'unknown', noise: false, riot: false };
+        return result;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return reply.status(500).send({ error: msg });
+      }
+    });
 
     // Start server
     const port = parseInt(process.env.PORT || '4250', 10);
