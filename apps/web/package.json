@@ -21,6 +21,7 @@
     "@apollo/client": "^3.14.0",
     "graphql": "^16.8.1",
     "lucide-react": "^0.312.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^6.21.3",

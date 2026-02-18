@@ -3,16 +3,17 @@
  */
 
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import ProtectedRoute from './components/ProtectedRoute';
 
+import ProtectedRoute from './components/ProtectedRoute';
 // Pages
-import Landing from './pages/Landing';
-import Login from './pages/Login';
-import Register from './pages/Register';
+import Analytics from './pages/Analytics';
 import Dashboard from './pages/Dashboard';
 import Devices from './pages/Devices';
-import Analytics from './pages/Analytics';
+import Landing from './pages/Landing';
+import LiveThreats from './pages/LiveThreats';
+import Login from './pages/Login';
 import Policies from './pages/Policies';
+import Register from './pages/Register';
 import Settings from './pages/Settings';
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Landing />} />
+        <Route path="/live" element={<LiveThreats />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 

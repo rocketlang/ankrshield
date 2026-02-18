@@ -10,7 +10,10 @@
  * - CTA section with download + GitHub buttons
  */
 
+import { QRCodeSVG } from 'qrcode.react';
 import { Link } from 'react-router-dom';
+
+const APK_URL = 'https://shield.ankr.in/ankrshield.apk';
 
 // ─── Gradient border card wrapper ─────────────────────────────────────────────
 function GradientCard({
@@ -354,7 +357,68 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── CTA Section ── */}
+      {/* ── Server Threat Tracking Section ── */}
+      <section id="server-shield" className="py-20 bg-gray-950 border-t border-gray-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <span className="inline-block bg-red-500/10 text-red-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest mb-4">
+              Live Server Protection
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-4">
+              AI Warrior watches your Linux server
+            </h2>
+            <p className="text-gray-400 max-w-2xl mx-auto">
+              ANKR Shield runs silently on your server stack — sniffing network traffic, tracking
+              processes, and detecting lateral movement, data exfiltration, and zero-day exploits in
+              real time.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            {[
+              {
+                icon: '🌐',
+                title: 'Network Sniffing',
+                desc: 'Deep packet inspection on all interfaces. Flags C2 callbacks, DNS tunnelling, and TOR exit node traffic from your stack.',
+              },
+              {
+                icon: '⚙️',
+                title: 'Process & File Monitoring',
+                desc: 'Watches /proc, cron jobs, and systemd units for injected code, rootkits, and privilege escalation attempts.',
+              },
+              {
+                icon: '🤖',
+                title: 'AI Threat Correlation',
+                desc: 'AI Warrior correlates events across layers — process, network, file — building attack chains and scoring threats 0–100.',
+              },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-red-500/30 transition-colors"
+              >
+                <div className="text-3xl mb-3">{item.icon}</div>
+                <h3 className="text-white font-bold text-lg mb-2">{item.title}</h3>
+                <p className="text-gray-400 text-sm leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Live threat demo link */}
+          <div className="text-center">
+            <a
+              href="https://shield.ankr.in/live"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-red-600/10 hover:bg-red-600/20 text-red-400 border border-red-500/30 px-6 py-3 rounded-xl transition-all font-semibold text-sm"
+            >
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              View Live Threat Dashboard
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA + QR Download Section ── */}
       <section
         id="download"
         className="relative overflow-hidden py-24 bg-gradient-to-br from-blue-950 via-gray-950 to-cyan-950"
@@ -364,38 +428,75 @@ export default function Landing() {
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[500px] h-[300px] bg-blue-600/10 rounded-full blur-3xl" />
         </div>
 
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <div className="text-5xl mb-6">🛡️</div>
-          <h2 className="text-4xl sm:text-5xl font-extrabold text-white mb-4 tracking-tight">
-            Protect Yourself Now
-          </h2>
-          <p className="text-gray-400 text-lg mb-10 max-w-xl mx-auto leading-relaxed">
-            Nation-state spyware targets activists, journalists, and executives every day. ANKR
-            Shield is your open-source defense layer.
-          </p>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a
-              href="#"
-              className="inline-flex items-center gap-3 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white font-bold px-10 py-4 rounded-xl transition-all shadow-xl shadow-blue-500/30 text-lg"
-            >
-              <span>📥</span>
-              Download the App
-            </a>
-            <a
-              href="https://github.com/rocketlang-private/ankrshield"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-3 bg-transparent hover:bg-gray-800 text-white font-bold px-10 py-4 rounded-xl transition-all border border-gray-600 hover:border-gray-400 text-lg"
-            >
-              <span>🐙</span>
-              View GitHub
-            </a>
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Headline */}
+          <div className="text-center mb-14">
+            <div className="text-5xl mb-6">🛡️</div>
+            <h2 className="text-4xl sm:text-5xl font-extrabold text-white mb-4 tracking-tight">
+              Protect Yourself Now
+            </h2>
+            <p className="text-gray-400 text-lg max-w-xl mx-auto leading-relaxed">
+              Nation-state spyware targets activists, journalists, and executives every day. ANKR
+              Shield is your open-source defense layer — free, no telemetry.
+            </p>
           </div>
 
-          <p className="mt-8 text-gray-600 text-sm">
-            Open source · No telemetry · Self-hosted · MIT License
-          </p>
+          {/* Two-column: QR + Buttons */}
+          <div className="flex flex-col lg:flex-row items-center justify-center gap-12">
+            {/* QR Code Card */}
+            <div className="bg-gray-900 border border-gray-700 rounded-2xl p-8 flex flex-col items-center gap-4 shadow-2xl">
+              <p className="text-cyan-400 font-bold text-sm uppercase tracking-widest">
+                📱 Scan to Download Android APK
+              </p>
+              <div className="bg-white p-3 rounded-xl">
+                <QRCodeSVG
+                  value={APK_URL}
+                  size={180}
+                  bgColor="#ffffff"
+                  fgColor="#0f172a"
+                  level="M"
+                />
+              </div>
+              <p className="text-gray-500 text-xs text-center max-w-[200px]">
+                Point your camera at the QR code to download ANKR Shield APK
+              </p>
+              <a
+                href={APK_URL}
+                download="ankrshield.apk"
+                className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-lg shadow-blue-500/30 text-sm w-full justify-center"
+              >
+                <span>📥</span> Direct Download APK
+              </a>
+            </div>
+
+            {/* Info + buttons */}
+            <div className="flex flex-col gap-5 max-w-sm w-full">
+              <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-5">
+                <p className="text-white font-semibold mb-1">Android (APK)</p>
+                <p className="text-gray-400 text-sm">
+                  Scan the QR code or tap Direct Download. Enable "Install from unknown sources" in
+                  your Android settings before installing.
+                </p>
+              </div>
+              <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-5">
+                <p className="text-white font-semibold mb-1">Self-hosted Server</p>
+                <p className="text-gray-400 text-sm font-mono text-xs bg-gray-950 rounded p-2 mt-2">
+                  npx @ankrshield/warrior start
+                </p>
+              </div>
+              <a
+                href="https://github.com/rocketlang-private/ankrshield"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-3 bg-transparent hover:bg-gray-800 text-white font-bold px-8 py-4 rounded-xl transition-all border border-gray-600 hover:border-gray-400 text-base justify-center"
+              >
+                <span>🐙</span> View GitHub
+              </a>
+              <p className="text-gray-600 text-xs text-center">
+                Open source · No telemetry · Self-hosted · MIT License
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
