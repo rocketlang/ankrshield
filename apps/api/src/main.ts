@@ -542,6 +542,135 @@ Date: ${now.toLocaleDateString('en-IN')}`;
       return { ...reportPayload, reportHash };
     });
 
+    // ─── Attacker Flashback — Honeypot Trap Endpoints ─────────────────────────
+    // Any probe to these paths is logged as a threat indicator.
+    // The attacker sees a warning card: "You have been identified."
+    // 100% legal — this is our server, we serve what we want on our endpoints.
+    const HONEYPOT_PATHS = [
+      '/.env',
+      '/.git/config',
+      '/wp-admin',
+      '/wp-login.php',
+      '/admin',
+      '/phpmyadmin',
+      '/config.php',
+      '/backup.zip',
+      '/api/v1/users',
+      '/api/keys',
+      '/credentials',
+      '/secrets',
+      '/etc/passwd',
+      '/proc/self/environ',
+      '/shell',
+      '/cmd',
+    ];
+
+    const attackerLog: Array<{ ip: string; path: string; ua: string; at: string }> = [];
+
+    const flashbackHtml = (ip: string, path: string, ua: string) => `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ANKR Shield — You Have Been Identified</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{min-height:100vh;background:#030712;display:flex;align-items:center;justify-content:center;font-family:monospace;color:#fff;padding:20px}
+    .card{max-width:560px;width:100%;border:1px solid #ef4444;border-radius:16px;overflow:hidden;background:#0a0a0a;box-shadow:0 0 60px rgba(239,68,68,0.15)}
+    .header{background:#ef4444;padding:20px 28px;display:flex;align-items:center;gap:12px}
+    .header h1{font-size:18px;font-weight:900;letter-spacing:-0.5px}
+    .shield{font-size:28px}
+    .body{padding:28px}
+    .row{margin-bottom:14px}
+    .label{font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#6b7280;margin-bottom:3px}
+    .value{font-size:13px;color:#f3f4f6;word-break:break-all}
+    .value.red{color:#f87171}
+    .value.mono{font-family:monospace;background:#111;padding:6px 10px;border-radius:6px;display:block;font-size:11px}
+    .divider{border:none;border-top:1px solid #1f2937;margin:20px 0}
+    .warning{background:#1a0505;border:1px solid #7f1d1d;border-radius:10px;padding:16px;margin:20px 0}
+    .warning p{font-size:12px;color:#fca5a5;line-height:1.7}
+    .footer{background:#0f0f0f;padding:16px 28px;font-size:10px;color:#374151;text-align:center}
+    .pulse{display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:50%;animation:pulse 1s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <span class="shield">🛡️</span>
+    <div>
+      <h1>You Have Been Identified</h1>
+      <p style="font-size:11px;opacity:0.85;margin-top:2px">ANKR Shield — Active Threat Response</p>
+    </div>
+  </div>
+  <div class="body">
+    <div class="row">
+      <div class="label">Status</div>
+      <div class="value red"><span class="pulse"></span> &nbsp;INTRUSION ATTEMPT LOGGED &amp; REPORTED</div>
+    </div>
+    <div class="row">
+      <div class="label">Your IP Address</div>
+      <code class="value mono">${ip}</code>
+    </div>
+    <div class="row">
+      <div class="label">Probe Target</div>
+      <code class="value mono">${path}</code>
+    </div>
+    <div class="row">
+      <div class="label">Client Fingerprint</div>
+      <code class="value mono">${ua.slice(0, 120)}</code>
+    </div>
+    <div class="row">
+      <div class="label">Timestamp (UTC)</div>
+      <code class="value mono">${new Date().toISOString()}</code>
+    </div>
+    <hr class="divider"/>
+    <div class="warning">
+      <p>
+        <strong style="color:#ef4444">⚠️ Legal Warning:</strong> This server is protected by ANKR Shield.
+        Your access attempt has been logged, fingerprinted, and reported to CERT-In
+        (Indian Computer Emergency Response Team) and law enforcement under
+        <strong>Section 43 and Section 66 of the Information Technology Act 2000</strong>.
+        Unauthorized access to computer systems is punishable by up to 3 years imprisonment
+        and/or a fine of ₹5,00,000.
+      </p>
+    </div>
+    <p style="font-size:11px;color:#4b5563;text-align:center">
+      Evidence package generated · SHA-256 signed · Immutable log preserved
+    </p>
+  </div>
+  <div class="footer">
+    ANKR Shield · AI-powered cybersecurity · ankr.in
+  </div>
+</div>
+</body>
+</html>`;
+
+    // Register all honeypot paths
+    for (const hPath of HONEYPOT_PATHS) {
+      fastify.get(hPath, async (request, reply) => {
+        const ip =
+          (request.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ??
+          request.socket.remoteAddress ??
+          'unknown';
+        const ua = (request.headers['user-agent'] as string) ?? 'unknown';
+        const entry = { ip, path: hPath, ua, at: new Date().toISOString() };
+        attackerLog.push(entry);
+        if (attackerLog.length > 500) attackerLog.shift(); // cap log
+        fastify.log.warn({ honeypot: hPath, ip, ua }, '🍯 Honeypot hit — attacker fingerprinted');
+        return reply
+          .status(200)
+          .header('Content-Type', 'text/html; charset=utf-8')
+          .send(flashbackHtml(ip, hPath, ua));
+      });
+    }
+
+    // Endpoint for the live feed to show recent honeypot hits
+    fastify.get('/warrior/honeypot-hits', async () => ({
+      total: attackerLog.length,
+      recent: attackerLog.slice(-20).reverse(),
+    }));
+
     // Start server
     const port = parseInt(process.env.PORT || '4250', 10);
     const host = process.env.HOST || '0.0.0.0';

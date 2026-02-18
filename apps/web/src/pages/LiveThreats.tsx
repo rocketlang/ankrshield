@@ -26,6 +26,13 @@ interface QuarantinedAgent {
   since: string;
 }
 
+interface HoneypotHit {
+  ip: string;
+  path: string;
+  ua: string;
+  at: string;
+}
+
 interface LiveData {
   ok: boolean;
   timestamp: string;
@@ -202,6 +209,7 @@ function ServerStat({
 
 export default function LiveThreats() {
   const [data, setData] = useState<LiveData | null>(null);
+  const [hits, setHits] = useState<HoneypotHit[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState('');
   const [polls, setPolls] = useState(0);
@@ -210,10 +218,17 @@ export default function LiveThreats() {
 
   const fetch5s = async () => {
     try {
-      const res = await fetch(`${API_BASE}/warrior/threats/live`);
-      if (!res.ok) throw new Error(`${res.status}`);
-      const json = (await res.json()) as LiveData;
+      const [liveRes, hitsRes] = await Promise.all([
+        fetch(`${API_BASE}/warrior/threats/live`),
+        fetch(`${API_BASE}/warrior/honeypot-hits`),
+      ]);
+      if (!liveRes.ok) throw new Error(`${liveRes.status}`);
+      const json = (await liveRes.json()) as LiveData;
       setData(json);
+      if (hitsRes.ok) {
+        const hitsJson = (await hitsRes.json()) as { recent: HoneypotHit[] };
+        setHits(hitsJson.recent ?? []);
+      }
       setError(null);
       setLastFetch(new Date().toLocaleTimeString('en-IN', { hour12: false }));
       setPulse(true);
@@ -371,6 +386,60 @@ export default function LiveThreats() {
                 </div>
               )}
             </div>
+
+            {/* ── Attacker Flashback — Honeypot Hits ── */}
+            {hits.length > 0 && (
+              <div>
+                <h2 className="font-bold text-lg flex items-center gap-2 mb-4">
+                  <span className="text-xl">🍯</span> Intruders Identified
+                  <span className="text-xs text-gray-600 font-normal ml-1">
+                    ({hits.length} honeypot hits)
+                  </span>
+                </h2>
+                <div className="space-y-3">
+                  {hits.map((hit, i) => (
+                    <div
+                      key={`${hit.ip}-${hit.at}-${i}`}
+                      className="relative rounded-2xl border border-red-500/30 bg-red-950/10 overflow-hidden"
+                    >
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500" />
+                      <div className="pl-5 pr-5 py-4">
+                        <div className="flex items-center gap-2 flex-wrap mb-2">
+                          <span className="px-2.5 py-0.5 rounded-lg border text-xs font-bold bg-red-500/10 border-red-500/40 text-red-400">
+                            ⚠️ INTRUDER IDENTIFIED
+                          </span>
+                          <span className="text-gray-600 text-xs">{fmtTimeAgo(hit.at)}</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                          <div>
+                            <p className="text-gray-600 uppercase tracking-widest text-[10px]">
+                              IP Address
+                            </p>
+                            <code className="text-red-300 font-mono">{hit.ip}</code>
+                          </div>
+                          <div>
+                            <p className="text-gray-600 uppercase tracking-widest text-[10px]">
+                              Probe Target
+                            </p>
+                            <code className="text-orange-300 font-mono">{hit.path}</code>
+                          </div>
+                          <div>
+                            <p className="text-gray-600 uppercase tracking-widest text-[10px]">
+                              Timestamp
+                            </p>
+                            <code className="text-gray-400 font-mono">{fmtTime(hit.at)}</code>
+                          </div>
+                        </div>
+                        <p className="mt-2 text-gray-600 text-xs truncate">UA: {hit.ua}</p>
+                        <p className="mt-1 text-[10px] text-red-700">
+                          Warning served · Fingerprint logged · Reported to CERT-In
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* ── Quarantined Agents ── */}
             {data.warrior.quarantinedAgents.length > 0 && (
