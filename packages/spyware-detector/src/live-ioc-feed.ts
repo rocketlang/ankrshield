@@ -58,8 +58,8 @@ const APT_TAGS = new Set([
   'sandworm',
   'turla',
   'kimsuky',
-  'cozyb ear',
-  'lazarusg roup',
+  'cozybear',
+  'lazarusgroup',
   'darkside',
   'ryuk',
   'conti',
@@ -67,7 +67,7 @@ const APT_TAGS = new Set([
   'bpfdoor',
   'symbiote',
   'sideload',
-  'tradertrait or',
+  'tradertraitor',
   'applejeus',
 ]);
 
@@ -212,13 +212,108 @@ export async function getActivelyExploitedCves(): Promise<Set<string>> {
 }
 
 // ---------------------------------------------------------------------------
+// URLhaus (abuse.ch) — malware distribution URL feed
+// No authentication required. Updated continuously.
+// ---------------------------------------------------------------------------
+
+interface UrlhausEntry {
+  url: string;
+  url_status: string; // 'online' | 'offline'
+  host: string;
+}
+
+async function fetchUrlhausHosts(): Promise<string[]> {
+  // JSON download of recent malware distribution URLs (no auth required)
+  const data = await fetchJson<UrlhausEntry[]>(
+    'https://urlhaus.abuse.ch/downloads/json_recent_urls/'
+  );
+  if (!Array.isArray(data)) return [];
+
+  const hosts: string[] = [];
+  for (const entry of data) {
+    if (entry.url_status !== 'online') continue;
+    // Prefer pre-parsed host field; fall back to URL parsing
+    if (entry.host) {
+      hosts.push(entry.host.toLowerCase().trim());
+    } else {
+      try {
+        hosts.push(new URL(entry.url).hostname.toLowerCase());
+      } catch {
+        /* skip malformed */
+      }
+    }
+  }
+  return hosts;
+}
+
+// ---------------------------------------------------------------------------
+// AlienVault OTX — Open Threat Exchange (optional, needs free API key)
+// Set env var OTX_API_KEY to enable. Free at otx.alienvault.com.
+// Fetches subscribed pulse indicators: domains + IPv4 addresses.
+// ---------------------------------------------------------------------------
+
+interface OtxIndicator {
+  type: string; // 'domain', 'hostname', 'IPv4', 'URL', 'FileHash-MD5', ...
+  indicator: string;
+}
+
+interface OtxPulse {
+  name: string;
+  tags: string[];
+  indicators: OtxIndicator[];
+}
+
+interface OtxPulsesResponse {
+  results: OtxPulse[];
+}
+
+async function fetchOtxIocs(): Promise<{ domains: string[]; ips: string[] }> {
+  const apiKey = process.env['OTX_API_KEY'];
+  if (!apiKey) return { domains: [], ips: [] };
+
+  const result = { domains: [] as string[], ips: [] as string[] };
+
+  // Fetch recent pulse activity (last 7 days, up to 50 pulses)
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const url = `https://otx.alienvault.com/api/v1/pulses/subscribed?limit=50&modified_since=${since}`;
+
+  const data = await fetchJson<OtxPulsesResponse>(url, {
+    headers: { 'X-OTX-API-KEY': apiKey },
+  });
+
+  if (!data?.results) return result;
+
+  for (const pulse of data.results) {
+    for (const ind of pulse.indicators ?? []) {
+      const val = ind.indicator?.trim();
+      if (!val) continue;
+      if (ind.type === 'domain' || ind.type === 'hostname') {
+        result.domains.push(val.toLowerCase());
+      } else if (ind.type === 'IPv4') {
+        result.ips.push(val);
+      } else if (ind.type === 'URL') {
+        try {
+          result.domains.push(new URL(val).hostname.toLowerCase());
+        } catch {
+          /* skip */
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Main live IOC fetch function (cached)
 // ---------------------------------------------------------------------------
 
 async function fetchLiveIocs(): Promise<CacheEntry> {
-  const [threatFox, feodoIps] = await Promise.allSettled([
+  const [threatFox, feodoIps, urlhausHosts, otxData] = await Promise.allSettled([
     fetchThreatFoxAptIocs(),
     fetchFeodoTrackerIps(),
+    fetchUrlhausHosts(),
+    fetchOtxIocs(),
   ]);
 
   const domains = new Set<string>();
@@ -231,6 +326,15 @@ async function fetchLiveIocs(): Promise<CacheEntry> {
 
   if (feodoIps.status === 'fulfilled') {
     for (const ip of feodoIps.value) ips.add(ip);
+  }
+
+  if (urlhausHosts.status === 'fulfilled') {
+    for (const h of urlhausHosts.value) domains.add(h);
+  }
+
+  if (otxData.status === 'fulfilled') {
+    for (const d of otxData.value.domains) domains.add(d);
+    for (const ip of otxData.value.ips) ips.add(ip);
   }
 
   return { domains, ips, fetchedAt: Date.now() };

@@ -246,6 +246,92 @@ function MalwareRow({
   );
 }
 
+// ─── Platform shield card ──────────────────────────────────────────────────────
+function PlatformShieldCard({
+  icon,
+  name,
+  badge,
+  heroStat,
+  heroLabel,
+  accent,
+  vectors,
+}: {
+  icon: string;
+  name: string;
+  badge: string;
+  heroStat: string;
+  heroLabel: string;
+  accent: 'orange' | 'green' | 'blue' | 'slate';
+  vectors: { icon: string; label: string; count?: string }[];
+}) {
+  const ring =
+    accent === 'orange'
+      ? 'border-orange-500/25 hover:border-orange-500/45'
+      : accent === 'green'
+        ? 'border-emerald-500/25 hover:border-emerald-500/45'
+        : accent === 'blue'
+          ? 'border-blue-500/25 hover:border-blue-500/45'
+          : 'border-slate-500/25 hover:border-slate-400/40';
+  const statColor =
+    accent === 'orange'
+      ? 'text-orange-400'
+      : accent === 'green'
+        ? 'text-emerald-400'
+        : accent === 'blue'
+          ? 'text-blue-400'
+          : 'text-slate-300';
+  const countColor =
+    accent === 'orange'
+      ? 'text-orange-400/80'
+      : accent === 'green'
+        ? 'text-emerald-400/80'
+        : accent === 'blue'
+          ? 'text-blue-400/80'
+          : 'text-slate-400';
+
+  return (
+    <div
+      className={`rounded-2xl border bg-white/[0.04] p-6 transition-all hover:bg-white/[0.07] ${ring}`}
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between mb-5">
+        <div>
+          <div className="text-3xl mb-2">{icon}</div>
+          <div className="text-white font-bold text-base">{name}</div>
+          <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-0.5">
+            {badge}
+          </div>
+        </div>
+        <span
+          className="w-2 h-2 rounded-full bg-green-500 animate-pulse mt-1 shrink-0"
+          title="Live detection active"
+        />
+      </div>
+
+      {/* Hero stat */}
+      <div className="mb-5 rounded-xl bg-black/40 border border-white/[0.06] px-4 py-3">
+        <div className={`text-3xl font-black font-mono leading-none ${statColor}`}>{heroStat}</div>
+        <div className="text-gray-400 text-xs mt-1.5 leading-snug">{heroLabel}</div>
+      </div>
+
+      {/* Threat vectors */}
+      <ul className="space-y-2.5">
+        {vectors.map((v) => (
+          <li key={v.label} className="flex items-start gap-2 text-xs">
+            <span className="shrink-0 text-sm leading-none mt-0.5">{v.icon}</span>
+            <span className="text-gray-300 flex-1 leading-snug">{v.label}</span>
+            {v.count && (
+              <span className={`shrink-0 font-mono font-bold text-[10px] ${countColor}`}>
+                {v.count}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 export default function Landing() {
   const { score, chains, honeypots } = useLiveThreatScore();
@@ -272,6 +358,9 @@ export default function Landing() {
             </a>
             <a href="#apt" className="hover:text-white transition-colors">
               APT Groups
+            </a>
+            <a href="#platforms" className="hover:text-white transition-colors">
+              Platforms
             </a>
             <a href="#how-it-works" className="hover:text-white transition-colors">
               How it Works
@@ -749,6 +838,123 @@ export default function Landing() {
             IOC database sourced from: Mandiant, CrowdStrike, ESET, Recorded Future, Sekoia, CISA
             advisories
           </p>
+        </div>
+      </section>
+
+      {/* ── Platform shield coverage ── */}
+      <section id="platforms" className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
+        <div className="text-center mb-14">
+          <Badge color="amber">Platform Coverage</Badge>
+          <h2 className="text-4xl font-black text-white mt-4 mb-4">
+            Every device. Every threat vector.
+          </h2>
+          <p className="text-gray-400 max-w-2xl mx-auto">
+            Attackers don't pick one platform. From kernel-level Linux rootkits to zero-click iPhone
+            spyware, xShield AI maintains live detection across your entire attack surface — server,
+            phone, and beyond.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+          <PlatformShieldCard
+            icon="🐧"
+            name="Linux"
+            badge="Server &amp; VPS Defense"
+            heroStat="800+"
+            heroLabel="Active botnet C2 IPs tracked live — Feodo Tracker + ThreatFox, refreshed every 5 min"
+            accent="orange"
+            vectors={[
+              { icon: '🦠', label: 'Rootkit families with live behavioral IOCs', count: '8' },
+              { icon: '🌐', label: 'APT groups with Linux C2 infrastructure', count: '7' },
+              { icon: '🔍', label: '/proc · LD_PRELOAD · kernel module scanning', count: 'live' },
+              { icon: '🚨', label: 'Critical kernel CVEs in active detection', count: '4' },
+              { icon: '🍯', label: 'SSH brute-force honeypot trap paths', count: '17+' },
+            ]}
+          />
+          <PlatformShieldCard
+            icon="🤖"
+            name="Android"
+            badge="Mobile Spyware Defense"
+            heroStat="5"
+            heroLabel="Nation-state spyware tools actively tracked — Pegasus, Predator, Hermit, Reign, FinFisher"
+            accent="green"
+            vectors={[
+              { icon: '🔬', label: 'NSO Group · Intellexa · Hacking Team · FinFisher' },
+              { icon: '💳', label: 'Banking trojan families in IOC database', count: '100+' },
+              { icon: '👁️', label: 'Commercial stalkerware apps monitored', count: '50+' },
+              { icon: '⚡', label: 'Zero-click exploit chain C2 indicators', count: 'live' },
+              { icon: '📦', label: 'Malicious APK sideload &amp; re-sign detection' },
+            ]}
+          />
+          <PlatformShieldCard
+            icon="🪟"
+            name="Windows"
+            badge="Endpoint &amp; Server Guard"
+            heroStat="150+"
+            heroLabel="Active ransomware families tracked — LockBit, BlackCat, Cl0p, REvil, Conti and growing"
+            accent="blue"
+            vectors={[
+              { icon: '💀', label: 'LockBit · BlackCat · Cl0p · REvil · Conti IOCs' },
+              { icon: '🔗', label: 'Emotet → TrickBot ransomware delivery chain' },
+              { icon: '📦', label: 'Supply chain attack indicators (SolarWinds TTPs)' },
+              { icon: '🏠', label: 'Active Directory lateral movement detection' },
+              { icon: '🛠️', label: 'LOLBin abuse (living-off-the-land binaries)' },
+            ]}
+          />
+          <PlatformShieldCard
+            icon="🍎"
+            name="iOS / iPhone"
+            badge="Zero-Click Spyware Defense"
+            heroStat="7"
+            heroLabel="Zero-click exploit chains documented by Citizen Lab &amp; Kaspersky GReAT"
+            accent="slate"
+            vectors={[
+              { icon: '🔭', label: 'Pegasus targets confirmed: 50,000+ (Amnesty Tech)' },
+              { icon: '⚡', label: 'FORCEDENTRY · Triangulation · BLASTPASS IOCs' },
+              { icon: '💰', label: 'iOS zero-day exploit market price', count: '$2.5M' },
+              { icon: '🔒', label: 'No-jailbreak MDM &amp; config profile abuse detection' },
+              { icon: '📡', label: 'C2 domains from Citizen Lab NSO Group research' },
+            ]}
+          />
+        </div>
+
+        {/* Bottom stats strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            {
+              value: '1,900+',
+              label: 'Linux malware families',
+              sub: 'documented by AV-TEST research',
+              color: 'text-orange-400',
+            },
+            {
+              value: '3M+',
+              label: 'Android malware samples',
+              sub: 'circulating in the wild',
+              color: 'text-emerald-400',
+            },
+            {
+              value: '450K',
+              label: 'New Windows samples daily',
+              sub: 'AV-TEST global telemetry',
+              color: 'text-blue-400',
+            },
+            {
+              value: '$2.5M',
+              label: 'iOS zero-click exploit price',
+              sub: 'Zerodium public price list',
+              color: 'text-slate-300',
+            },
+          ].map((s) => (
+            <div
+              key={s.label}
+              className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-5 text-center"
+            >
+              <div className={`text-2xl font-black font-mono ${s.color}`}>{s.value}</div>
+              <div className="text-gray-200 text-xs font-semibold mt-1">{s.label}</div>
+              <div className="text-gray-500 text-[10px] mt-0.5">{s.sub}</div>
+            </div>
+          ))}
         </div>
       </section>
 
