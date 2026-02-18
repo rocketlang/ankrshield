@@ -10,24 +10,22 @@
  * - Added live demo on this VM option
  */
 
-import { Link } from 'react-router-dom';
 import {
   Shield,
   Lock,
   Eye,
-  Zap,
   Download,
   PlayCircle,
   AlertTriangle,
   CheckCircle,
-  TrendingUp,
   Code,
   MonitorPlay,
   Laptop,
   DollarSign,
   Activity,
-  Server
+  Server,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 // Threat Card Component
 function ThreatCard({
@@ -127,10 +125,7 @@ function TrustCard({
       <div className="mb-4">{icon}</div>
       <h3 className="text-xl font-bold mb-3">{title}</h3>
       <p className="text-gray-300 mb-4 leading-relaxed">{description}</p>
-      <a
-        href={link}
-        className="text-blue-400 hover:text-blue-300 text-sm font-semibold transition"
-      >
+      <a href={link} className="text-blue-400 hover:text-blue-300 text-sm font-semibold transition">
         Learn More →
       </a>
     </div>
@@ -160,22 +155,13 @@ export default function Landing() {
             <span className="text-2xl font-bold">ankrshield</span>
           </div>
           <div className="space-x-4 flex items-center">
-            <a
-              href="#demo"
-              className="px-4 py-2 text-gray-300 hover:text-white transition"
-            >
+            <a href="#demo" className="px-4 py-2 text-gray-300 hover:text-white transition">
               Try Demo
             </a>
-            <a
-              href="#download"
-              className="px-4 py-2 text-gray-300 hover:text-white transition"
-            >
+            <a href="#download" className="px-4 py-2 text-gray-300 hover:text-white transition">
               Download
             </a>
-            <Link
-              to="/login"
-              className="px-4 py-2 text-gray-300 hover:text-white transition"
-            >
+            <Link to="/login" className="px-4 py-2 text-gray-300 hover:text-white transition">
               Login
             </Link>
             <Link
@@ -200,8 +186,8 @@ export default function Landing() {
           </h1>
 
           <p className="text-xl md:text-2xl text-gray-300 mb-8 leading-relaxed">
-            <span className="text-red-400 font-bold">98.6% of websites</span> have trackers.
-            AI companies scrape your data for training. Data brokers sell your profile for{' '}
+            <span className="text-red-400 font-bold">98.6% of websites</span> have trackers. AI
+            companies scrape your data for training. Data brokers sell your profile for{' '}
             <span className="text-red-400 font-bold">$700/year</span>.
             <br />
             <span className="text-blue-400 font-bold">Take back control. Right now.</span>
@@ -284,13 +270,11 @@ export default function Landing() {
             <div className="inline-block px-6 py-3 bg-red-900/20 border border-red-500/30 rounded-lg">
               <p className="text-gray-300">
                 <span className="text-red-400 font-bold">98.6%</span> of websites track you |
-                <span className="text-red-400 font-bold">1,500+ data points</span> collected about you |
-                <span className="text-red-400 font-bold">$700/year</span> your data is worth |
+                <span className="text-red-400 font-bold">1,500+ data points</span> collected about
+                you |<span className="text-red-400 font-bold">$700/year</span> your data is worth |
                 <span className="text-red-400 font-bold">$0.0005</span> what you get paid (nothing)
               </p>
-              <p className="text-xs text-gray-500 mt-2">
-                Sources: Health Affairs, WebFX, Proton
-              </p>
+              <p className="text-xs text-gray-500 mt-2">Sources: Health Affairs, WebFX, Proton</p>
             </div>
           </div>
         </section>
@@ -371,8 +355,8 @@ export default function Landing() {
               </div>
 
               <p className="text-sm text-gray-400">
-                Demo mode includes all features • No account required • Try for free •
-                See REAL protection working on this server
+                Demo mode includes all features • No account required • Try for free • See REAL
+                protection working on this server
               </p>
             </div>
           </div>
@@ -413,7 +397,8 @@ export default function Landing() {
 
           <div className="mt-12 text-center">
             <p className="text-gray-400">
-              Desktop apps are <strong>100% offline-capable</strong> • No internet required after install
+              Desktop apps are <strong>100% offline-capable</strong> • No internet required after
+              install
             </p>
           </div>
         </section>
@@ -622,11 +607,10 @@ export default function Landing() {
           </div>
 
           <div className="border-t border-gray-800 pt-8 text-center text-gray-400 text-sm">
-            <p>
-              © 2026 ankrshield. Your Privacy, Your Control. Licensed under GPL-3.0.
-            </p>
+            <p>© 2026 ankrshield. Your Privacy, Your Control. Licensed under GPL-3.0.</p>
             <p className="mt-2">
-              Made with privacy-first principles. All statistics verified from peer-reviewed research.
+              Made with privacy-first principles. All statistics verified from peer-reviewed
+              research.
             </p>
           </div>
         </div>

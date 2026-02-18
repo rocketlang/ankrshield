@@ -3,19 +3,14 @@
  * Side navigation with menu items
  */
 
+import { LayoutDashboard, Smartphone, BarChart3, Shield, Settings } from 'lucide-react';
+import type { JSX } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import {
-  LayoutDashboard,
-  Smartphone,
-  BarChart3,
-  Shield,
-  Settings,
-} from 'lucide-react';
 
 interface NavItem {
   label: string;
   path: string;
-  icon: React.ReactNode;
+  icon: JSX.Element;
 }
 
 const navItems: NavItem[] = [

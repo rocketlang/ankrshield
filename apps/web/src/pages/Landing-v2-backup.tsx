@@ -2,7 +2,6 @@
  * Landing Page - Compelling, threat-aware, trust-building
  */
 
-import { Link } from 'react-router-dom';
 import {
   Shield,
   Lock,
@@ -12,14 +11,13 @@ import {
   PlayCircle,
   AlertTriangle,
   CheckCircle,
-  TrendingUp,
   Users,
   Code,
   FileCheck,
-  Chrome,
   MonitorPlay,
-  Laptop
+  Laptop,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export default function Landing() {
   return (
@@ -32,22 +30,13 @@ export default function Landing() {
             <span className="text-2xl font-bold">ankrshield</span>
           </div>
           <div className="space-x-4 flex items-center">
-            <a
-              href="#demo"
-              className="px-4 py-2 text-gray-300 hover:text-white transition"
-            >
+            <a href="#demo" className="px-4 py-2 text-gray-300 hover:text-white transition">
               Try Demo
             </a>
-            <a
-              href="#download"
-              className="px-4 py-2 text-gray-300 hover:text-white transition"
-            >
+            <a href="#download" className="px-4 py-2 text-gray-300 hover:text-white transition">
               Download
             </a>
-            <Link
-              to="/login"
-              className="px-4 py-2 text-gray-300 hover:text-white transition"
-            >
+            <Link to="/login" className="px-4 py-2 text-gray-300 hover:text-white transition">
               Login
             </Link>
             <Link
@@ -72,8 +61,8 @@ export default function Landing() {
           </h1>
 
           <p className="text-xl md:text-2xl text-gray-300 mb-8 leading-relaxed">
-            Every day, <span className="text-red-400 font-bold">2,000+ trackers</span> harvest your data.
-            AI agents scrape your behavior. Your privacy is being sold without your consent.
+            Every day, <span className="text-red-400 font-bold">2,000+ trackers</span> harvest your
+            data. AI agents scrape your behavior. Your privacy is being sold without your consent.
             <br />
             <span className="text-blue-400 font-bold">Take back control. Right now.</span>
           </p>
@@ -122,9 +111,7 @@ export default function Landing() {
             <h2 className="text-4xl md:text-5xl font-bold mb-4">
               The Threats Are <span className="text-red-400">REAL</span>
             </h2>
-            <p className="text-xl text-gray-300">
-              Here's what's happening to your data right now
-            </p>
+            <p className="text-xl text-gray-300">Here's what's happening to your data right now</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
@@ -155,8 +142,8 @@ export default function Landing() {
             <div className="inline-block px-6 py-3 bg-red-900/20 border border-red-500/30 rounded-lg">
               <p className="text-red-300">
                 <AlertTriangle className="w-5 h-5 inline mr-2" />
-                <strong>Average user:</strong> Tracked by 1,200+ companies daily | Data sold for $0.50/profile |
-                Zero control over who sees your information
+                <strong>Average user:</strong> Tracked by 1,200+ companies daily | Data sold for
+                $0.50/profile | Zero control over who sees your information
               </p>
             </div>
           </div>
@@ -178,30 +165,30 @@ export default function Landing() {
               icon={<Shield className="w-12 h-12 text-blue-400" />}
               title="AI Agent Control"
               features={[
-                "Monitor what AI tools access",
-                "Block unauthorized scraping",
-                "Fake data injection for scrapers",
-                "Real-time AI activity logs"
+                'Monitor what AI tools access',
+                'Block unauthorized scraping',
+                'Fake data injection for scrapers',
+                'Real-time AI activity logs',
               ]}
             />
             <ProtectionCard
               icon={<Eye className="w-12 h-12 text-purple-400" />}
               title="Tracker Annihilation"
               features={[
-                "Block 2M+ known trackers",
-                "DNS-level ad blocking",
-                "Cookie auto-deletion",
-                "Fingerprint randomization"
+                'Block 2M+ known trackers',
+                'DNS-level ad blocking',
+                'Cookie auto-deletion',
+                'Fingerprint randomization',
               ]}
             />
             <ProtectionCard
               icon={<Zap className="w-12 h-12 text-green-400" />}
               title="Real-time Intelligence"
               features={[
-                "See every network request",
-                "Privacy score dashboard",
-                "Threat alert notifications",
-                "Detailed analytics"
+                'See every network request',
+                'Privacy score dashboard',
+                'Threat alert notifications',
+                'Detailed analytics',
               ]}
             />
           </div>
@@ -271,7 +258,8 @@ export default function Landing() {
             <div className="inline-block px-6 py-3 bg-green-900/20 border border-green-500/30 rounded-lg">
               <p className="text-green-300">
                 <CheckCircle className="w-5 h-5 inline mr-2" />
-                Desktop apps are <strong>100% offline-capable</strong> • No internet required after install
+                Desktop apps are <strong>100% offline-capable</strong> • No internet required after
+                install
               </p>
             </div>
           </div>
@@ -320,19 +308,27 @@ export default function Landing() {
             <ul className="space-y-3 text-gray-300">
               <li className="flex items-start gap-3">
                 <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0 mt-1" />
-                <span><strong>No accounts required</strong> - Use the desktop app completely offline</span>
+                <span>
+                  <strong>No accounts required</strong> - Use the desktop app completely offline
+                </span>
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0 mt-1" />
-                <span><strong>No telemetry</strong> - We never phone home or collect usage stats</span>
+                <span>
+                  <strong>No telemetry</strong> - We never phone home or collect usage stats
+                </span>
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0 mt-1" />
-                <span><strong>Local-first</strong> - All your data stays on your device, encrypted</span>
+                <span>
+                  <strong>Local-first</strong> - All your data stays on your device, encrypted
+                </span>
               </li>
               <li className="flex items-start gap-3">
                 <CheckCircle className="w-6 h-6 text-green-400 flex-shrink-0 mt-1" />
-                <span><strong>Free forever</strong> - No freemium tricks, no paid plans, no ads</span>
+                <span>
+                  <strong>Free forever</strong> - No freemium tricks, no paid plans, no ads
+                </span>
               </li>
             </ul>
           </div>
@@ -394,30 +390,78 @@ export default function Landing() {
           <div>
             <h4 className="font-semibold mb-4">Product</h4>
             <ul className="space-y-2 text-gray-400 text-sm">
-              <li><a href="#demo" className="hover:text-white">Live Demo</a></li>
-              <li><a href="#download" className="hover:text-white">Download</a></li>
-              <li><a href="/features" className="hover:text-white">Features</a></li>
-              <li><a href="/pricing" className="hover:text-white">Pricing (FREE)</a></li>
+              <li>
+                <a href="#demo" className="hover:text-white">
+                  Live Demo
+                </a>
+              </li>
+              <li>
+                <a href="#download" className="hover:text-white">
+                  Download
+                </a>
+              </li>
+              <li>
+                <a href="/features" className="hover:text-white">
+                  Features
+                </a>
+              </li>
+              <li>
+                <a href="/pricing" className="hover:text-white">
+                  Pricing (FREE)
+                </a>
+              </li>
             </ul>
           </div>
 
           <div>
             <h4 className="font-semibold mb-4">Trust</h4>
             <ul className="space-y-2 text-gray-400 text-sm">
-              <li><a href="https://github.com/ankrshield" className="hover:text-white">GitHub</a></li>
-              <li><a href="/security-audit" className="hover:text-white">Security Audit</a></li>
-              <li><a href="/privacy-policy" className="hover:text-white">Privacy Policy</a></li>
-              <li><a href="/open-source" className="hover:text-white">Open Source</a></li>
+              <li>
+                <a href="https://github.com/ankrshield" className="hover:text-white">
+                  GitHub
+                </a>
+              </li>
+              <li>
+                <a href="/security-audit" className="hover:text-white">
+                  Security Audit
+                </a>
+              </li>
+              <li>
+                <a href="/privacy-policy" className="hover:text-white">
+                  Privacy Policy
+                </a>
+              </li>
+              <li>
+                <a href="/open-source" className="hover:text-white">
+                  Open Source
+                </a>
+              </li>
             </ul>
           </div>
 
           <div>
             <h4 className="font-semibold mb-4">Community</h4>
             <ul className="space-y-2 text-gray-400 text-sm">
-              <li><a href="/blog" className="hover:text-white">Blog</a></li>
-              <li><a href="/docs" className="hover:text-white">Documentation</a></li>
-              <li><a href="/discord" className="hover:text-white">Discord</a></li>
-              <li><a href="/contribute" className="hover:text-white">Contribute</a></li>
+              <li>
+                <a href="/blog" className="hover:text-white">
+                  Blog
+                </a>
+              </li>
+              <li>
+                <a href="/docs" className="hover:text-white">
+                  Documentation
+                </a>
+              </li>
+              <li>
+                <a href="/discord" className="hover:text-white">
+                  Discord
+                </a>
+              </li>
+              <li>
+                <a href="/contribute" className="hover:text-white">
+                  Contribute
+                </a>
+              </li>
             </ul>
           </div>
         </div>
