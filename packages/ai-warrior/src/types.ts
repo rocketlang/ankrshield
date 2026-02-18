@@ -32,8 +32,8 @@ export interface ThreatEvent {
   agentName?: string;
 
   // What happened
-  action: string;       // e.g. "FILE_READ", "NETWORK_UPLOAD", "CLIPBOARD_ACCESS"
-  resource: string;     // e.g. file path, domain, endpoint
+  action: string; // e.g. "FILE_READ", "NETWORK_UPLOAD", "CLIPBOARD_ACCESS"
+  resource: string; // e.g. file path, domain, endpoint
 
   // Size (bytes transferred, file size, etc.)
   byteCount?: number;
@@ -73,17 +73,17 @@ export interface AttackChain {
 
   // Classification
   attackType: AttackType;
-  threatScore: number;          // 0–100
+  threatScore: number; // 0–100
 
   // LLM-generated descriptions
-  narrative: string;            // Plain English for non-technical users
-  technicalSummary: string;     // Technical analysis for security teams
+  narrative: string; // Plain English for non-technical users
+  technicalSummary: string; // Technical analysis for security teams
 
   // Impact
-  affectedAssets: string[];     // File paths, domains, credentials affected
+  affectedAssets: string[]; // File paths, domains, credentials affected
 
   // Response
-  suggestedActions: string[];   // Human-readable remediation steps
+  suggestedActions: string[]; // Human-readable remediation steps
   autoActionsApplied: string[]; // Actions already taken automatically
 }
 
@@ -101,17 +101,17 @@ export type PolicyRuleType =
 
 export interface GeneratedPolicyRule {
   type: PolicyRuleType;
-  value: string;        // The path / domain / type / bytes cap
-  reason: string;       // Why this rule was generated
+  value: string; // The path / domain / type / bytes cap
+  reason: string; // Why this rule was generated
 }
 
 export interface GeneratedPolicy {
   id: string;
   name: string;
   description: string;
-  triggeredBy: string;           // AttackChain.id
+  triggeredBy: string; // AttackChain.id
   rules: GeneratedPolicyRule[];
-  confidence: number;            // 0–100 — how certain the LLM is
+  confidence: number; // 0–100 — how certain the LLM is
   autoApplied: boolean;
   requiresApproval: boolean;
   createdAt: Date;
@@ -127,7 +127,7 @@ export interface HoneypotAsset {
   type: HoneypotType;
   path: string;
   name: string;
-  content: string;      // The decoy content placed in the file
+  content: string; // The decoy content placed in the file
   createdAt: Date;
   lastCheckedAtime: number; // ms — atime snapshot at last poll
 
@@ -145,7 +145,7 @@ export interface QuarantinedAgent {
   quarantinedAt: Date;
   reason: string;
   attackChainId: string;
-  isActive: boolean;    // still quarantined vs. released
+  isActive: boolean; // still quarantined vs. released
 }
 
 // ─── Incident Report ──────────────────────────────────────────────────────────
@@ -164,11 +164,11 @@ export interface IncidentReport {
   period: { start: Date; end: Date };
 
   // Scores
-  riskScore: number;             // 0–100 overall
+  riskScore: number; // 0–100 overall
 
   // LLM-generated summaries
-  executiveSummary: string;      // 2–3 sentence plain English
-  technicalAnalysis: string;     // Full technical breakdown
+  executiveSummary: string; // 2–3 sentence plain English
+  technicalAnalysis: string; // Full technical breakdown
 
   // Data
   attackChains: AttackChain[];
@@ -189,33 +189,44 @@ export interface IncidentReport {
 // ─── Warrior Config ───────────────────────────────────────────────────────────
 
 export interface WarriorConfig {
-  // LLM
-  anthropicApiKey: string;
-  model?: string;                    // Default: claude-sonnet-4-6
+  // LLM — one of proxyUrl (ANKR AI proxy, no key needed) or anthropicApiKey required
+  /** ANKR AI proxy URL e.g. http://localhost:4444 — uses free_first strategy by default */
+  proxyUrl?: string;
+  proxyStrategy?: 'free_first' | 'cheapest' | 'fastest' | 'quality';
+  /** Direct Anthropic API key — used only when proxyUrl is not set */
+  anthropicApiKey?: string;
+  model?: string; // Default: claude-sonnet-4-6
 
   // Correlation tuning
-  correlationWindowMs?: number;      // Default: 5 minutes (300_000)
-  minEventsForChain?: number;        // Default: 2
-  threatScoreThreshold?: number;     // Default: 55 — trigger policy gen
+  correlationWindowMs?: number; // Default: 5 minutes (300_000)
+  minEventsForChain?: number; // Default: 2
+  threatScoreThreshold?: number; // Default: 55 — trigger policy gen
 
   // Response automation
-  autoApplyPolicies?: boolean;       // Default: false — require user approval
-  autoQuarantineScore?: number;      // Default: 88 — auto-quarantine above this
+  autoApplyPolicies?: boolean; // Default: false — require user approval
+  autoQuarantineScore?: number; // Default: 88 — auto-quarantine above this
 
   // Honeypots
-  enableHoneypots?: boolean;         // Default: true
-  honeypotDirectory?: string;        // Default: os.tmpdir()/ankrshield-honeypots
-  honeypotPollIntervalMs?: number;   // Default: 30_000
+  enableHoneypots?: boolean; // Default: true
+  honeypotDirectory?: string; // Default: os.tmpdir()/ankrshield-honeypots
+  honeypotPollIntervalMs?: number; // Default: 30_000
 
   // Reporting
-  reportIntervalMs?: number;         // Default: 86_400_000 (24 hours)
+  reportIntervalMs?: number; // Default: 86_400_000 (24 hours)
 
   // Buffer cap
-  maxEventBufferSize?: number;       // Default: 10_000
+  maxEventBufferSize?: number; // Default: 10_000
 }
 
-// Internal: all fields required (after applying defaults)
-export type ResolvedWarriorConfig = Required<WarriorConfig>;
+// Internal: all fields required (after applying defaults), except optional LLM fields
+export type ResolvedWarriorConfig = Omit<
+  Required<WarriorConfig>,
+  'proxyUrl' | 'proxyStrategy' | 'anthropicApiKey'
+> & {
+  proxyUrl?: string;
+  proxyStrategy?: 'free_first' | 'cheapest' | 'fastest' | 'quality';
+  anthropicApiKey?: string;
+};
 
 // ─── Warrior Status ───────────────────────────────────────────────────────────
 

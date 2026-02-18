@@ -7,13 +7,7 @@
  * Default: 'allow' if no policy matches.
  */
 
-import type {
-  Policy,
-  PolicyConditions,
-  EvaluationRequest,
-  EvaluationResult,
-  PolicyAction,
-} from './types';
+import type { Policy, PolicyConditions, EvaluationRequest, EvaluationResult } from './types';
 
 // ─── Threat Level Ranking ──────────────────────────────────────────────────────
 
@@ -108,11 +102,7 @@ export class PolicyEngine {
 
   // ─── Condition Matching ────────────────────────────────────────────────────
 
-  private matches(
-    conditions: PolicyConditions,
-    req: EvaluationRequest,
-    now: Date,
-  ): boolean {
+  private matches(conditions: PolicyConditions, req: EvaluationRequest, now: Date): boolean {
     // Each condition group must match if present (AND logic)
 
     if (conditions.domains?.length && req.domain) {

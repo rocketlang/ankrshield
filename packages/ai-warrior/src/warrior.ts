@@ -116,7 +116,12 @@ export class AIWarrior extends EventEmitter {
       ...config,
     } as ResolvedWarriorConfig;
 
-    this.llm = new WarriorLLMClient(config.anthropicApiKey, this.config.model);
+    this.llm = new WarriorLLMClient({
+      proxyUrl: config.proxyUrl,
+      proxyStrategy: config.proxyStrategy,
+      anthropicApiKey: config.anthropicApiKey,
+      model: this.config.model,
+    });
 
     this.correlator = new AttackCorrelator();
     this.narrator = new ThreatNarrator(this.llm);

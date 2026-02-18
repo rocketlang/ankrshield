@@ -40,8 +40,13 @@ function pushEvent(type: string, payload: unknown): void {
 
 export function getWarrior(): AIWarrior {
   if (!warrior) {
+    // Use ANKR AI proxy if configured (no Anthropic key needed — free_first routing)
+    // Falls back to direct Anthropic SDK when proxy is not set.
+    const proxyUrl = process.env.ANKR_AI_PROXY_URL || process.env.WARRIOR_PROXY_URL;
     warrior = new AIWarrior({
-      anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? '',
+      ...(proxyUrl
+        ? { proxyUrl, proxyStrategy: 'free_first' }
+        : { anthropicApiKey: process.env.ANTHROPIC_API_KEY }),
       model: process.env.WARRIOR_MODEL ?? 'claude-sonnet-4-6',
       correlationWindowMs: parseInt(process.env.WARRIOR_CORRELATION_WINDOW_MS ?? '300000'),
       threatScoreThreshold: parseInt(process.env.WARRIOR_THREAT_THRESHOLD ?? '55'),

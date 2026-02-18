@@ -5,7 +5,6 @@
  * These are NOT Prisma models — they live entirely in process memory.
  */
 
-import { builder } from '../builder';
 import type {
   ThreatEvent,
   AttackChain,
@@ -19,6 +18,8 @@ import type {
   WarriorStatus,
 } from '@ankrshield/ai-warrior';
 
+import { builder } from '../builder';
+
 // ─── Enums ────────────────────────────────────────────────────────────────────
 
 builder.enumType('ThreatSeverity', {
@@ -26,7 +27,15 @@ builder.enumType('ThreatSeverity', {
 });
 
 builder.enumType('ThreatSource', {
-  values: ['ai-agent', 'network', 'file-system', 'clipboard', 'dns', 'process', 'honeypot'] as const,
+  values: [
+    'ai_agent',
+    'network',
+    'file_system',
+    'clipboard',
+    'dns',
+    'process',
+    'honeypot',
+  ] as const,
 });
 
 builder.enumType('AttackType', {
@@ -56,7 +65,7 @@ builder.enumType('PolicyRuleType', {
 });
 
 builder.enumType('HoneypotType', {
-  values: ['file', 'directory', 'api-key', 'wallet', 'credential'] as const,
+  values: ['file', 'directory', 'api_key', 'wallet', 'credential'] as const,
 });
 
 builder.enumType('ScopeViolationType', {

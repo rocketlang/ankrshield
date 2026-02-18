@@ -19,12 +19,10 @@
 
 import { execSync } from 'child_process';
 import { randomUUID } from 'crypto';
-import type { SpywareIndicator } from '../types.js';
+
+import { FINFISHER_PROCESS_NAMES, HERMIT_PACKAGE_NAMES } from '../iocs/other-spyware-iocs.js';
 import { PEGASUS_PROCESS_NAMES } from '../iocs/pegasus-iocs.js';
-import {
-  FINFISHER_PROCESS_NAMES,
-  HERMIT_PACKAGE_NAMES,
-} from '../iocs/other-spyware-iocs.js';
+import type { SpywareIndicator } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Internal signature table
@@ -75,7 +73,12 @@ function parseProcessTokens(raw: string): string[] {
   return raw
     .split('\n')
     .flatMap((line) => line.split(/\s+/))
-    .map((tok) => tok.toLowerCase().replace(/^["']|["']$/g, '').trim())
+    .map((tok) =>
+      tok
+        .toLowerCase()
+        .replace(/^["']|["']$/g, '')
+        .trim()
+    )
     .filter(Boolean);
 }
 
@@ -149,7 +152,7 @@ export class ProcessDetector {
   }
 
   /**
-   * Attempt to read /proc/*/cmdline on Linux for a deeper process scan.
+   * Attempt to read /proc/{pid}/cmdline on Linux for a deeper process scan.
    * Returns an empty array on any error (not all systems expose /proc).
    */
   scanProcFs(): SpywareIndicator[] {

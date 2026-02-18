@@ -21,22 +21,23 @@
  * Users can upgrade to 'BLOCK' or 'QUARANTINE' per-agent in settings.
  */
 
+import { randomUUID } from 'node:crypto';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { randomUUID } from 'node:crypto';
+
 import type { ThreatEvent, ThreatSeverity } from '../types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ScopeViolationType =
-  | 'file_out_of_scope'         // file not covered by any allowedFileGlob
-  | 'file_explicitly_denied'    // file matches a deniedFileGlob
-  | 'domain_not_allowed'        // domain not in allowedDomains
-  | 'upload_size_exceeded'      // byteCount > maxUploadBytes
-  | 'clipboard_not_permitted'   // clipboard access; contract says false
-  | 'screenshot_not_permitted'  // screenshot; contract says false
-  | 'after_hours_access'        // action outside allowedHours
-  | 'off_day_access';           // action on a non-allowedDay
+  | 'file_out_of_scope' // file not covered by any allowedFileGlob
+  | 'file_explicitly_denied' // file matches a deniedFileGlob
+  | 'domain_not_allowed' // domain not in allowedDomains
+  | 'upload_size_exceeded' // byteCount > maxUploadBytes
+  | 'clipboard_not_permitted' // clipboard access; contract says false
+  | 'screenshot_not_permitted' // screenshot; contract says false
+  | 'after_hours_access' // action outside allowedHours
+  | 'off_day_access'; // action on a non-allowedDay
 
 export type ScopeViolationAction = 'ALERTED' | 'BLOCKED' | 'QUARANTINED' | 'NOTED';
 
@@ -51,12 +52,12 @@ export interface ScopeViolation {
 
   // What happened
   violationType: ScopeViolationType;
-  resource: string;          // the file path / domain / action that violated
-  declaredScope: string;     // what the contract allows (for human-readable alert)
+  resource: string; // the file path / domain / action that violated
+  declaredScope: string; // what the contract allows (for human-readable alert)
 
   // Response
   severity: ThreatSeverity;
-  violationCount: number;    // cumulative violations for this agent
+  violationCount: number; // cumulative violations for this agent
   actionTaken: ScopeViolationAction;
 
   // Original event (for correlation into attack chains)
@@ -66,30 +67,30 @@ export interface ScopeViolation {
 export interface AgentScopeContract {
   agentId: string;
   agentName: string;
-  parentApp: string;         // "Visual Studio Code"
-  authorizedBy: string;      // "Microsoft / GitHub"
+  parentApp: string; // "Visual Studio Code"
+  authorizedBy: string; // "Microsoft / GitHub"
   version?: string;
 
   // ── File scope ──────────────────────────────────────────────────────────────
   // Globs are evaluated in order: deniedFileGlobs FIRST (take priority), then
   // allowedFileGlobs. If neither matches, the access is out-of-scope.
-  allowedFileGlobs: string[];  // e.g. ["${workspace}/**", "**/*.md"]
-  deniedFileGlobs?: string[];  // e.g. ["**/.env*", "**/*.pem"]
+  allowedFileGlobs: string[]; // e.g. ["${workspace}/**", "**/*.md"]
+  deniedFileGlobs?: string[]; // e.g. ["**/.env*", "**/*.pem"]
 
   // Variable resolution: use ${workspace} or ${home} in globs
-  workspaceRoot?: string;    // absolute path to the current project root
+  workspaceRoot?: string; // absolute path to the current project root
 
   // ── Network scope ───────────────────────────────────────────────────────────
-  allowedDomains: string[];  // exact hostnames or wildcard "*.github.com"
-  maxUploadBytes?: number;   // bytes — undefined means no cap
+  allowedDomains: string[]; // exact hostnames or wildcard "*.github.com"
+  maxUploadBytes?: number; // bytes — undefined means no cap
 
   // ── Capability scope ────────────────────────────────────────────────────────
   allowClipboard: boolean;
   allowScreenshot: boolean;
 
   // ── Time scope ──────────────────────────────────────────────────────────────
-  allowedHours?: { start: string; end: string };   // "09:00" – "22:00" (24h local)
-  allowedDays?: number[];    // 0=Sun … 6=Sat. undefined = all days
+  allowedHours?: { start: string; end: string }; // "09:00" – "22:00" (24h local)
+  allowedDays?: number[]; // 0=Sun … 6=Sat. undefined = all days
 
   // ── Enforcement ─────────────────────────────────────────────────────────────
   // ALERT     → emit 'scope-violation', let the action proceed (default)
@@ -118,25 +119,45 @@ export type BuiltinPresetId =
 type PresetTemplate = Omit<AgentScopeContract, 'agentId' | 'agentName'>;
 
 const PRESET_TEMPLATES: Record<BuiltinPresetId, PresetTemplate> = {
-
   'github-copilot': {
     parentApp: 'Visual Studio Code / JetBrains / Neovim',
     authorizedBy: 'Microsoft / GitHub',
     // Code files within the workspace only
     allowedFileGlobs: [
       '${workspace}/**',
-      '**/*.ts', '**/*.js', '**/*.tsx', '**/*.jsx',
-      '**/*.py', '**/*.go', '**/*.rs', '**/*.java',
-      '**/*.c', '**/*.cpp', '**/*.h', '**/*.cs',
-      '**/*.rb', '**/*.php', '**/*.swift', '**/*.kt',
-      '**/*.md', '**/*.txt', '**/*.yaml', '**/*.json',
+      '**/*.ts',
+      '**/*.js',
+      '**/*.tsx',
+      '**/*.jsx',
+      '**/*.py',
+      '**/*.go',
+      '**/*.rs',
+      '**/*.java',
+      '**/*.c',
+      '**/*.cpp',
+      '**/*.h',
+      '**/*.cs',
+      '**/*.rb',
+      '**/*.php',
+      '**/*.swift',
+      '**/*.kt',
+      '**/*.md',
+      '**/*.txt',
+      '**/*.yaml',
+      '**/*.json',
     ],
     // Copilot has no legitimate reason to touch these
     deniedFileGlobs: [
-      '**/.env', '**/.env.*',
-      '**/*.pem', '**/*.key', '**/*.pfx', '**/*.p12',
-      '**/wallet*.dat', '**/wallet*.json',
-      '**/password*', '**/secret*',
+      '**/.env',
+      '**/.env.*',
+      '**/*.pem',
+      '**/*.key',
+      '**/*.pfx',
+      '**/*.p12',
+      '**/wallet*.dat',
+      '**/wallet*.json',
+      '**/password*',
+      '**/secret*',
       '**/.ssh/**',
       '**/Documents/Finance/**',
       '**/Documents/Tax*/**',
@@ -149,7 +170,7 @@ const PRESET_TEMPLATES: Record<BuiltinPresetId, PresetTemplate> = {
       'vscode.dev',
       'default.exp-tas.com', // telemetry (regrettably)
     ],
-    maxUploadBytes: 100 * 1024,  // 100 KB — code context snippets only
+    maxUploadBytes: 100 * 1024, // 100 KB — code context snippets only
     allowClipboard: false,
     allowScreenshot: false,
     violationAction: 'ALERT',
@@ -161,24 +182,37 @@ const PRESET_TEMPLATES: Record<BuiltinPresetId, PresetTemplate> = {
     authorizedBy: 'Anysphere',
     allowedFileGlobs: [
       '${workspace}/**',
-      '**/*.ts', '**/*.js', '**/*.tsx', '**/*.jsx',
-      '**/*.py', '**/*.go', '**/*.rs', '**/*.java',
-      '**/*.md', '**/*.yaml', '**/*.json', '**/*.toml',
+      '**/*.ts',
+      '**/*.js',
+      '**/*.tsx',
+      '**/*.jsx',
+      '**/*.py',
+      '**/*.go',
+      '**/*.rs',
+      '**/*.java',
+      '**/*.md',
+      '**/*.yaml',
+      '**/*.json',
+      '**/*.toml',
     ],
     deniedFileGlobs: [
-      '**/.env', '**/.env.*',
-      '**/*.pem', '**/*.key',
-      '**/wallet*', '**/password*', '**/secret*',
+      '**/.env',
+      '**/.env.*',
+      '**/*.pem',
+      '**/*.key',
+      '**/wallet*',
+      '**/password*',
+      '**/secret*',
       '**/.ssh/**',
     ],
     allowedDomains: [
       'api2.cursor.sh',
       'cursor.sh',
-      'api.anthropic.com',  // Cursor uses Claude under the hood
-      'api.openai.com',     // and GPT-4
+      'api.anthropic.com', // Cursor uses Claude under the hood
+      'api.openai.com', // and GPT-4
     ],
-    maxUploadBytes: 512 * 1024,  // 512 KB — larger context window
-    allowClipboard: true,        // Cursor pastes code
+    maxUploadBytes: 512 * 1024, // 512 KB — larger context window
+    allowClipboard: true, // Cursor pastes code
     allowScreenshot: false,
     violationAction: 'ALERT',
     violationThreshold: 1,
@@ -193,27 +227,30 @@ const PRESET_TEMPLATES: Record<BuiltinPresetId, PresetTemplate> = {
       '${home}/Downloads/**',
       '${home}/Desktop/**',
       '${workspace}/**',
-      '**/*.pdf', '**/*.docx', '**/*.xlsx', '**/*.csv',
-      '**/*.txt', '**/*.md',
+      '**/*.pdf',
+      '**/*.docx',
+      '**/*.xlsx',
+      '**/*.csv',
+      '**/*.txt',
+      '**/*.md',
     ],
     deniedFileGlobs: [
-      '**/.env', '**/.env.*',
-      '**/*.pem', '**/*.key', '**/*.pfx',
+      '**/.env',
+      '**/.env.*',
+      '**/*.pem',
+      '**/*.key',
+      '**/*.pfx',
       '**/wallet*',
       '**/.ssh/**',
       '**/.aws/credentials',
       '**/keychain*',
     ],
-    allowedDomains: [
-      'claude.ai',
-      'api.anthropic.com',
-      'cdn.anthropic.com',
-    ],
-    maxUploadBytes: 10 * 1024 * 1024,  // 10 MB — document uploads expected
+    allowedDomains: ['claude.ai', 'api.anthropic.com', 'cdn.anthropic.com'],
+    maxUploadBytes: 10 * 1024 * 1024, // 10 MB — document uploads expected
     allowClipboard: true,
-    allowScreenshot: false,  // Claude Desktop shouldn't need screenshots
+    allowScreenshot: false, // Claude Desktop shouldn't need screenshots
     violationAction: 'ALERT',
-    violationThreshold: 3,  // More lenient — user-invoked tool
+    violationThreshold: 3, // More lenient — user-invoked tool
   },
 
   'chatgpt-desktop': {
@@ -223,12 +260,19 @@ const PRESET_TEMPLATES: Record<BuiltinPresetId, PresetTemplate> = {
       '${home}/Documents/**',
       '${home}/Downloads/**',
       '${home}/Desktop/**',
-      '**/*.pdf', '**/*.docx', '**/*.txt', '**/*.csv', '**/*.md',
+      '**/*.pdf',
+      '**/*.docx',
+      '**/*.txt',
+      '**/*.csv',
+      '**/*.md',
     ],
     deniedFileGlobs: [
-      '**/.env', '**/.env.*',
-      '**/*.pem', '**/*.key',
-      '**/wallet*', '**/password*',
+      '**/.env',
+      '**/.env.*',
+      '**/*.pem',
+      '**/*.key',
+      '**/wallet*',
+      '**/password*',
       '**/.ssh/**',
       '**/.aws/credentials',
     ],
@@ -236,26 +280,33 @@ const PRESET_TEMPLATES: Record<BuiltinPresetId, PresetTemplate> = {
       'chat.openai.com',
       'api.openai.com',
       'cdn.openai.com',
-      'ab.chatgpt.com',  // analytics
+      'ab.chatgpt.com', // analytics
     ],
-    maxUploadBytes: 25 * 1024 * 1024,  // 25 MB — ChatGPT supports large files
+    maxUploadBytes: 25 * 1024 * 1024, // 25 MB — ChatGPT supports large files
     allowClipboard: true,
     allowScreenshot: false,
     violationAction: 'ALERT',
     violationThreshold: 3,
   },
 
-  'grammarly': {
+  grammarly: {
     parentApp: 'Grammarly (browser extension / desktop app)',
     authorizedBy: 'Grammarly Inc.',
     allowedFileGlobs: [
       // Grammarly reads text from the focused document — allow broad text files
-      '**/*.txt', '**/*.md', '**/*.doc', '**/*.docx',
+      '**/*.txt',
+      '**/*.md',
+      '**/*.doc',
+      '**/*.docx',
       '${home}/Documents/**',
     ],
     deniedFileGlobs: [
-      '**/*.pem', '**/*.key', '**/*.env',
-      '**/wallet*', '**/password*', '**/*.kdbx',
+      '**/*.pem',
+      '**/*.key',
+      '**/*.env',
+      '**/wallet*',
+      '**/password*',
+      '**/*.kdbx',
       '**/.ssh/**',
     ],
     allowedDomains: [
@@ -264,59 +315,73 @@ const PRESET_TEMPLATES: Record<BuiltinPresetId, PresetTemplate> = {
       'capi.grammarly.com',
       'editor.grammarly.com',
     ],
-    maxUploadBytes: 1024 * 1024,  // 1 MB — text only
-    allowClipboard: true,   // Core Grammarly function
+    maxUploadBytes: 1024 * 1024, // 1 MB — text only
+    allowClipboard: true, // Core Grammarly function
     allowScreenshot: false,
     violationAction: 'ALERT',
-    violationThreshold: 5,  // Writing assistant — high tolerance
+    violationThreshold: 5, // Writing assistant — high tolerance
   },
 
-  'tabnine': {
+  tabnine: {
     parentApp: 'Tabnine (IDE Plugin)',
     authorizedBy: 'Tabnine Ltd.',
     allowedFileGlobs: [
       '${workspace}/**',
-      '**/*.ts', '**/*.js', '**/*.py', '**/*.go',
-      '**/*.rs', '**/*.java', '**/*.c', '**/*.cpp',
-      '**/*.rb', '**/*.php', '**/*.md',
+      '**/*.ts',
+      '**/*.js',
+      '**/*.py',
+      '**/*.go',
+      '**/*.rs',
+      '**/*.java',
+      '**/*.c',
+      '**/*.cpp',
+      '**/*.rb',
+      '**/*.php',
+      '**/*.md',
     ],
     deniedFileGlobs: [
-      '**/.env', '**/.env.*',
-      '**/*.pem', '**/*.key',
-      '**/password*', '**/secret*',
+      '**/.env',
+      '**/.env.*',
+      '**/*.pem',
+      '**/*.key',
+      '**/password*',
+      '**/secret*',
       '**/.ssh/**',
     ],
-    allowedDomains: [
-      '*.tabnine.com',
-      'tabnine.com',
-    ],
-    maxUploadBytes: 64 * 1024,  // 64 KB — local completions mostly
+    allowedDomains: ['*.tabnine.com', 'tabnine.com'],
+    maxUploadBytes: 64 * 1024, // 64 KB — local completions mostly
     allowClipboard: false,
     allowScreenshot: false,
     violationAction: 'ALERT',
     violationThreshold: 1,
   },
 
-  'codeium': {
+  codeium: {
     parentApp: 'Codeium (IDE Plugin)',
     authorizedBy: 'Exafunction Inc.',
     allowedFileGlobs: [
       '${workspace}/**',
-      '**/*.ts', '**/*.js', '**/*.py', '**/*.go',
-      '**/*.rs', '**/*.java', '**/*.c', '**/*.cpp',
-      '**/*.md', '**/*.yaml',
+      '**/*.ts',
+      '**/*.js',
+      '**/*.py',
+      '**/*.go',
+      '**/*.rs',
+      '**/*.java',
+      '**/*.c',
+      '**/*.cpp',
+      '**/*.md',
+      '**/*.yaml',
     ],
     deniedFileGlobs: [
-      '**/.env', '**/.env.*',
-      '**/*.pem', '**/*.key',
-      '**/password*', '**/secret*',
+      '**/.env',
+      '**/.env.*',
+      '**/*.pem',
+      '**/*.key',
+      '**/password*',
+      '**/secret*',
       '**/.ssh/**',
     ],
-    allowedDomains: [
-      'codeium.com',
-      '*.codeium.com',
-      'api.codeium.com',
-    ],
+    allowedDomains: ['codeium.com', '*.codeium.com', 'api.codeium.com'],
     maxUploadBytes: 64 * 1024,
     allowClipboard: false,
     allowScreenshot: false,
@@ -329,22 +394,31 @@ const PRESET_TEMPLATES: Record<BuiltinPresetId, PresetTemplate> = {
     authorizedBy: 'Google',
     allowedFileGlobs: [
       '${workspace}/**',
-      '**/*.ts', '**/*.js', '**/*.py', '**/*.go',
-      '**/*.java', '**/*.kt', '**/*.md', '**/*.yaml',
+      '**/*.ts',
+      '**/*.js',
+      '**/*.py',
+      '**/*.go',
+      '**/*.java',
+      '**/*.kt',
+      '**/*.md',
+      '**/*.yaml',
     ],
     deniedFileGlobs: [
-      '**/.env', '**/.env.*',
-      '**/*.pem', '**/*.key',
-      '**/password*', '**/secret*',
+      '**/.env',
+      '**/.env.*',
+      '**/*.pem',
+      '**/*.key',
+      '**/password*',
+      '**/secret*',
       '**/.ssh/**',
-      '**/.gcloud/**',  // GCP credentials
+      '**/.gcloud/**', // GCP credentials
     ],
     allowedDomains: [
       'cloudcode-pa.googleapis.com',
       'generativelanguage.googleapis.com',
       '*.googleapis.com',
     ],
-    maxUploadBytes: 256 * 1024,  // 256 KB
+    maxUploadBytes: 256 * 1024, // 256 KB
     allowClipboard: false,
     allowScreenshot: false,
     violationAction: 'ALERT',
@@ -376,7 +450,7 @@ export class ScopeEnforcer {
     agentId: string,
     agentName: string,
     presetId: BuiltinPresetId,
-    overrides?: Partial<AgentScopeContract>,
+    overrides?: Partial<AgentScopeContract>
   ): void {
     const template = PRESET_TEMPLATES[presetId];
     this.registerContract({
@@ -457,11 +531,7 @@ export class ScopeEnforcer {
       if (fileViolation) return this.buildViolation(event, contract, fileViolation);
     }
 
-    if (
-      action === 'NETWORK_UPLOAD' ||
-      action === 'NETWORK_REQUEST' ||
-      event.source === 'network'
-    ) {
+    if (action === 'NETWORK_UPLOAD' || action === 'NETWORK_REQUEST' || event.source === 'network') {
       const netViolation = this.checkNetworkScope(event, contract);
       if (netViolation) return this.buildViolation(event, contract, netViolation);
     }
@@ -472,9 +542,7 @@ export class ScopeEnforcer {
   // ─── Violation History ────────────────────────────────────────────────────
 
   getViolations(agentId?: string): ScopeViolation[] {
-    return agentId
-      ? this.violations.filter((v) => v.agentId === agentId)
-      : [...this.violations];
+    return agentId ? this.violations.filter((v) => v.agentId === agentId) : [...this.violations];
   }
 
   getViolationCount(agentId: string): number {
@@ -497,10 +565,7 @@ export class ScopeEnforcer {
 
   // ─── Scope Checkers ───────────────────────────────────────────────────────
 
-  private checkFileScope(
-    filePath: string,
-    contract: AgentScopeContract,
-  ): ViolationDetails | null {
+  private checkFileScope(filePath: string, contract: AgentScopeContract): ViolationDetails | null {
     const resolved = this.resolvePath(filePath, contract);
 
     // 1. Explicit deny (highest priority)
@@ -538,14 +603,14 @@ export class ScopeEnforcer {
 
   private checkNetworkScope(
     event: ThreatEvent,
-    contract: AgentScopeContract,
+    contract: AgentScopeContract
   ): ViolationDetails | null {
     // Extract hostname
     const domain = this.extractDomain(event.resource);
 
     if (domain) {
       const domainAllowed = contract.allowedDomains.some((allowed) =>
-        this.matchDomain(domain, allowed),
+        this.matchDomain(domain, allowed)
       );
 
       if (!domainAllowed) {
@@ -578,7 +643,7 @@ export class ScopeEnforcer {
 
   private checkTimeScope(
     event: ThreatEvent,
-    contract: AgentScopeContract,
+    contract: AgentScopeContract
   ): ViolationDetails | null {
     const now = event.timestamp;
 
@@ -620,13 +685,15 @@ export class ScopeEnforcer {
     const fp = filePath.replace(/\\/g, '/');
     const gl = glob.replace(/\\/g, '/');
 
-    // Build regex from glob
+    // Build regex from glob: replace ** first with a safe placeholder string
+    // that can't appear in a file path, then expand single * and ?, then restore **
+    const DOUBLE_STAR = '__DOUBLESTAR__';
     let pattern = gl
       .replace(/[.+^${}()|[\]]/g, '\\$&') // escape regex special chars (not * and ?)
-      .replace(/\*\*/g, '\x00')            // placeholder for **
-      .replace(/\*/g, '[^/]*')             // * → any chars except /
-      .replace(/\?/g, '[^/]')              // ? → single char except /
-      .replace(/\x00/g, '.*');             // ** → any chars including /
+      .replace(/\*\*/g, DOUBLE_STAR) // placeholder for **
+      .replace(/\*/g, '[^/]*') // * → any chars except /
+      .replace(/\?/g, '[^/]') // ? → single char except /
+      .replace(new RegExp(DOUBLE_STAR, 'g'), '.*'); // ** → any chars including /
 
     // Allow matching at any depth when glob starts with **
     if (!gl.startsWith('/') && !gl.startsWith('**')) {
@@ -656,7 +723,7 @@ export class ScopeEnforcer {
       .replace(/\$\{home\}/g, os.homedir());
   }
 
-  private resolvePath(filePath: string, contract: AgentScopeContract): string {
+  private resolvePath(filePath: string, _contract: AgentScopeContract): string {
     if (filePath.startsWith('~/') || filePath === '~') {
       return path.join(os.homedir(), filePath.slice(2));
     }
@@ -665,9 +732,7 @@ export class ScopeEnforcer {
 
   private extractDomain(resource: string): string | null {
     try {
-      const url = resource.startsWith('http')
-        ? new URL(resource)
-        : new URL(`https://${resource}`);
+      const url = resource.startsWith('http') ? new URL(resource) : new URL(`https://${resource}`);
       return url.hostname;
     } catch {
       // Not a URL — might just be a hostname string
@@ -681,7 +746,7 @@ export class ScopeEnforcer {
   private buildViolation(
     event: ThreatEvent,
     contract: AgentScopeContract,
-    details: ViolationDetails,
+    details: ViolationDetails
   ): ScopeViolation {
     const count = (this.violationCounts.get(contract.agentId) ?? 0) + 1;
     this.violationCounts.set(contract.agentId, count);
@@ -717,13 +782,16 @@ export class ScopeEnforcer {
   private resolveAction(
     configured: AgentScopeContract['violationAction'],
     count: number,
-    threshold: number,
+    threshold: number
   ): ScopeViolationAction {
-    if (count < threshold) return 'NOTED';   // not yet at threshold — log silently
+    if (count < threshold) return 'NOTED'; // not yet at threshold — log silently
     switch (configured) {
-      case 'ALERT':      return 'ALERTED';
-      case 'BLOCK':      return 'BLOCKED';
-      case 'QUARANTINE': return 'QUARANTINED';
+      case 'ALERT':
+        return 'ALERTED';
+      case 'BLOCK':
+        return 'BLOCKED';
+      case 'QUARANTINE':
+        return 'QUARANTINED';
     }
   }
 
