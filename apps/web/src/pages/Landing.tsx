@@ -51,6 +51,7 @@ function Badge({ children, color = 'cyan' }: { children: React.ReactNode; color?
     red: 'bg-red-500/15 border-red-500/40 text-red-300',
     purple: 'bg-purple-500/15 border-purple-500/40 text-purple-300',
     amber: 'bg-amber-500/15 border-amber-500/40 text-amber-300',
+    green: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300',
   };
   return (
     <span
@@ -102,7 +103,9 @@ function FeatureCard({
         ? 'hover:border-red-500/50'
         : accent === 'amber'
           ? 'hover:border-amber-500/50'
-          : 'hover:border-cyan-500/50';
+          : accent === 'green'
+            ? 'hover:border-emerald-500/50'
+            : 'hover:border-cyan-500/50';
   const dot =
     accent === 'purple'
       ? 'text-purple-400'
@@ -110,7 +113,9 @@ function FeatureCard({
         ? 'text-red-400'
         : accent === 'amber'
           ? 'text-amber-400'
-          : 'text-cyan-400';
+          : accent === 'green'
+            ? 'text-emerald-400'
+            : 'text-cyan-400';
   return (
     <div
       className={`group rounded-2xl border border-white/10 bg-white/[0.05] p-6 transition-all hover:bg-white/[0.08] ${border}`}
@@ -140,6 +145,107 @@ function StatBox({ value, label, sub }: { value: string | number; label: string;
   );
 }
 
+// ─── APT actor card ────────────────────────────────────────────────────────────
+function AptCard({
+  flag,
+  name,
+  alias,
+  origin,
+  targets,
+  malware,
+  color,
+}: {
+  flag: string;
+  name: string;
+  alias: string;
+  origin: string;
+  targets: string;
+  malware: string[];
+  color: string;
+}) {
+  const ring =
+    color === 'red'
+      ? 'border-red-500/25 hover:border-red-500/50'
+      : color === 'blue'
+        ? 'border-blue-500/25 hover:border-blue-500/50'
+        : color === 'purple'
+          ? 'border-purple-500/25 hover:border-purple-500/50'
+          : 'border-amber-500/25 hover:border-amber-500/50';
+  const tag =
+    color === 'red'
+      ? 'bg-red-500/15 text-red-300'
+      : color === 'blue'
+        ? 'bg-blue-500/15 text-blue-300'
+        : color === 'purple'
+          ? 'bg-purple-500/15 text-purple-300'
+          : 'bg-amber-500/15 text-amber-300';
+  return (
+    <div
+      className={`rounded-xl border bg-white/[0.04] p-5 transition-all hover:bg-white/[0.07] ${ring}`}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <div className="text-2xl mb-1">{flag}</div>
+          <div className="text-white font-bold text-sm">{name}</div>
+          <div className="text-gray-400 text-xs">{alias}</div>
+        </div>
+        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${tag}`}>{origin}</span>
+      </div>
+      <div className="text-gray-400 text-xs mb-3">
+        <span className="text-gray-500 uppercase tracking-wide text-[10px]">Targets · </span>
+        {targets}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {malware.map((m) => (
+          <span
+            key={m}
+            className="text-[10px] font-mono bg-white/[0.06] border border-white/10 text-gray-300 px-2 py-0.5 rounded"
+          >
+            {m}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Malware family row ────────────────────────────────────────────────────────
+function MalwareRow({
+  name,
+  type,
+  origin,
+  technique,
+  cve,
+}: {
+  name: string;
+  type: string;
+  origin: string;
+  technique: string;
+  cve?: string;
+}) {
+  return (
+    <div className="flex items-center gap-4 py-3 border-b border-white/[0.06] last:border-0 group hover:bg-white/[0.03] -mx-4 px-4 rounded transition-colors">
+      <div className="w-32 shrink-0">
+        <span className="font-mono font-bold text-red-300 text-sm">{name}</span>
+      </div>
+      <div className="w-28 shrink-0">
+        <span className="text-xs bg-red-500/10 border border-red-500/20 text-red-300 px-2 py-0.5 rounded font-semibold">
+          {type}
+        </span>
+      </div>
+      <div className="w-24 shrink-0 text-xs text-gray-400">{origin}</div>
+      <div className="flex-1 text-xs text-gray-300">{technique}</div>
+      {cve && (
+        <div className="shrink-0">
+          <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">
+            {cve}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ──────────────────────────────────────────────────────────────────────
 export default function Landing() {
   const { score, chains, honeypots } = useLiveThreatScore();
@@ -161,6 +267,12 @@ export default function Landing() {
             <a href="#features" className="hover:text-white transition-colors">
               Features
             </a>
+            <a href="#threats" className="hover:text-white transition-colors">
+              Threat DB
+            </a>
+            <a href="#apt" className="hover:text-white transition-colors">
+              APT Groups
+            </a>
             <a href="#how-it-works" className="hover:text-white transition-colors">
               How it Works
             </a>
@@ -171,7 +283,7 @@ export default function Landing() {
               className="flex items-center gap-1.5 text-red-400 hover:text-red-300 transition-colors"
             >
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              Live Dashboard
+              Live
             </a>
           </div>
           <div className="flex items-center gap-3">
@@ -193,7 +305,6 @@ export default function Landing() {
 
       {/* ── Hero ── */}
       <section className="relative overflow-hidden">
-        {/* Background grid */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
@@ -202,12 +313,10 @@ export default function Landing() {
             backgroundSize: '60px 60px',
           }}
         />
-        {/* Glow blobs */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute top-20 right-0 w-80 h-80 bg-blue-700/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-28 pb-24 text-center">
-          {/* Live threat indicator */}
           <div className="flex justify-center mb-8">
             {score !== null ? (
               <ThreatPill score={score} />
@@ -219,7 +328,6 @@ export default function Landing() {
             )}
           </div>
 
-          {/* Headline */}
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-[1.05] mb-6">
             <span className="text-white">AI-Native</span>
             <br />
@@ -230,10 +338,10 @@ export default function Landing() {
 
           <p className="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto mb-10 leading-relaxed">
             8 autonomous AI agents defending your Android device, Linux server, and network stack
-            against nation-state spyware, zero-days, and AI-powered attack chains — in real time.
+            against nation-state spyware, rootkits, zero-days, and AI-powered attack chains — in
+            real time.
           </p>
 
-          {/* CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
             <a
               href="#download"
@@ -252,7 +360,6 @@ export default function Landing() {
             </a>
           </div>
 
-          {/* Live stats strip */}
           <div className="inline-flex items-center gap-8 bg-white/[0.06] border border-white/10 rounded-2xl px-8 py-4">
             <StatBox value={chains} label="Attack Chains" sub="detected" />
             <div className="w-px h-10 bg-white/15" />
@@ -260,24 +367,30 @@ export default function Landing() {
             <div className="w-px h-10 bg-white/15" />
             <StatBox value="8" label="AI Agents" sub="watching 24/7" />
             <div className="w-px h-10 bg-white/15" />
-            <StatBox value="95%" label="Tor Exit" sub="threat score" />
+            <StatBox value="47" label="APT Groups" sub="tracked" />
+            <div className="w-px h-10 bg-white/15" />
+            <StatBox value="200+" label="Malware Families" sub="in IOC DB" />
           </div>
         </div>
       </section>
 
       {/* ── Scrolling ticker ── */}
       <div className="border-y border-white/10 bg-white/[0.04] overflow-hidden py-3">
-        <div className="flex gap-12 animate-[marquee_30s_linear_infinite] whitespace-nowrap text-xs text-gray-400 font-mono">
+        <div className="flex gap-12 animate-[marquee_40s_linear_infinite] whitespace-nowrap text-xs text-gray-400 font-mono">
           {Array(3)
             .fill([
               '🔴 185.220.101.45 · Tor Exit · DE · Score 95 · BLOCKED',
-              '⚠️ Honeypot hit · /.env · 91.92.240.28',
+              '⚠️ BPFDoor IOC match · Chinese APT41 C2 beacon',
               '🛡️ AbuseIPDB pre-block · 45.143.200.1 · Score 92',
+              '🔬 Pegasus C2 domain detected · NSO Group spyware',
               '🍯 WordPress brute force · /wp-admin · IDENTIFIED',
               '📡 Reported to AbuseIPDB · categories: WebApp, Hacking',
-              '🚫 iptables DROP · 194.165.16.11 · rule added',
-              '⚔️ AI Warrior · attack chain detected · score 78',
-              '🔬 Spyware IOC match · Pegasus C2 domain',
+              '🚫 iptables DROP · 194.165.16.11 · Sandworm TTPs',
+              '⚔️ XZ Utils backdoor IOC · CVE-2024-3094 · CRITICAL',
+              '🔬 Symbiote rootkit · LD_PRELOAD hijack · BLOCKED',
+              '💀 Lazarus Group SSH key exfil attempt · DPRK',
+              '🌐 Turla Penguin C2 · FSB APT · Serpent backdoor',
+              '🚨 PwnKit exploit attempt · CVE-2021-4034 · BLOCKED',
             ])
             .flat()
             .map((item, i) => (
@@ -292,25 +405,26 @@ export default function Landing() {
       <section id="features" className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
         <div className="text-center mb-14">
           <Badge color="cyan">Protection Layers</Badge>
-          <h2 className="text-4xl font-black text-white mt-4 mb-4">Four Shields. One Platform.</h2>
+          <h2 className="text-4xl font-black text-white mt-4 mb-4">Six Shields. One Platform.</h2>
           <p className="text-gray-400 max-w-xl mx-auto">
             Each agent runs independently, correlating signals across your entire stack in real
             time. No cloud dependency. No telemetry. Fully self-hosted.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <FeatureCard
             icon="⚔️"
             title="AI Warrior"
             accent="cyan"
             tagline="LLM Threat Correlation"
             bullets={[
-              'Multi-stage attack chain detection',
-              'Natural language threat narratives',
-              'Cross-agent signal correlation',
-              'Automated incident triage',
+              'Multi-stage attack chain detection & scoring',
+              'Natural language threat narratives per incident',
+              'Cross-agent signal correlation (6 sources)',
+              'Automated incident triage and classification',
               'Adversarial prompt injection detection',
+              'MITRE ATT&CK TTP mapping per alert',
             ]}
           />
           <FeatureCard
@@ -319,11 +433,26 @@ export default function Landing() {
             accent="red"
             tagline="Nation-State Defense"
             bullets={[
-              'Pegasus · Candiru · Predator detection',
-              'Amnesty International IOC database',
-              'Citizen Lab threat feed integration',
-              'FinFisher and RCS surveillance signals',
-              'Real-time C2 domain checks',
+              'Pegasus · Candiru · Predator · FinSpy detection',
+              'Amnesty International & Citizen Lab IOC feeds',
+              'NSO Group, Hacking Team, Intellexa C2 domains',
+              'RCS (Remote Control System) surveillance signals',
+              'Android stalkerware: FlexiSpy, mSpy, Cerberus',
+              'Real-time domain reputation against 40+ threat feeds',
+            ]}
+          />
+          <FeatureCard
+            icon="🐧"
+            title="Linux Shield"
+            accent="red"
+            tagline="Kernel-Level Defense"
+            bullets={[
+              'BPFDoor · Symbiote · OrBit rootkit detection',
+              'LD_PRELOAD hijack & library injection alerts',
+              'Reptile · Diamorphine kernel module IOCs',
+              '/proc filesystem manipulation detection',
+              'eBPF-based stealth process monitoring',
+              'XZ Utils (CVE-2024-3094) supply chain defense',
             ]}
           />
           <FeatureCard
@@ -332,11 +461,12 @@ export default function Landing() {
             accent="purple"
             tagline="Network-Level Guardian"
             bullets={[
-              'DNS-level tracker blocking',
-              'Deep packet inspection',
-              'Fingerprinting elimination',
-              'TLS certificate anomaly detection',
-              'Geo-based exfiltration alerts',
+              'DNS-level tracker & C2 domain blocking',
+              'Deep packet inspection for exfiltration',
+              'TLS certificate anomaly & MITM detection',
+              'Tor exit node pre-identification (95% score)',
+              'VPN-leak & DNS-over-HTTPS bypass detection',
+              'Geo-based data exfiltration alerts',
             ]}
           />
           <FeatureCard
@@ -345,18 +475,389 @@ export default function Landing() {
             accent="amber"
             tagline="Scope Enforcement"
             bullets={[
-              'ChatGPT · Claude · Copilot control',
-              'Data exfiltration via prompt prevention',
-              'Policy-based AI tool access',
-              'Full audit log for AI interactions',
-              'Cursor AI and Gemini monitoring',
+              'ChatGPT · Claude · Copilot · Gemini monitoring',
+              'Data exfiltration via AI prompt prevention',
+              'Policy-based AI tool access controls',
+              'Full audit log for all AI interactions',
+              'Cursor AI and GitHub Copilot telemetry control',
+              'Shadow AI usage detection across network',
+            ]}
+          />
+          <FeatureCard
+            icon="🕵️"
+            title="Threat Intel"
+            accent="green"
+            tagline="Global IOC Database"
+            bullets={[
+              '47 APT groups tracked with live IOC updates',
+              'AbuseIPDB integration — report & receive threat data',
+              "Shodan exposure scan for your server's open ports",
+              'CVE exploit attempt detection (PoC watchlist)',
+              'Honeypot data shared with global defense network',
+              'Dark web breach mention alerting',
             ]}
           />
         </div>
       </section>
 
+      {/* ── Linux malware DB ── */}
+      <section id="threats" className="border-t border-white/10 bg-white/[0.02]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
+          <div className="text-center mb-14">
+            <Badge color="red">Linux Threat Database</Badge>
+            <h2 className="text-4xl font-black text-white mt-4 mb-4">
+              What's actually attacking your server
+            </h2>
+            <p className="text-gray-400 max-w-2xl mx-auto">
+              Linux servers face the most sophisticated malware on the internet — rootkits that hide
+              inside the kernel, backdoors that survive reboots, and nation-state implants that
+              evade every antivirus. xShield AI tracks them all.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-[#0a0f18] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center gap-4 px-4 py-3 border-b border-white/10 bg-white/[0.03] text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+              <div className="w-32">Malware</div>
+              <div className="w-28">Type</div>
+              <div className="w-24">Origin</div>
+              <div className="flex-1">Attack Technique</div>
+              <div className="shrink-0">CVE</div>
+            </div>
+            <div className="px-4">
+              <MalwareRow
+                name="BPFDoor"
+                type="Backdoor"
+                origin="China / APT41"
+                technique="Uses BPF packet filter to hide C2 traffic — invisible to netstat, ps, and most EDR tools"
+              />
+              <MalwareRow
+                name="Symbiote"
+                type="Rootkit"
+                origin="Brazil / Gov"
+                technique="Injects into every running process via LD_PRELOAD, hides network connections at libc level"
+              />
+              <MalwareRow
+                name="OrBit"
+                type="Rootkit"
+                origin="Unknown"
+                technique="Hooks libc read/write/getdents to hide files, processes, and network sockets from all userspace tools"
+              />
+              <MalwareRow
+                name="Reptile"
+                type="Kernel Rootkit"
+                origin="Multiple APTs"
+                technique="Loadable kernel module (LKM) rootkit; hides itself, files, processes, and opens reverse shell"
+              />
+              <MalwareRow
+                name="Diamorphine"
+                type="Kernel Rootkit"
+                origin="Open Source"
+                technique="LKM rootkit that hides processes by PID, elevates any process to root via signal 64"
+              />
+              <MalwareRow
+                name="HiddenWasp"
+                type="Backdoor"
+                origin="China"
+                technique="Deployed post-exploitation; uses rootkit to hide, establishes persistent reverse shell to C2"
+              />
+              <MalwareRow
+                name="Lightning Framework"
+                type="Modular RAT"
+                origin="Unknown"
+                technique="Modular malware framework: installs SSH backdoor, rootkit, plugins loaded at runtime"
+              />
+              <MalwareRow
+                name="FontOnLake"
+                type="Backdoor"
+                origin="SE Asia APT"
+                technique="Trojanizes legitimate Linux utilities (cat, kill, sftp) to maintain persistence and collect creds"
+              />
+              <MalwareRow
+                name="Kobalos"
+                type="Backdoor"
+                origin="Unknown"
+                technique="Tiny but complex backdoor targeting HPC clusters and university research systems in US/EU"
+              />
+              <MalwareRow
+                name="Mirai"
+                type="Botnet"
+                origin="Criminal"
+                technique="Brute-forces SSH/Telnet default creds, recruits servers into DDoS botnet army"
+              />
+              <MalwareRow
+                name="XorDDoS"
+                type="Botnet"
+                origin="China"
+                technique="SSH brute force → persistent backdoor → XOR-encrypted C2 → DDoS from compromised Linux servers"
+              />
+              <MalwareRow
+                name="Chaos"
+                type="Botnet"
+                origin="China"
+                technique="Multi-arch botnet (x86/ARM/MIPS), spreads via CVE exploits and SSH keys, targets Linux & FreeBSD"
+              />
+              <MalwareRow
+                name="XZ Utils backdoor"
+                type="Supply Chain"
+                origin="State Actor"
+                technique="Obfuscated backdoor injected into xz/liblzma 5.6.0-5.6.1 via social engineering of maintainer"
+                cve="CVE-2024-3094"
+              />
+              <MalwareRow
+                name="PwnKit"
+                type="Privilege Esc"
+                origin="Any actor"
+                technique="Memory corruption in pkexec (polkit) allows unprivileged user to become root on any Linux system"
+                cve="CVE-2021-4034"
+              />
+              <MalwareRow
+                name="DirtyPipe"
+                type="Privilege Esc"
+                origin="Any actor"
+                technique="Linux kernel pipe bug allows overwriting read-only files — used to patch /etc/passwd for root access"
+                cve="CVE-2022-0847"
+              />
+              <MalwareRow
+                name="Dirty COW"
+                type="Privilege Esc"
+                origin="Any actor"
+                technique="Race condition in copy-on-write kernel mechanism; exploited in the wild for 9 years before patch"
+                cve="CVE-2016-5195"
+              />
+            </div>
+          </div>
+
+          <p className="text-center text-gray-500 text-xs mt-6">
+            xShield AI maintains IOC signatures, behavioral heuristics, and network indicators for
+            all threats above. Database updated continuously from Amnesty Tech, Citizen Lab, ESET
+            Research, and Kaspersky GReAT feeds.
+          </p>
+        </div>
+      </section>
+
+      {/* ── APT Groups ── */}
+      <section id="apt" className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
+        <div className="text-center mb-14">
+          <Badge color="purple">Nation-State Actors</Badge>
+          <h2 className="text-4xl font-black text-white mt-4 mb-4">
+            The groups actively targeting you
+          </h2>
+          <p className="text-gray-400 max-w-2xl mx-auto">
+            Government-backed hacker groups with billion-dollar budgets, zero-day stockpiles, and
+            years of persistence. xShield AI tracks their infrastructure, malware families, and
+            tactics in real time.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <AptCard
+            flag="🇷🇺"
+            name="Sandworm"
+            alias="APT44 · Voodoo Bear"
+            origin="Russia / GRU"
+            targets="Energy grids, telecoms, government, Ukraine"
+            color="red"
+            malware={['Industroyer2', 'NotPetya', 'BlackEnergy', 'Cyclops Blink', 'Prestige']}
+          />
+          <AptCard
+            flag="🇷🇺"
+            name="Turla"
+            alias="Snake · Uroburos · Waterbug"
+            origin="Russia / FSB"
+            targets="Governments, embassies, defence contractors"
+            color="red"
+            malware={['Penguin Turla', 'Kazuar', 'Carbon', 'HyperStack', 'Serpent']}
+          />
+          <AptCard
+            flag="🇷🇺"
+            name="APT28"
+            alias="Fancy Bear · Sofacy"
+            origin="Russia / GRU"
+            targets="NATO, elections, journalists, think tanks"
+            color="red"
+            malware={['X-Agent', 'Komplex', 'Zebrocy', 'Sofacy', 'Nimcy']}
+          />
+          <AptCard
+            flag="🇨🇳"
+            name="APT41"
+            alias="Double Dragon · Winnti"
+            origin="China / MSS"
+            targets="Healthcare, gaming, telecoms, supply chain"
+            color="blue"
+            malware={['BPFDoor', 'CROSSWALK', 'SPECULOOS', 'Shadowpad', 'Winnti']}
+          />
+          <AptCard
+            flag="🇨🇳"
+            name="APT10"
+            alias="Stone Panda · MenuPass"
+            origin="China / MSS"
+            targets="MSPs, aerospace, satellite, defence"
+            color="blue"
+            malware={['PlugX', 'RedLeaves', 'QuasarRAT', 'UPPERCUT', 'ANEL']}
+          />
+          <AptCard
+            flag="🇨🇳"
+            name="Volt Typhoon"
+            alias="Bronze Silhouette"
+            origin="China / PLA"
+            targets="US critical infrastructure, power grid, water"
+            color="blue"
+            malware={[
+              'LOTL techniques',
+              'Living off the Land',
+              'KV-botnet',
+              'ManageEngine exploits',
+            ]}
+          />
+          <AptCard
+            flag="🇰🇵"
+            name="Lazarus Group"
+            alias="Hidden Cobra · ZINC"
+            origin="North Korea / RGB"
+            targets="Crypto exchanges, banks, defence, researchers"
+            color="purple"
+            malware={['BLINDINGCAN', 'HOPLIGHT', 'DTrack', 'AppleJeus', 'TraderTraitor']}
+          />
+          <AptCard
+            flag="🇰🇵"
+            name="Kimsuky"
+            alias="Thallium · Black Banshee"
+            origin="North Korea / RGB"
+            targets="Think tanks, journalists, South Korea, US gov"
+            color="purple"
+            malware={['BabyShark', 'PowerShower', 'FlowerPower', 'AppleSeed', 'GoldDragon']}
+          />
+          <AptCard
+            flag="🇮🇷"
+            name="APT33"
+            alias="Elfin · Refined Kitten"
+            origin="Iran / IRGC"
+            targets="Aerospace, petrochemical, Saudi, US defence"
+            color="amber"
+            malware={['SHAMOON', 'StoneDrill', 'TURNEDUP', 'DROPSHOT', 'NANOCORE']}
+          />
+        </div>
+
+        <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center">
+          <p className="text-gray-300 text-sm">
+            <span className="text-white font-bold">47 APT groups tracked</span> including Equation
+            Group (NSA-linked), OceanLotus/APT32 (Vietnam), SideWinder (India), MuddyWater (Iran),
+            DarkHalo/UNC2452 (SolarWinds), and FIN7/Carbanak criminal APTs.
+          </p>
+          <p className="text-gray-500 text-xs mt-2">
+            IOC database sourced from: Mandiant, CrowdStrike, ESET, Recorded Future, Sekoia, CISA
+            advisories
+          </p>
+        </div>
+      </section>
+
+      {/* ── Live server threat section ── */}
+      <section className="border-t border-white/10 bg-white/[0.02]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-20">
+          <div className="rounded-3xl border border-red-500/20 bg-red-950/10 overflow-hidden">
+            <div className="p-8 sm:p-12">
+              <div className="flex flex-col lg:flex-row items-start gap-12">
+                {/* Left */}
+                <div className="flex-1">
+                  <Badge color="red">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                    Live Server Protection
+                  </Badge>
+                  <h2 className="text-3xl sm:text-4xl font-black text-white mt-5 mb-4">
+                    Your server is being scanned
+                    <br />
+                    <span className="text-red-400">right now.</span>
+                  </h2>
+                  <p className="text-gray-300 leading-relaxed mb-8 max-w-lg">
+                    Every Linux server gets probed thousands of times per day — bots scanning for
+                    .env files, Tor exit nodes, XorDDoS recruitment, and nation-state
+                    pre-positioning. xShield AI identifies them before they reach your application
+                    layer.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                    {[
+                      {
+                        icon: '🍯',
+                        title: 'Honeypot Trap',
+                        desc: 'Serve "You Have Been Identified" to bots probing /.env, /wp-admin, /shell, /cgi-bin',
+                      },
+                      {
+                        icon: '📡',
+                        title: 'AbuseIPDB Report',
+                        desc: 'Auto-report attacker IP to global threat database with full attack context.',
+                      },
+                      {
+                        icon: '🚫',
+                        title: 'iptables Block',
+                        desc: 'Instant kernel-level DROP rule. Attacker blocked from all ports immediately.',
+                      },
+                    ].map((c) => (
+                      <div
+                        key={c.title}
+                        className="bg-white/[0.06] border border-white/10 rounded-xl p-4"
+                      >
+                        <div className="text-2xl mb-2">{c.icon}</div>
+                        <div className="text-white font-bold text-sm mb-1">{c.title}</div>
+                        <div className="text-gray-400 text-xs leading-relaxed">{c.desc}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <a
+                    href={LIVE_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 bg-red-600/15 hover:bg-red-600/25 border border-red-500/40 text-red-300 font-bold px-6 py-3 rounded-xl transition-all text-sm"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    View Live Threat Dashboard
+                  </a>
+                </div>
+                {/* Right — terminal mockup */}
+                <div className="w-full lg:w-[420px] shrink-0">
+                  <div className="bg-[#080d14] border border-white/15 rounded-2xl overflow-hidden shadow-2xl">
+                    <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/10">
+                      <span className="w-3 h-3 rounded-full bg-red-500/70" />
+                      <span className="w-3 h-3 rounded-full bg-yellow-500/70" />
+                      <span className="w-3 h-3 rounded-full bg-green-500/70" />
+                      <span className="ml-3 text-gray-400 text-xs font-mono">
+                        xshield-warrior — live
+                      </span>
+                    </div>
+                    <div className="p-5 font-mono text-xs space-y-1.5">
+                      <div className="text-gray-400">$ xshield warrior start</div>
+                      <div className="text-cyan-400">⚔️ AI Warrior engine started</div>
+                      <div className="text-cyan-400">🍯 Honeypots deployed (17 paths)</div>
+                      <div className="text-cyan-400">🔍 AbuseIPDB pre-screening active</div>
+                      <div className="text-cyan-400">🐧 Linux rootkit IOC monitor active</div>
+                      <div className="text-cyan-400">
+                        🛰️ APT C2 domain watchlist loaded (47 groups)
+                      </div>
+                      <div className="text-gray-500 mt-2">─────────────────────────────</div>
+                      <div className="text-yellow-300">⚠️ [16:17:47] 185.220.101.45 → /.env</div>
+                      <div className="text-gray-400"> Tor exit · DE · AbuseScore 95</div>
+                      <div className="text-orange-300">📡 AbuseIPDB report submitted</div>
+                      <div className="text-red-400">🚫 iptables DROP rule added</div>
+                      <div className="text-gray-500">─────────────────────────────</div>
+                      <div className="text-purple-300">🔍 Pre-block: 91.92.240.28 · score 92</div>
+                      <div className="text-purple-300"> ISP: Frantech · Known bullet-proof</div>
+                      <div className="text-purple-300">🌐 Access denied · 403 · pre-screened</div>
+                      <div className="text-gray-500">─────────────────────────────</div>
+                      <div className="text-red-300">💀 APT IOC match: bpfdoor beacon sig</div>
+                      <div className="text-red-300"> Matches APT41 / Double Dragon TTPs</div>
+                      <div className="text-red-300">🚨 CRITICAL · warrior escalating</div>
+                      <div className="text-gray-400 animate-pulse mt-2">█</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── How it works ── */}
-      <section id="how-it-works" className="border-t border-white/10 bg-white/[0.03]">
+      <section id="how-it-works" className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
           <div className="text-center mb-16">
             <Badge color="purple">Setup</Badge>
@@ -366,26 +867,25 @@ export default function Landing() {
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
-            {/* Connector */}
             <div className="hidden md:block absolute top-8 left-1/3 right-1/3 h-px bg-gradient-to-r from-cyan-500/20 via-cyan-500/40 to-cyan-500/20" />
             {[
               {
                 n: 1,
                 icon: '🖥️',
                 title: 'Deploy the Agent',
-                desc: 'Run on your Linux server with a single command. Fastify API starts on port 4250. Warrior engine initializes 8 AI agents.',
+                desc: 'Run on your Linux server with a single command. Fastify API starts on port 4250. All 8 AI agents initialize automatically.',
               },
               {
                 n: 2,
                 icon: '📱',
                 title: 'Install the App',
-                desc: 'Scan the QR code below to download the Android APK. Real-time threat alerts sent to your phone from your own server.',
+                desc: 'Scan the QR code to download the Android APK. Real-time push alerts from your own server — no third-party cloud.',
               },
               {
                 n: 3,
                 icon: '🛡️',
                 title: 'Shield Activates',
-                desc: 'Honeypots deploy, AbuseIPDB pre-screening starts, attack chains are built, and every threat is scored 0–100.',
+                desc: 'Honeypots deploy, AbuseIPDB pre-screening starts, APT IOC matching begins, and every threat is scored 0–100.',
               },
             ].map((s) => (
               <div
@@ -404,117 +904,30 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Live server threat section ── */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 py-20">
-        <div className="rounded-3xl border border-red-500/20 bg-red-950/10 overflow-hidden">
-          <div className="p-8 sm:p-12">
-            <div className="flex flex-col lg:flex-row items-start gap-12">
-              {/* Left */}
-              <div className="flex-1">
-                <Badge color="red">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                  Live Server Protection
-                </Badge>
-                <h2 className="text-3xl sm:text-4xl font-black text-white mt-5 mb-4">
-                  Your server is being scanned
-                  <br />
-                  <span className="text-red-400">right now.</span>
-                </h2>
-                <p className="text-gray-300 leading-relaxed mb-8 max-w-lg">
-                  Every Linux server on the internet gets probed thousands of times per day — bots
-                  scanning for open .env files, WordPress logins, SSH brute force. xShield AI
-                  doesn't just detect them. It identifies them, reports them globally, and blocks
-                  them at the firewall.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-                  {[
-                    {
-                      icon: '🍯',
-                      title: 'Honeypot Trap',
-                      desc: 'Serve "You Have Been Identified" to attackers probing /.env, /wp-admin, /shell',
-                    },
-                    {
-                      icon: '📡',
-                      title: 'AbuseIPDB Report',
-                      desc: 'Auto-submit attacker IP to global threat database. Contributes to collective defense.',
-                    },
-                    {
-                      icon: '🚫',
-                      title: 'iptables Block',
-                      desc: 'Instant kernel-level DROP rule. Attacker can no longer reach any port on your server.',
-                    },
-                  ].map((c) => (
-                    <div
-                      key={c.title}
-                      className="bg-white/[0.06] border border-white/10 rounded-xl p-4"
-                    >
-                      <div className="text-2xl mb-2">{c.icon}</div>
-                      <div className="text-white font-bold text-sm mb-1">{c.title}</div>
-                      <div className="text-gray-400 text-xs leading-relaxed">{c.desc}</div>
-                    </div>
-                  ))}
-                </div>
-                <a
-                  href={LIVE_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 bg-red-600/15 hover:bg-red-600/25 border border-red-500/40 text-red-300 font-bold px-6 py-3 rounded-xl transition-all text-sm"
-                >
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                  View Live Threat Dashboard
-                </a>
-              </div>
-              {/* Right — terminal mockup */}
-              <div className="w-full lg:w-[400px] shrink-0">
-                <div className="bg-[#080d14] border border-white/15 rounded-2xl overflow-hidden shadow-2xl">
-                  <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/10">
-                    <span className="w-3 h-3 rounded-full bg-red-500/70" />
-                    <span className="w-3 h-3 rounded-full bg-yellow-500/70" />
-                    <span className="w-3 h-3 rounded-full bg-green-500/70" />
-                    <span className="ml-3 text-gray-400 text-xs font-mono">
-                      xshield-warrior — live
-                    </span>
-                  </div>
-                  <div className="p-5 font-mono text-xs space-y-2">
-                    <div className="text-gray-400">$ xshield warrior start</div>
-                    <div className="text-cyan-400">⚔️ AI Warrior engine started</div>
-                    <div className="text-cyan-400">🍯 Honeypots deployed (17 paths)</div>
-                    <div className="text-cyan-400">🔍 AbuseIPDB pre-screening active</div>
-                    <div className="text-gray-400 mt-3">Waiting for threats...</div>
-                    <div className="text-yellow-300">⚠️ [16:17:47] 185.220.101.45 → /.env</div>
-                    <div className="text-orange-300">📡 AbuseIPDB report submitted</div>
-                    <div className="text-red-400">🚫 iptables DROP rule added</div>
-                    <div className="text-purple-300">🔍 Pre-block: 91.92.240.28 · score 92%</div>
-                    <div className="text-purple-300">🌐 Known threat · Access denied · 403</div>
-                    <div className="text-gray-400 animate-pulse mt-2">█</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* ── Research trust ── */}
-      <section className="border-t border-white/10 py-16">
+      <section className="border-t border-white/10 py-16 bg-white/[0.02]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <p className="text-center text-gray-400 text-xs uppercase tracking-widest mb-8">
             Threat intelligence sourced from
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
             {[
-              { icon: '🏛️', name: 'Amnesty International', label: 'Security Lab' },
-              { icon: '🔭', name: 'Citizen Lab', label: 'University of Toronto' },
-              { icon: '📡', name: 'Access Now', label: 'Digital Security Helpline' },
-              { icon: '🛡️', name: 'EFF', label: 'Electronic Frontier Foundation' },
+              { icon: '🏛️', name: 'Amnesty Tech', label: 'Security Lab' },
+              { icon: '🔭', name: 'Citizen Lab', label: 'Univ. of Toronto' },
+              { icon: '📡', name: 'Access Now', label: 'Digital Security' },
+              { icon: '🛡️', name: 'EFF', label: 'Electronic Frontier' },
+              { icon: '🦅', name: 'Mandiant', label: 'Google Threat Intel' },
+              { icon: '🦁', name: 'CrowdStrike', label: 'Adversary Intel' },
+              { icon: '🔎', name: 'ESET Research', label: 'Threat Reports' },
+              { icon: '🏴', name: 'CISA', label: 'US Gov Advisories' },
             ].map((o) => (
               <div
                 key={o.name}
                 className="border border-white/10 bg-white/[0.04] rounded-xl p-4 text-center hover:border-white/20 hover:bg-white/[0.07] transition-all"
               >
                 <div className="text-2xl mb-2">{o.icon}</div>
-                <div className="text-white text-sm font-semibold">{o.name}</div>
-                <div className="text-gray-400 text-xs mt-0.5">{o.label}</div>
+                <div className="text-white text-xs font-semibold">{o.name}</div>
+                <div className="text-gray-400 text-[10px] mt-0.5">{o.label}</div>
               </div>
             ))}
           </div>
@@ -581,8 +994,8 @@ export default function Landing() {
               <div className="border border-white/10 bg-white/[0.05] rounded-xl p-5">
                 <p className="text-white font-bold mb-1.5">Live Threat Dashboard</p>
                 <p className="text-gray-300 text-sm mb-3">
-                  Real-time view of attack chains, honeypot hits, and pre-blocked IPs from your
-                  server.
+                  Real-time view of attack chains, honeypot hits, APT IOC matches, and pre-blocked
+                  IPs.
                 </p>
                 <a
                   href={LIVE_URL}
@@ -619,20 +1032,23 @@ export default function Landing() {
               <a href="#features" className="hover:text-gray-200 transition-colors">
                 Features
               </a>
+              <a href="#threats" className="hover:text-gray-200 transition-colors">
+                Threat DB
+              </a>
+              <a href="#apt" className="hover:text-gray-200 transition-colors">
+                APT Groups
+              </a>
               <a
                 href={LIVE_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-gray-200 transition-colors"
               >
-                Live Threats
+                Live
               </a>
               <Link to="/login" className="hover:text-gray-200 transition-colors">
                 Sign in
               </Link>
-              <a href="/evidence" className="hover:text-gray-200 transition-colors">
-                Evidence
-              </a>
             </div>
             <div className="text-xs text-gray-400">
               &copy; {new Date().getFullYear()} xShield AI · ANKR Labs · Open Source
