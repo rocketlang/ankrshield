@@ -159,6 +159,12 @@ export interface RiskReport {
   /** GitHub code search hits revealing secrets referencing this domain */
   githubLeaks: import('./detectors/github-dork.js').GithubLeakHit[];
 
+  /**
+   * Claude AI-generated threat narrative — plain-English analysis of all findings.
+   * null when ANTHROPIC_API_KEY is not set.
+   */
+  threatNarrative: import('./threat-narrative.js').ThreatNarrative | null;
+
   /** Time taken to assemble the report, in milliseconds */
   durationMs: number;
 }
@@ -194,4 +200,8 @@ export interface RiskEngineOptions {
   enableGithubDork?: boolean;
   /** GitHub personal access token — required for GitHub dork scanner */
   githubToken?: string;
+  /** Generate Claude AI threat narrative (requires ANTHROPIC_API_KEY). Default: true */
+  enableThreatNarrative?: boolean;
+  /** Anthropic API key override (defaults to ANTHROPIC_API_KEY env var) */
+  anthropicApiKey?: string;
 }

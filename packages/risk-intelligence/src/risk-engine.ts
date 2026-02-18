@@ -42,6 +42,7 @@ import { scanIpWithOtx, scanDomainWithOtx, otxToFactors } from './detectors/otx-
 import { searchPastes, pasteHitsToFactors } from './detectors/paste-monitor.js';
 import { checkPhishingFeeds, phishingHitsToFactors } from './detectors/phishing-feeds.js';
 import { scanIpWithShodan, shodanToFactors } from './detectors/shodan-scanner.js';
+import { generateThreatNarrative } from './threat-narrative.js';
 import type { RiskEngineOptions, RiskFactor, RiskLevel, RiskReport } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -118,8 +119,10 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
   const enableAsnReputation = options.enableAsnReputation ?? true;
   const enableGithubDork = options.enableGithubDork ?? true;
 
+  const enableThreatNarrative = options.enableThreatNarrative ?? true;
   const otxApiKey = options.otxApiKey ?? process.env['OTX_API_KEY'];
   const githubToken = options.githubToken ?? process.env['GITHUB_TOKEN'];
+  const anthropicApiKey = options.anthropicApiKey ?? process.env['ANTHROPIC_API_KEY'];
 
   // Resolve server IP
   const serverIp = options.serverIp ?? (await resolveIp(domain));
@@ -182,6 +185,36 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
   const riskScore = aggregateScore(factors);
   const riskLevel = scoreToLevel(riskScore);
 
+  // Build partial report to pass to narrative generator
+  const partialReport = {
+    id: '',
+    generatedAt: new Date().toISOString(),
+    domain,
+    serverIp,
+    riskScore,
+    riskLevel,
+    factors,
+    greynoise: greyNoiseResult,
+    exposedServices: shodanResult?.services ?? [],
+    breaches,
+    domainThreats,
+    otx: otxIpResult ?? otxDomainResult,
+    suspiciousCerts,
+    registeredTyposquats,
+    pasteHits,
+    dnsSecurityReport,
+    phishingHits,
+    asnRecord,
+    githubLeaks,
+    threatNarrative: null,
+    durationMs: 0,
+  };
+
+  // Generate AI narrative (runs after all parallel checks complete)
+  const threatNarrative = enableThreatNarrative
+    ? await generateThreatNarrative(partialReport, anthropicApiKey)
+    : null;
+
   return {
     id: randomUUID(),
     generatedAt: new Date().toISOString(),
@@ -202,6 +235,7 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     phishingHits,
     asnRecord,
     githubLeaks,
+    threatNarrative,
     durationMs: Date.now() - start,
   };
 }

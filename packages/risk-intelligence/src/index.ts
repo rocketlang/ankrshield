@@ -37,6 +37,7 @@ export type { DnsSecurityReport } from './detectors/dns-security-audit.js';
 export type { PhishingHit } from './detectors/phishing-feeds.js';
 export type { AsnRecord } from './detectors/asn-reputation.js';
 export type { GithubLeakHit } from './detectors/github-dork.js';
+export type { ThreatNarrative } from './threat-narrative.js';
 
 // ---------------------------------------------------------------------------
 // Individual detectors (usable independently)
@@ -53,6 +54,7 @@ export { auditDnsSecurity, dnsAuditToFactors } from './detectors/dns-security-au
 export { checkPhishingFeeds, phishingHitsToFactors } from './detectors/phishing-feeds.js';
 export { lookupAsnReputation, asnToFactors } from './detectors/asn-reputation.js';
 export { scanGithubSecrets, githubLeaksToFactors } from './detectors/github-dork.js';
+export { generateThreatNarrative } from './threat-narrative.js';
 
 // ---------------------------------------------------------------------------
 // Main engine
