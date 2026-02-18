@@ -14,6 +14,10 @@
  *   - crt.sh             (certificate transparency, free/no auth)
  *   - DNS validation     (typosquat DNS registration, no API)
  *   - Paste monitor      (data leak detection, free/no auth)
+ *   - DNS security audit (SPF/DMARC/DNSSEC/CAA, no API)
+ *   - OpenPhish/SURBL    (active phishing feeds, free/no auth)
+ *   - ip-api.com         (ASN / geopolitical risk, free/no auth)
+ *   - GitHub code search (secret exposure dorks, free token)
  *
  * Score → Level:
  *   0–14   : minimal
@@ -26,13 +30,17 @@
 import { randomUUID } from 'crypto';
 import { promises as dns } from 'dns';
 
+import { lookupAsnReputation, asnToFactors } from './detectors/asn-reputation.js';
 import { checkDomainBreaches, breachesToFactors } from './detectors/breach-monitor.js';
 import { monitorCertTransparency, certRecordsToFactors } from './detectors/cert-transparency.js';
+import { auditDnsSecurity, dnsAuditToFactors } from './detectors/dns-security-audit.js';
 import { validateTyposquats, typosquatsToFactors } from './detectors/dns-validator.js';
 import { scanDomainThreats, domainThreatsToFactors } from './detectors/domain-guard.js';
+import { scanGithubSecrets, githubLeaksToFactors } from './detectors/github-dork.js';
 import { scanIpWithGreyNoise, greyNoiseToFactors } from './detectors/greynoise-scanner.js';
 import { scanIpWithOtx, scanDomainWithOtx, otxToFactors } from './detectors/otx-scanner.js';
 import { searchPastes, pasteHitsToFactors } from './detectors/paste-monitor.js';
+import { checkPhishingFeeds, phishingHitsToFactors } from './detectors/phishing-feeds.js';
 import { scanIpWithShodan, shodanToFactors } from './detectors/shodan-scanner.js';
 import type { RiskEngineOptions, RiskFactor, RiskLevel, RiskReport } from './types.js';
 
@@ -105,8 +113,13 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
   const enableCert = options.enableCertTransparency ?? true;
   const enableDns = options.enableDnsValidation ?? true;
   const enablePaste = options.enablePasteMonitor ?? true;
+  const enableDnsSecurity = options.enableDnsSecurity ?? true;
+  const enablePhishFeeds = options.enablePhishFeeds ?? true;
+  const enableAsnReputation = options.enableAsnReputation ?? true;
+  const enableGithubDork = options.enableGithubDork ?? true;
 
   const otxApiKey = options.otxApiKey ?? process.env['OTX_API_KEY'];
+  const githubToken = options.githubToken ?? process.env['GITHUB_TOKEN'];
 
   // Resolve server IP
   const serverIp = options.serverIp ?? (await resolveIp(domain));
@@ -123,6 +136,10 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     suspiciousCerts,
     registeredTyposquats,
     pasteHits,
+    dnsSecurityReport,
+    phishingHits,
+    asnRecord,
+    githubLeaks,
   ] = await Promise.all([
     enableGreyNoise && serverIp ? scanIpWithGreyNoise(serverIp) : Promise.resolve(null),
     enableShodan && serverIp
@@ -137,6 +154,12 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
       ? validateTyposquats(domain, legitimateIps)
       : Promise.resolve([]),
     enablePaste && !IP_RE.test(domain) ? searchPastes(domain) : Promise.resolve([]),
+    enableDnsSecurity && !IP_RE.test(domain) ? auditDnsSecurity(domain) : Promise.resolve(null),
+    enablePhishFeeds && !IP_RE.test(domain) ? checkPhishingFeeds(domain) : Promise.resolve([]),
+    enableAsnReputation && serverIp ? lookupAsnReputation(serverIp) : Promise.resolve(null),
+    enableGithubDork && !IP_RE.test(domain)
+      ? scanGithubSecrets(domain, githubToken)
+      : Promise.resolve([]),
   ]);
 
   // Collect all risk factors
@@ -151,6 +174,10 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
   factors.push(...certRecordsToFactors(suspiciousCerts, domain));
   factors.push(...typosquatsToFactors(registeredTyposquats, domain));
   factors.push(...pasteHitsToFactors(pasteHits, domain));
+  if (dnsSecurityReport) factors.push(...dnsAuditToFactors(dnsSecurityReport));
+  factors.push(...phishingHitsToFactors(phishingHits, domain));
+  if (asnRecord) factors.push(...asnToFactors(asnRecord));
+  factors.push(...githubLeaksToFactors(githubLeaks, domain));
 
   const riskScore = aggregateScore(factors);
   const riskLevel = scoreToLevel(riskScore);
@@ -171,6 +198,10 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     suspiciousCerts,
     registeredTyposquats,
     pasteHits,
+    dnsSecurityReport,
+    phishingHits,
+    asnRecord,
+    githubLeaks,
     durationMs: Date.now() - start,
   };
 }

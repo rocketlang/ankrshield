@@ -19,8 +19,11 @@ const TIMEOUT_MS = 15_000;
 
 // Ports commonly left exposed by mistake — higher risk weight
 const HIGH_RISK_PORTS = new Set([22, 23, 3389, 5900, 5901, 6379, 27017, 11211, 9200, 8086]);
-// Ports that are expected on a web server — lower weight
-const LOW_RISK_PORTS = new Set([80, 443, 8080, 8443]);
+// Ports that are expected on a web server or CDN — lower weight
+// Cloudflare proxy ports: 2052, 2053, 2082, 2083, 2086, 2087, 2095, 2096, 8880
+const LOW_RISK_PORTS = new Set([
+  80, 443, 8080, 8443, 2052, 2053, 2082, 2083, 2086, 2087, 2095, 2096, 8880,
+]);
 
 interface ShodanVuln {
   cvss?: number;

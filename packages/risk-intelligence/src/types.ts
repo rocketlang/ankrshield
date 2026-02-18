@@ -27,7 +27,10 @@ export interface RiskFactor {
     | 'open_port'
     | 'outdated_software'
     | 'shodan_indexed'
-    | 'scanner_activity';
+    | 'scanner_activity'
+    | 'active_phishing_campaign'
+    | 'geopolitical_risk'
+    | 'code_secret_exposure';
   /** Human-readable summary of the finding */
   summary: string;
   /** Severity contribution 0–100 */
@@ -144,6 +147,18 @@ export interface RiskReport {
   /** Paste site hits mentioning this domain */
   pasteHits: import('./detectors/paste-monitor.js').PasteHit[];
 
+  /** DNS security configuration audit (SPF, DMARC, DNSSEC, CAA) */
+  dnsSecurityReport: import('./detectors/dns-security-audit.js').DnsSecurityReport | null;
+
+  /** Active phishing feed hits for this domain */
+  phishingHits: import('./detectors/phishing-feeds.js').PhishingHit[];
+
+  /** ASN / geopolitical risk record for the server IP */
+  asnRecord: import('./detectors/asn-reputation.js').AsnRecord | null;
+
+  /** GitHub code search hits revealing secrets referencing this domain */
+  githubLeaks: import('./detectors/github-dork.js').GithubLeakHit[];
+
   /** Time taken to assemble the report, in milliseconds */
   durationMs: number;
 }
@@ -173,4 +188,10 @@ export interface RiskEngineOptions {
   enableCertTransparency?: boolean;
   enableDnsValidation?: boolean;
   enablePasteMonitor?: boolean;
+  enableDnsSecurity?: boolean;
+  enablePhishFeeds?: boolean;
+  enableAsnReputation?: boolean;
+  enableGithubDork?: boolean;
+  /** GitHub personal access token — required for GitHub dork scanner */
+  githubToken?: string;
 }
