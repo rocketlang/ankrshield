@@ -1347,6 +1347,137 @@ export default function Landing() {
             </div>
           </div>
         </div>
+
+        {/* AI Threat Narrative — Sample Report */}
+        <div className="mt-10 border border-violet-500/30 bg-violet-600/5 rounded-2xl p-8 md:p-10">
+          {/* Header */}
+          <div className="flex flex-wrap items-center gap-3 mb-6">
+            <span className="text-2xl">🤖</span>
+            <div>
+              <div className="text-xs font-bold text-violet-400 uppercase tracking-widest mb-0.5">
+                AI Threat Narrative · Powered by xShield Intelligence
+              </div>
+              <div className="text-white font-black text-xl">
+                Sample Report — ankr.in · Risk Score{' '}
+                <span className="text-red-400 font-mono">100</span>
+                <span className="ml-2 text-xs font-bold text-red-400 border border-red-500/40 rounded-full px-2 py-0.5 uppercase">
+                  Critical
+                </span>
+              </div>
+            </div>
+            <div className="ml-auto text-[10px] text-gray-600 font-mono">
+              via groq/llama-3.3-70b · cost $0.00
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Executive Summary */}
+            <div className="bg-black/30 border border-white/10 rounded-xl p-5">
+              <div className="text-xs font-bold text-violet-400 uppercase tracking-widest mb-3">
+                📋 Executive Summary
+              </div>
+              <p className="text-gray-300 text-sm leading-relaxed">
+                The domain <span className="text-white font-semibold">ankr.in</span> has been
+                identified as a <span className="text-red-400 font-semibold">critical risk</span>,
+                with a risk score of 100, due to multiple security vulnerabilities and active
+                phishing threats. The presence of{' '}
+                <span className="text-orange-300">12 registered lookalike domains</span>, lack of
+                DMARC record, and absence of CAA record pose significant risks to the organization's
+                security and reputation. Immediate attention is required to mitigate these risks and
+                prevent potential attacks.
+              </p>
+            </div>
+
+            {/* Immediate Actions */}
+            <div className="bg-black/30 border border-white/10 rounded-xl p-5">
+              <div className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-3">
+                ⚡ Immediate Actions
+              </div>
+              <ol className="space-y-2">
+                {[
+                  'Implement a DMARC record to prevent email spoofing',
+                  'Configure a CAA record to restrict SSL certificate issuance',
+                  'Monitor and request takedown of lookalike domains',
+                  'Review and update DNS configuration to improve security score',
+                  'Conduct a security audit to identify additional vulnerabilities',
+                ].map((action, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm text-gray-300">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-[10px] font-bold flex items-center justify-center mt-0.5">
+                      {i + 1}
+                    </span>
+                    {action}
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            {/* Intelligence Sources Used */}
+            <div className="bg-black/30 border border-white/10 rounded-xl p-5">
+              <div className="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-3">
+                🔍 Intelligence Sources · 13 Parallel Checks
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: 'GreyNoise', color: 'text-cyan-400 border-cyan-500/30' },
+                  { label: 'Shodan', color: 'text-orange-400 border-orange-500/30' },
+                  { label: 'OTX', color: 'text-yellow-400 border-yellow-500/30' },
+                  { label: 'HIBP', color: 'text-purple-400 border-purple-500/30' },
+                  { label: 'urlscan.io', color: 'text-rose-400 border-rose-500/30' },
+                  { label: 'crt.sh', color: 'text-blue-400 border-blue-500/30' },
+                  { label: 'DNS Typosquat', color: 'text-emerald-400 border-emerald-500/30' },
+                  { label: 'PasteBin', color: 'text-gray-400 border-gray-500/30' },
+                  { label: 'SPF/DMARC/DNSSEC', color: 'text-red-400 border-red-500/30' },
+                  { label: 'OpenPhish', color: 'text-pink-400 border-pink-500/30' },
+                  { label: 'ASN Reputation', color: 'text-indigo-400 border-indigo-500/30' },
+                  { label: 'GitHub Dork', color: 'text-violet-400 border-violet-500/30' },
+                  { label: 'RDAP', color: 'text-teal-400 border-teal-500/30' },
+                ].map(({ label, color }) => (
+                  <span
+                    key={label}
+                    className={`text-[10px] font-bold px-2 py-1 rounded-full border ${color} bg-white/5`}
+                  >
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Risk Explanation */}
+            <div className="bg-black/30 border border-white/10 rounded-xl p-5">
+              <div className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-3">
+                📊 Risk Breakdown · Why Score = 100
+              </div>
+              <div className="space-y-2">
+                {[
+                  { label: '12 registered typosquat domains', score: 49, color: 'bg-red-500' },
+                  { label: 'No DMARC record (email spoofing)', score: 45, color: 'bg-orange-500' },
+                  { label: 'No SPF record', score: 40, color: 'bg-orange-400' },
+                  { label: 'No CAA record', score: 15, color: 'bg-yellow-500' },
+                  { label: 'OTX pulse activity', score: 8, color: 'bg-gray-500' },
+                ].map(({ label, score, color }) => (
+                  <div key={label}>
+                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                      <span>{label}</span>
+                      <span className="font-mono text-white">{score}</span>
+                    </div>
+                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${color} rounded-full`}
+                        style={{ width: `${score}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 text-center text-xs text-gray-600">
+            This briefing was auto-generated in ~19 seconds by the xShield AI threat narrative
+            engine — replacing hours of manual CTI analyst work.{' '}
+            <span className="text-violet-400">Try it free on your own domain →</span>
+          </div>
+        </div>
       </section>
 
       {/* ── Download / CTA ── */}
