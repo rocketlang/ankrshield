@@ -13,10 +13,11 @@
  *   warrior.ingest(event); // feed events from any source
  */
 
-import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
+import { EventEmitter } from 'node:events';
+
 import type { AIActivity } from '@ankrshield/ai-governance';
-import { WarriorLLMClient } from './llm/client';
+
 import { AttackCorrelator } from './analysis/correlator';
 import { ThreatNarrator } from './analysis/narrator';
 import { AutoPolicyGenerator } from './analysis/policy-gen';
@@ -24,6 +25,7 @@ import { HoneypotManager } from './defense/honeypot';
 import { AgentQuarantine } from './defense/quarantine';
 import { ScopeEnforcer } from './defense/scope-enforcer';
 import type { AgentScopeContract, BuiltinPresetId, ScopeViolation } from './defense/scope-enforcer';
+import { WarriorLLMClient } from './llm/client';
 import { IncidentReporter } from './reporting/incident';
 import type {
   AttackChain,
@@ -42,7 +44,7 @@ import type {
 
 const DEFAULTS: Omit<ResolvedWarriorConfig, 'anthropicApiKey'> = {
   model: 'claude-sonnet-4-6',
-  correlationWindowMs: 5 * 60_000,   // 5 minutes
+  correlationWindowMs: 5 * 60_000, // 5 minutes
   minEventsForChain: 2,
   threatScoreThreshold: 55,
   autoApplyPolicies: false,
@@ -56,6 +58,7 @@ const DEFAULTS: Omit<ResolvedWarriorConfig, 'anthropicApiKey'> = {
 
 // ─── Typed EventEmitter Declaration ───────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export declare interface AIWarrior {
   on(event: 'attack-detected', listener: (chain: AttackChain) => void): this;
   on(event: 'policy-generated', listener: (policy: GeneratedPolicy) => void): this;
@@ -76,6 +79,7 @@ export declare interface AIWarrior {
 
 // ─── AIWarrior ────────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class AIWarrior extends EventEmitter {
   private config: ResolvedWarriorConfig;
 
@@ -112,17 +116,14 @@ export class AIWarrior extends EventEmitter {
       ...config,
     } as ResolvedWarriorConfig;
 
-    this.llm = new WarriorLLMClient(
-      config.anthropicApiKey,
-      this.config.model,
-    );
+    this.llm = new WarriorLLMClient(config.anthropicApiKey, this.config.model);
 
     this.correlator = new AttackCorrelator();
     this.narrator = new ThreatNarrator(this.llm);
     this.policyGen = new AutoPolicyGenerator(this.llm);
     this.honeypots = new HoneypotManager(
       this.config.honeypotDirectory || undefined,
-      this.config.honeypotPollIntervalMs,
+      this.config.honeypotPollIntervalMs
     );
     this.quarantine = new AgentQuarantine();
     this.scopeEnforcer = new ScopeEnforcer();
@@ -149,10 +150,7 @@ export class AIWarrior extends EventEmitter {
     }
 
     // Correlation loop — runs at 1/5 of the window
-    const correlationInterval = Math.max(
-      10_000,
-      Math.floor(this.config.correlationWindowMs / 5),
-    );
+    const correlationInterval = Math.max(10_000, Math.floor(this.config.correlationWindowMs / 5));
     this.correlationTimer = setInterval(() => {
       void this.runCorrelation();
     }, correlationInterval);
@@ -263,9 +261,7 @@ export class AIWarrior extends EventEmitter {
 
     try {
       const windowStart = Date.now() - this.config.correlationWindowMs;
-      const recentEvents = this.eventBuffer.filter(
-        (e) => e.timestamp.getTime() >= windowStart,
-      );
+      const recentEvents = this.eventBuffer.filter((e) => e.timestamp.getTime() >= windowStart);
 
       if (recentEvents.length < this.config.minEventsForChain) return;
 
@@ -293,20 +289,14 @@ export class AIWarrior extends EventEmitter {
         this.emit('attack-detected', chain);
 
         // Auto-generate policy
-        const policy = await this.policyGen.generate(
-          chain,
-          this.config.autoApplyPolicies,
-        );
+        const policy = await this.policyGen.generate(chain, this.config.autoApplyPolicies);
         if (policy) {
           this.generatedPolicies.push(policy);
           this.emit('policy-generated', policy);
         }
 
         // Auto-quarantine on very high scores
-        if (
-          chain.threatScore >= this.config.autoQuarantineScore &&
-          agentId !== '__global__'
-        ) {
+        if (chain.threatScore >= this.config.autoQuarantineScore && agentId !== '__global__') {
           const quarantined = this.quarantine.quarantine(agentId, chain);
           chain.autoActionsApplied.push(`Agent quarantined: ${agentId}`);
           this.emit('agent-quarantined', quarantined);
@@ -390,8 +380,7 @@ export class AIWarrior extends EventEmitter {
     const reportPeriod = period ?? { start: this.startTime, end: new Date() };
 
     const chainsInPeriod = this.attackChains.filter(
-      (c) =>
-        c.detectedAt >= reportPeriod.start && c.detectedAt <= reportPeriod.end,
+      (c) => c.detectedAt >= reportPeriod.start && c.detectedAt <= reportPeriod.end
     );
 
     const report = await this.reporter.generate({
@@ -497,7 +486,7 @@ export class AIWarrior extends EventEmitter {
     agentId: string,
     agentName: string,
     presetId: BuiltinPresetId,
-    overrides?: Partial<AgentScopeContract>,
+    overrides?: Partial<AgentScopeContract>
   ): void {
     this.scopeEnforcer.registerPreset(agentId, agentName, presetId, overrides);
   }
@@ -521,6 +510,14 @@ export class AIWarrior extends EventEmitter {
   /** Returns all currently quarantined (active) agents. */
   getActiveQuarantinedAgents(): QuarantinedAgent[] {
     return this.quarantine.getActive();
+  }
+
+  /**
+   * Restore a quarantine entry from DB on startup without emitting events.
+   * Used to re-hydrate the in-memory quarantine registry after a restart.
+   */
+  restoreQuarantine(agentId: string, chain: AttackChain): void {
+    this.quarantine.quarantine(agentId, chain);
   }
 
   /**
@@ -567,17 +564,14 @@ export class AIWarrior extends EventEmitter {
       (existing) =>
         existing.events[0]?.agentId === agentId &&
         existing.attackType === chain.attackType &&
-        existing.detectedAt.getTime() > cutoff,
+        existing.detectedAt.getTime() > cutoff
     );
   }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function groupBy<T>(
-  arr: T[],
-  key: (item: T) => string,
-): Map<string, T[]> {
+function groupBy<T>(arr: T[], key: (item: T) => string): Map<string, T[]> {
   const map = new Map<string, T[]>();
   for (const item of arr) {
     const k = key(item);
@@ -591,20 +585,20 @@ function groupBy<T>(
   return map;
 }
 
-function activityTypeToSource(
-  type: AIActivity['type'],
-): ThreatSource {
+function activityTypeToSource(type: AIActivity['type']): ThreatSource {
   switch (type) {
-    case 'file': return 'file-system';
-    case 'network': return 'network';
-    case 'clipboard': return 'clipboard';
-    default: return 'ai-agent';
+    case 'file':
+      return 'file-system';
+    case 'network':
+      return 'network';
+    case 'clipboard':
+      return 'clipboard';
+    default:
+      return 'ai-agent';
   }
 }
 
-function activityToSeverity(
-  activity: AIActivity,
-): ThreatEvent['severity'] {
+function activityToSeverity(activity: AIActivity): ThreatEvent['severity'] {
   // Heuristic: sensitive keywords in details → higher severity
   if (/\.env|\.pem|\.key|wallet|password|secret|api.?key/i.test(activity.details)) {
     return 'high';

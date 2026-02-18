@@ -30,6 +30,8 @@
       "@ankrshield/privacy-engine": ["./packages/privacy-engine/src"],
       "@ankrshield/policy-engine": ["./packages/policy-engine/src"],
       "@ankrshield/ai-governance": ["./packages/ai-governance/src"],
+      "@ankrshield/ai-warrior": ["./packages/ai-warrior/src"],
+      "@ankrshield/spyware-detector": ["./packages/spyware-detector/src"],
       "@ankrshield/tracker-db": ["./packages/tracker-db/src"],
       "@ankrshield/crypto": ["./packages/crypto/src"]
     }

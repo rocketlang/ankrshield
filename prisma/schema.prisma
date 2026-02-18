@@ -465,6 +465,155 @@ model Alert {
 }
 
 // ============================================================================
+// AI WARRIOR — Threat Intelligence Persistence
+// ============================================================================
+
+enum WarriorAttackType {
+  data_exfiltration
+  credential_theft
+  lateral_movement
+  ransomware
+  surveillance
+  supply_chain_compromise
+  privilege_escalation
+  honeypot_triggered
+  unknown
+
+  @@map("warrior_attack_type")
+}
+
+enum WarriorEventType {
+  attack_detected
+  policy_generated
+  honeypot_triggered
+  agent_quarantined
+  scope_violation
+  incident_report
+  spyware_detected
+
+  @@map("warrior_event_type")
+}
+
+// Correlated attack chains detected by AI Warrior
+model WarriorAttackChain {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  detectedAt    DateTime @default(now()) @db.Timestamptz
+  startTime     DateTime @db.Timestamptz
+  endTime       DateTime @db.Timestamptz
+
+  // Classification
+  attackType    WarriorAttackType
+  threatScore   Float    @db.Real      // 0-100
+  eventCount    Int      @default(0)
+
+  // LLM-generated text
+  narrative         String   @db.Text
+  technicalSummary  String   @db.Text
+
+  // JSON arrays
+  affectedAssets    String[]
+  suggestedActions  String[]
+  autoActionsApplied String[]
+
+  // Relations
+  policies      WarriorPolicy[]
+  events        WarriorEvent[]
+
+  @@index([detectedAt(sort: Desc)])
+  @@index([attackType])
+  @@index([threatScore(sort: Desc)])
+  @@map("warrior_attack_chains")
+}
+
+// Auto-generated policies from attack chains
+model WarriorPolicy {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  createdAt       DateTime @default(now())
+
+  name            String
+  description     String   @db.Text
+  triggeredBy     String   @db.Uuid     // WarriorAttackChain.id
+  confidence      Float    @db.Real     // 0-100
+  autoApplied     Boolean  @default(false)
+  requiresApproval Boolean @default(true)
+  appliedAt       DateTime?
+
+  // Rules stored as JSON array of { type, value, reason }
+  rules           Json
+
+  // Relation
+  chain           WarriorAttackChain @relation(fields: [triggeredBy], references: [id], onDelete: Cascade)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([requiresApproval])
+  @@index([autoApplied])
+  @@map("warrior_policies")
+}
+
+// Persisted incident reports (LLM-generated, immutable after creation)
+model WarriorIncidentReport {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  generatedAt     DateTime @default(now())
+  periodStart     DateTime @db.Timestamptz
+  periodEnd       DateTime @db.Timestamptz
+
+  riskScore       Float    @db.Real
+  executiveSummary String  @db.Text
+  technicalAnalysis String @db.Text
+
+  totalEventsAnalyzed   Int @default(0)
+  totalAlertsGenerated  Int @default(0)
+
+  // JSON arrays / objects
+  topThreats      String[]
+  recommendations String[]
+  // Full report stored as JSON for complete replay
+  rawReport       Json
+
+  @@index([generatedAt(sort: Desc)])
+  @@index([riskScore(sort: Desc)])
+  @@map("warrior_incident_reports")
+}
+
+// Append-only event log — every significant warrior action
+model WarriorEvent {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  occurredAt  DateTime @default(now()) @db.Timestamptz
+
+  eventType   WarriorEventType
+  agentId     String?
+  agentName   String?
+  chainId     String?  @db.Uuid
+
+  // Serialised payload (AttackChain, ScopeViolation, etc.)
+  payload     Json
+
+  // Optional relation to chain
+  chain       WarriorAttackChain? @relation(fields: [chainId], references: [id], onDelete: SetNull)
+
+  @@index([occurredAt(sort: Desc)])
+  @@index([eventType])
+  @@index([agentId])
+  @@index([chainId])
+  @@map("warrior_events")
+}
+
+// Quarantine registry — persists across restarts
+model WarriorQuarantine {
+  agentId       String   @id
+  agentName     String
+  quarantinedAt DateTime @default(now())
+  reason        String   @db.Text
+  attackChainId String   @db.Uuid
+  isActive      Boolean  @default(true)
+  releasedAt    DateTime?
+
+  @@index([isActive])
+  @@index([quarantinedAt(sort: Desc)])
+  @@map("warrior_quarantine")
+}
+
+// ============================================================================
 // ANALYTICS (Denormalized for performance)
 // ============================================================================
 

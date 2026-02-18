@@ -8,12 +8,10 @@
  *            addHoneypot, deployDefaultHoneypots
  */
 
-import { builder } from '../builder';
-import {
-  getWarrior,
-  getRecentEvents,
-} from '../../warrior/warrior-service';
 import type { ThreatSource, ThreatSeverity } from '@ankrshield/ai-warrior';
+
+import { getWarrior, getRecentEvents } from '../../warrior/warrior-service';
+import { builder, prisma } from '../builder';
 
 // ─── Queries ──────────────────────────────────────────────────────────────────
 
@@ -67,9 +65,10 @@ builder.queryField('generatedPolicies', (t) =>
     },
     resolve: (_p, args) => {
       const policies = getWarrior().getGeneratedPolicies();
-      const filtered = (args.pendingApprovalOnly ?? false)
-        ? policies.filter((p) => p.requiresApproval && !p.autoApplied)
-        : policies;
+      const filtered =
+        (args.pendingApprovalOnly ?? false)
+          ? policies.filter((p) => p.requiresApproval && !p.autoApplied)
+          : policies;
       return filtered.slice(0, args.limit ?? 50);
     },
   })
@@ -84,9 +83,7 @@ builder.queryField('quarantinedAgents', (t) =>
     },
     resolve: (_p, args) => {
       const w = getWarrior();
-      return (args.activeOnly ?? true)
-        ? w.getActiveQuarantinedAgents()
-        : w.getQuarantinedAgents();
+      return (args.activeOnly ?? true) ? w.getActiveQuarantinedAgents() : w.getQuarantinedAgents();
     },
   })
 );
@@ -100,9 +97,7 @@ builder.queryField('honeypotAssets', (t) =>
     },
     resolve: (_p, args) => {
       const assets = getWarrior().honeypotManager.getAll();
-      return (args.triggeredOnly ?? false)
-        ? assets.filter((a) => a.triggered)
-        : assets;
+      return (args.triggeredOnly ?? false) ? assets.filter((a) => a.triggered) : assets;
     },
   })
 );
@@ -117,9 +112,7 @@ builder.queryField('warriorEvents', (t) =>
     },
     resolve: (_p, args) => {
       const events = getRecentEvents();
-      const filtered = args.type
-        ? events.filter((e) => e.type === args.type)
-        : events;
+      const filtered = args.type ? events.filter((e) => e.type === args.type) : events;
       return filtered
         .slice(-(args.limit ?? 50))
         .reverse()
@@ -153,8 +146,18 @@ builder.mutationField('releaseAgent', (t) =>
     args: {
       agentId: t.arg.string({ required: true }),
     },
-    resolve: (_p, args) => {
-      return getWarrior().releaseAgent(args.agentId);
+    resolve: async (_p, args) => {
+      const ok = getWarrior().releaseAgent(args.agentId);
+      // Persist release to DB
+      try {
+        await prisma.warriorQuarantine.updateMany({
+          where: { agentId: args.agentId, isActive: true },
+          data: { isActive: false, releasedAt: new Date() },
+        });
+      } catch (_e) {
+        /* DB may not be migrated yet */
+      }
+      return ok;
     },
   })
 );
@@ -165,9 +168,19 @@ builder.mutationField('applyPolicy', (t) =>
     description: 'Mark a generated policy as manually applied (clears requiresApproval).',
     args: {
       policyId: t.arg.string({ required: true }),
+      // Note: id is a UUID string matching WarriorPolicy.id in DB
     },
-    resolve: (_p, args) => {
-      return getWarrior().applyPolicy(args.policyId);
+    resolve: async (_p, args) => {
+      const ok = getWarrior().applyPolicy(args.policyId);
+      try {
+        await prisma.warriorPolicy.updateMany({
+          where: { id: args.policyId },
+          data: { autoApplied: true, requiresApproval: false, appliedAt: new Date() },
+        });
+      } catch (_e) {
+        /* DB may not be migrated yet */
+      }
+      return ok;
     },
   })
 );
@@ -183,9 +196,8 @@ builder.mutationField('registerScopePreset', (t) =>
       workspaceRoot: t.arg.string({ required: false }),
     },
     resolve: (_p, args) => {
-      const overrides = args.workspaceRoot
-        ? { workspaceRoot: args.workspaceRoot }
-        : undefined;
+      const overrides = args.workspaceRoot ? { workspaceRoot: args.workspaceRoot } : undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       getWarrior().registerPreset(args.agentId, args.agentName, args.presetId as any, overrides);
       return true;
     },
@@ -195,7 +207,8 @@ builder.mutationField('registerScopePreset', (t) =>
 builder.mutationField('ingestThreatEvent', (t) =>
   t.field({
     type: 'Boolean',
-    description: 'Manually inject a threat event into the warrior pipeline (for testing / API integrations).',
+    description:
+      'Manually inject a threat event into the warrior pipeline (for testing / API integrations).',
     args: {
       source: t.arg.string({ required: true }),
       severity: t.arg.string({ required: true }),
