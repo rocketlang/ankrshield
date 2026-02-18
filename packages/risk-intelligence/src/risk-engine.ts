@@ -65,7 +65,10 @@ function aggregateScore(factors: RiskFactor[]): number {
 // IP resolution
 // ---------------------------------------------------------------------------
 
+const IP_RE = /^(\d{1,3}\.){3}\d{1,3}$/;
+
 async function resolveIp(domain: string): Promise<string | null> {
+  if (IP_RE.test(domain)) return domain; // already an IP
   try {
     const addresses = await dns.resolve4(domain);
     return addresses[0] ?? null;
