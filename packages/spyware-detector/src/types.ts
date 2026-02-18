@@ -1,21 +1,41 @@
 /**
  * @ankrshield/spyware-detector — Type definitions
  *
- * Nation-state spyware detection types covering Pegasus, Candiru,
- * Predator, FinFisher, and Hermit threat families.
+ * Nation-state spyware, APT C2 infrastructure, Linux rootkits, and CVE
+ * vulnerability detection types.
  */
 
 // ---------------------------------------------------------------------------
 // Core enumerations
 // ---------------------------------------------------------------------------
 
-/** Known nation-state spyware families tracked by this engine. */
+/** Known threat families tracked by this engine. */
 export type SpywareFamily =
+  // Commercial / mercenary spyware
   | 'pegasus'
   | 'candiru'
   | 'predator'
   | 'finfisher'
   | 'hermit'
+  // Nation-state APT groups
+  | 'lazarus'
+  | 'apt41'
+  | 'sandworm'
+  | 'turla'
+  | 'apt28'
+  | 'apt33'
+  | 'kimsuky'
+  // Linux rootkits & implants
+  | 'bpfdoor'
+  | 'symbiote'
+  | 'reptile'
+  | 'diamorphine'
+  | 'orbit'
+  | 'hiddenwasp'
+  | 'xorddos'
+  | 'lightningframework'
+  // CVE / vulnerability
+  | 'cve'
   | 'unknown';
 
 /** Category of the indicator of compromise (IOC). */
@@ -26,7 +46,12 @@ export type SpywareIndicatorType =
   | 'dns_query'
   | 'certificate'
   | 'behavioral'
-  | 'memory_pattern';
+  | 'memory_pattern'
+  | 'ld_preload'
+  | 'kernel_module'
+  | 'kernel_artifact'
+  | 'cve_vulnerable'
+  | 'exploit_attempt';
 
 /**
  * Overall detection severity level based on accumulated confidence:
@@ -128,31 +153,30 @@ export interface SpywareScanResult {
  * All boolean flags default to `true` when omitted.
  */
 export interface ScanOptions {
-  /**
-   * Check recently resolved DNS names and active network connections
-   * against known C2 domain / IP lists.
-   */
+  /** Check recently resolved DNS names and active network connections
+   * against known C2 domain / IP lists (spyware + APT). */
   enableNetworkScan: boolean;
 
-  /**
-   * Enumerate running processes and compare against known spyware process
-   * name signatures.
-   */
+  /** Enumerate running processes and compare against known spyware process
+   * name signatures. */
   enableProcessScan: boolean;
 
-  /**
-   * Inspect the filesystem for known spyware file artifacts and residues.
-   */
+  /** Inspect the filesystem for known spyware and rootkit file artifacts. */
   enableFileScan: boolean;
 
-  /**
-   * Specifically monitor DNS query logs if available (subset of network scan).
-   */
+  /** Specifically monitor DNS query logs if available (subset of network scan). */
   enableDnsScan: boolean;
 
-  /**
-   * Optional list of additional IOC strings (domains or IPs) supplied by the
-   * caller — merged with the built-in lists before scanning.
-   */
+  /** Scan for Linux rootkit artifacts: LD_PRELOAD hijacks, kernel modules,
+   * /proc anomalies, raw sockets, hidden processes. Linux-only; no-op on
+   * other platforms. */
+  enableLinuxRootkitScan: boolean;
+
+  /** Check for unpatched CVEs: kernel vulnerabilities (DirtyPipe, DirtyCOW),
+   * PwnKit (polkit), XZ Utils backdoor. */
+  enableCveScan: boolean;
+
+  /** Optional list of additional IOC strings (domains or IPs) supplied by the
+   * caller — merged with the built-in lists before scanning. */
   customIocs?: string[];
 }
