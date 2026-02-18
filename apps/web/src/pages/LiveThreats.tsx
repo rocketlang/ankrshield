@@ -37,6 +37,17 @@ interface HoneypotHit {
   blockError?: string;
 }
 
+interface PreBlockedEntry {
+  ip: string;
+  score: number;
+  country?: string;
+  isp?: string;
+  totalReports: number;
+  blockedAt: string;
+  path: string;
+  blocked: boolean;
+}
+
 interface LiveData {
   ok: boolean;
   timestamp: string;
@@ -214,6 +225,7 @@ function ServerStat({
 export default function LiveThreats() {
   const [data, setData] = useState<LiveData | null>(null);
   const [hits, setHits] = useState<HoneypotHit[]>([]);
+  const [preBlocked, setPreBlocked] = useState<PreBlockedEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState('');
   const [polls, setPolls] = useState(0);
@@ -222,9 +234,10 @@ export default function LiveThreats() {
 
   const fetch5s = async () => {
     try {
-      const [liveRes, hitsRes] = await Promise.all([
+      const [liveRes, hitsRes, preBlockedRes] = await Promise.all([
         fetch(`${API_BASE}/warrior/threats/live`),
         fetch(`${API_BASE}/warrior/honeypot-hits`),
+        fetch(`${API_BASE}/warrior/preblocked-ips`),
       ]);
       if (!liveRes.ok) throw new Error(`${liveRes.status}`);
       const json = (await liveRes.json()) as LiveData;
@@ -232,6 +245,10 @@ export default function LiveThreats() {
       if (hitsRes.ok) {
         const hitsJson = (await hitsRes.json()) as { recent: HoneypotHit[]; blockedCount: number };
         setHits(hitsJson.recent ?? []);
+      }
+      if (preBlockedRes.ok) {
+        const pbJson = (await preBlockedRes.json()) as { recent: PreBlockedEntry[] };
+        setPreBlocked(pbJson.recent ?? []);
       }
       setError(null);
       setLastFetch(new Date().toLocaleTimeString('en-IN', { hour12: false }));
@@ -458,6 +475,103 @@ export default function LiveThreats() {
                               🚫 {hit.blockError ?? 'BLOCKING…'}
                             </span>
                           )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Pre-Identified Threats — AbuseIPDB pre-screened ── */}
+            {preBlocked.length > 0 && (
+              <div>
+                <h2 className="font-bold text-lg flex items-center gap-2 mb-4">
+                  <span className="text-xl">🔍</span> Pre-Identified Threats
+                  <span className="text-xs text-gray-600 font-normal ml-1">
+                    ({preBlocked.length} IPs flagged before they could act)
+                  </span>
+                </h2>
+                <div className="space-y-3">
+                  {preBlocked.map((pb, i) => (
+                    <div
+                      key={`${pb.ip}-${pb.blockedAt}-${i}`}
+                      className="relative rounded-2xl border border-purple-500/30 bg-purple-950/10 overflow-hidden"
+                    >
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-purple-500" />
+                      <div className="pl-5 pr-5 py-4">
+                        <div className="flex items-center gap-2 flex-wrap mb-2">
+                          <span className="px-2.5 py-0.5 rounded-lg border text-xs font-bold bg-purple-500/10 border-purple-500/40 text-purple-300">
+                            🔍 KNOWN THREAT
+                          </span>
+                          <span className="text-gray-600 text-xs">{fmtTimeAgo(pb.blockedAt)}</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs mb-3">
+                          <div>
+                            <p className="text-gray-600 uppercase tracking-widest text-[10px]">
+                              IP Address
+                            </p>
+                            <code className="text-purple-300 font-mono">{pb.ip}</code>
+                          </div>
+                          <div>
+                            <p className="text-gray-600 uppercase tracking-widest text-[10px]">
+                              Country / ISP
+                            </p>
+                            <code className="text-gray-400 font-mono">
+                              {[pb.country, pb.isp].filter(Boolean).join(' · ') || 'Unknown'}
+                            </code>
+                          </div>
+                          <div>
+                            <p className="text-gray-600 uppercase tracking-widest text-[10px]">
+                              First Seen Path
+                            </p>
+                            <code className="text-orange-300 font-mono">{pb.path}</code>
+                          </div>
+                          <div>
+                            <p className="text-gray-600 uppercase tracking-widest text-[10px]">
+                              Global Reports
+                            </p>
+                            <code className="text-gray-400 font-mono">
+                              {pb.totalReports.toLocaleString()}
+                            </code>
+                          </div>
+                        </div>
+                        {/* Abuse score bar */}
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] text-gray-600 uppercase tracking-widest">
+                              Global Abuse Confidence
+                            </span>
+                            <span
+                              className={`text-xs font-bold font-mono ${pb.score >= 80 ? 'text-red-400' : 'text-orange-400'}`}
+                            >
+                              {pb.score}%
+                            </span>
+                          </div>
+                          <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-purple-600 to-red-500 rounded-full transition-all duration-700"
+                              style={{ width: `${pb.score}%` }}
+                            />
+                          </div>
+                        </div>
+                        {/* Action badges */}
+                        <div className="flex flex-wrap gap-2">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                            🌐 ABUSEIPDB FLAGGED
+                          </span>
+                          {pb.blocked ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 border border-red-500/20 text-red-400">
+                              🚫 IP BLOCKED
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-gray-800 border border-gray-700 text-gray-500">
+                              🚫 BLOCK PENDING
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-500/10 border border-yellow-500/20 text-yellow-500">
+                            ⚡ PRE-SCREENED
+                          </span>
                         </div>
                       </div>
                     </div>

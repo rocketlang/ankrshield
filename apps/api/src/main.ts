@@ -32,6 +32,225 @@ const start = async () => {
     // Auth plugin (JWT)
     await fastify.register(authPlugin);
 
+    // ─── AbuseIPDB Pre-Identification Middleware ──────────────────────────────
+    // Checks every unique incoming IP against AbuseIPDB before any route runs.
+    // Cached per IP for 1 hour to protect the free-tier quota (1000 checks/day).
+    // IPs scoring ≥ 80 are blocked immediately with iptables + 403 response.
+
+    const ABUSE_SCORE_THRESHOLD = 80;
+    const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+    interface AbuseCheckResult {
+      score: number;
+      country?: string;
+      isp?: string;
+      totalReports: number;
+      cachedAt: number;
+    }
+
+    interface PreBlockedEntry {
+      ip: string;
+      score: number;
+      country?: string;
+      isp?: string;
+      totalReports: number;
+      blockedAt: string;
+      path: string;
+      blocked: boolean;
+    }
+
+    const abuseCache = new Map<string, AbuseCheckResult>();
+    const preBlockedLog: PreBlockedEntry[] = [];
+
+    // Paths exempt from the check (our own dashboard must always be reachable)
+    const EXEMPT_PATHS = new Set([
+      '/health',
+      '/warrior/threats/live',
+      '/warrior/honeypot-hits',
+      '/warrior/evidence-report',
+      '/warrior/preblocked-ips',
+    ]);
+
+    const checkAbuseIPDB = async (ip: string): Promise<AbuseCheckResult | null> => {
+      const apiKey = process.env.ABUSEIPDB_API_KEY;
+      if (!apiKey) return null;
+
+      // Return cached result if fresh
+      const cached = abuseCache.get(ip);
+      if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) return cached;
+
+      try {
+        const res = await fetch(
+          `https://api.abuseipdb.com/api/v2/check?ipAddress=${encodeURIComponent(ip)}&maxAgeInDays=30`,
+          {
+            headers: {
+              Key: apiKey,
+              Accept: 'application/json',
+            },
+          }
+        );
+        if (!res.ok) return null;
+
+        const json = (await res.json()) as {
+          data?: {
+            abuseConfidenceScore?: number;
+            countryCode?: string;
+            isp?: string;
+            totalReports?: number;
+          };
+        };
+
+        const result: AbuseCheckResult = {
+          score: json.data?.abuseConfidenceScore ?? 0,
+          country: json.data?.countryCode,
+          isp: json.data?.isp,
+          totalReports: json.data?.totalReports ?? 0,
+          cachedAt: Date.now(),
+        };
+
+        abuseCache.set(ip, result);
+        // Evict oldest entries if cache grows large
+        if (abuseCache.size > 5000) {
+          const oldest = [...abuseCache.entries()]
+            .sort((a, b) => a[1].cachedAt - b[1].cachedAt)
+            .slice(0, 500);
+          oldest.forEach(([k]) => abuseCache.delete(k));
+        }
+
+        return result;
+      } catch {
+        return null; // fail open — never block on AbuseIPDB outage
+      }
+    };
+
+    const preBlockHtml = (
+      ip: string,
+      score: number,
+      isp?: string,
+      country?: string
+    ) => `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ANKR Shield — Access Denied</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{min-height:100vh;background:#030712;display:flex;align-items:center;justify-content:center;font-family:monospace;color:#fff;padding:20px}
+    .card{max-width:540px;width:100%;border:1px solid #7c3aed;border-radius:16px;overflow:hidden;background:#0a0a0a;box-shadow:0 0 60px rgba(124,58,237,0.15)}
+    .header{background:#7c3aed;padding:20px 28px;display:flex;align-items:center;gap:12px}
+    .header h1{font-size:17px;font-weight:900;letter-spacing:-0.5px}
+    .body{padding:28px}
+    .row{margin-bottom:14px}
+    .label{font-size:10px;text-transform:uppercase;letter-spacing:2px;color:#6b7280;margin-bottom:3px}
+    .mono{font-family:monospace;background:#111;padding:6px 10px;border-radius:6px;display:block;font-size:11px;color:#e5e7eb;word-break:break-all}
+    .score{font-size:48px;font-weight:900;color:#f87171;font-family:monospace}
+    .bar-bg{background:#1f2937;border-radius:99px;height:8px;margin-top:6px}
+    .bar-fill{height:8px;border-radius:99px;background:linear-gradient(90deg,#ef4444,#dc2626);transition:width 1s}
+    .warning{background:#1a0a2e;border:1px solid #4c1d95;border-radius:10px;padding:16px;margin:20px 0}
+    .warning p{font-size:12px;color:#c4b5fd;line-height:1.7}
+    .footer{background:#0f0f0f;padding:14px 28px;font-size:10px;color:#374151;text-align:center}
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <span style="font-size:26px">🛡️</span>
+    <div>
+      <h1>Known Threat — Access Denied</h1>
+      <p style="font-size:11px;opacity:0.85;margin-top:2px">ANKR Shield · Pre-Identification System</p>
+    </div>
+  </div>
+  <div class="body">
+    <div class="row">
+      <div class="label">Your IP</div>
+      <code class="mono">${ip}${country ? ` · ${country}` : ''}${isp ? ` · ${isp}` : ''}</code>
+    </div>
+    <div class="row">
+      <div class="label">Global Abuse Confidence Score</div>
+      <div class="score">${score}%</div>
+      <div class="bar-bg"><div class="bar-fill" style="width:${score}%"></div></div>
+    </div>
+    <div class="warning">
+      <p>
+        <strong style="color:#a78bfa">🔍 Pre-identified:</strong> Your IP address has been
+        flagged by the global AbuseIPDB threat intelligence database with a
+        <strong>${score}% abuse confidence score</strong>.
+        This server is protected by ANKR Shield. Access has been denied and your
+        IP has been blocked. This decision is based on reports from security
+        researchers and sysadmins worldwide — not this server's actions.
+      </p>
+    </div>
+    <p style="font-size:11px;color:#4b5563;text-align:center">
+      If you believe this is an error, dispute at abuseipdb.com
+    </p>
+  </div>
+  <div class="footer">ANKR Shield · AI-powered cybersecurity · ankr.in</div>
+</div>
+</body>
+</html>`;
+
+    fastify.addHook('onRequest', async (request, reply) => {
+      // Skip non-GET/POST or exempt paths
+      if (EXEMPT_PATHS.has(request.url)) return;
+
+      const ip =
+        (request.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ??
+        request.socket.remoteAddress ??
+        '';
+
+      if (!ip || isPrivateIp(ip)) return; // skip private / unknown
+
+      // Check cache first (synchronous fast path)
+      const cached = abuseCache.get(ip);
+      if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) {
+        if (cached.score >= ABUSE_SCORE_THRESHOLD) {
+          blockIpWithIptables(ip);
+          fastify.log.warn({ ip, score: cached.score }, '🚫 Pre-blocked known threat (cached)');
+          return reply
+            .status(403)
+            .header('Content-Type', 'text/html; charset=utf-8')
+            .send(preBlockHtml(ip, cached.score, cached.isp, cached.country));
+        }
+        return; // cached clean IP
+      }
+
+      // Async check — fire without blocking the request for clean IPs
+      // For first-time IPs: check in background, log result
+      void checkAbuseIPDB(ip).then((result) => {
+        if (!result) return;
+        if (result.score >= ABUSE_SCORE_THRESHOLD) {
+          fastify.log.warn(
+            { ip, score: result.score, country: result.country, isp: result.isp },
+            '🚨 High-risk IP detected by pre-identifier'
+          );
+          const blockResult = blockIpWithIptables(ip);
+          const entry: PreBlockedEntry = {
+            ip,
+            score: result.score,
+            country: result.country,
+            isp: result.isp,
+            totalReports: result.totalReports,
+            blockedAt: new Date().toISOString(),
+            path: request.url,
+            blocked: blockResult.blocked,
+          };
+          preBlockedLog.unshift(entry);
+          if (preBlockedLog.length > 200) preBlockedLog.pop();
+        }
+      });
+
+      // For already-cached high-score IPs, block synchronously on repeat visits
+    });
+
+    // ─── Pre-blocked IPs feed ─────────────────────────────────────────────────
+    fastify.get('/warrior/preblocked-ips', async () => ({
+      total: preBlockedLog.length,
+      cacheSize: abuseCache.size,
+      threshold: ABUSE_SCORE_THRESHOLD,
+      recent: preBlockedLog.slice(0, 20),
+    }));
+
     // GraphQL with Mercurius
     await fastify.register(mercurius, {
       schema,
