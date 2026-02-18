@@ -132,6 +132,18 @@ export interface RiskReport {
   /** Phishing / typosquat domains found that target this domain */
   domainThreats: DomainThreat[];
 
+  /** OTX threat intelligence result for the server IP */
+  otx: import('./detectors/otx-scanner.js').OtxResult | null;
+
+  /** SSL certs issued for lookalike domains (cert transparency) */
+  suspiciousCerts: import('./detectors/cert-transparency.js').CertRecord[];
+
+  /** Typosquat domains that are actually registered (DNS-verified) */
+  registeredTyposquats: import('./detectors/dns-validator.js').RegisteredTyposquat[];
+
+  /** Paste site hits mentioning this domain */
+  pasteHits: import('./detectors/paste-monitor.js').PasteHit[];
+
   /** Time taken to assemble the report, in milliseconds */
   durationMs: number;
 }
@@ -150,11 +162,15 @@ export interface RiskEngineOptions {
   serverIp?: string;
   /** Shodan API key (free account at shodan.io). Required for Shodan checks. */
   shodanApiKey?: string;
-  /** AlienVault OTX API key — not used by this package directly */
+  /** AlienVault OTX API key (free at otx.alienvault.com). */
   otxApiKey?: string;
   /** Disable individual sub-checks */
   enableGreyNoise?: boolean;
   enableShodan?: boolean;
   enableHibp?: boolean;
   enableUrlscan?: boolean;
+  enableOtx?: boolean;
+  enableCertTransparency?: boolean;
+  enableDnsValidation?: boolean;
+  enablePasteMonitor?: boolean;
 }
