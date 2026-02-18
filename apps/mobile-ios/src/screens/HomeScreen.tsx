@@ -124,6 +124,13 @@ export function HomeScreen({ navigation }: any) {
         >
           <Text style={styles.actionButtonText}>Settings</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.warriorButton]}
+          onPress={() => navigation.navigate('Warrior')}
+        >
+          <Text style={styles.actionButtonText}>⚔️  AI Warrior</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -186,6 +193,11 @@ const styles = StyleSheet.create({
   },
   secondaryButton: {
     backgroundColor: '#2a2a2a',
+  },
+  warriorButton: {
+    backgroundColor: '#1a1a3a',
+    borderWidth: 1,
+    borderColor: '#3949AB',
   },
   actionButtonText: {
     color: '#fff',

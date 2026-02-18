@@ -10,6 +10,8 @@ import type { Context } from './graphql/builder';
 import securityPlugin from './plugins/security';
 import authPlugin from './plugins/auth';
 import { startMonitor, stopMonitor, getMonitor } from './monitor/traffic-monitor';
+import { startWarrior, stopWarrior } from './warrior/warrior-service';
+import { SpywareScanner } from '@ankrshield/spyware-detector';
 
 const fastify = Fastify({
   logger: {
@@ -102,6 +104,24 @@ const start = async () => {
       }
     });
 
+    // Spyware scan endpoint (POST /warrior/spyware-scan)
+    fastify.post('/warrior/spyware-scan', async (request) => {
+      try {
+        const opts = (request.body ?? {}) as Record<string, unknown>;
+        const scanner = new SpywareScanner({
+          enableNetworkScan: opts.enableNetworkScan !== false,
+          enableProcessScan: opts.enableProcessScan !== false,
+          enableFileScan: opts.enableFileScan !== false,
+          enableDnsScan: opts.enableDnsScan !== false,
+          customIocs: Array.isArray(opts.customIocs) ? opts.customIocs as string[] : undefined,
+        });
+        const result = await scanner.scan();
+        return result;
+      } catch (err: any) {
+        return { error: err.message, scannedAt: new Date().toISOString(), isClean: null };
+      }
+    });
+
     // Live traffic monitoring endpoint
     fastify.get('/monitor/stats', async () => {
       const monitor = getMonitor();
@@ -144,6 +164,10 @@ const start = async () => {
     startMonitor();
     fastify.log.info(`🔍 Traffic monitor started - capturing live tracking attempts`);
     fastify.log.info(`📈 Monitor stats: http://${host}:${port}/monitor/stats`);
+
+    // Start AI Warrior engine
+    await startWarrior();
+    fastify.log.info(`⚔️  AI Warrior engine started — honeypots deployed, scope enforcer active`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -156,6 +180,7 @@ signals.forEach((signal) => {
   process.on(signal, async () => {
     fastify.log.info(`Received ${signal}, closing server...`);
     stopMonitor();
+    await stopWarrior();
     await fastify.close();
     await prisma.$disconnect();
     process.exit(0);

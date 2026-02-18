@@ -11,6 +11,10 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ActivityScreen } from './src/screens/ActivityScreen';
+import { WarriorScreen } from './src/screens/WarriorScreen';
+import { ThreatAlertsScreen } from './src/screens/ThreatAlertsScreen';
+import { AgentManagerScreen } from './src/screens/AgentManagerScreen';
+import { SpywareScanScreen } from './src/screens/SpywareScanScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -52,6 +56,26 @@ function App(): React.JSX.Element {
             name="Settings"
             component={SettingsScreen}
             options={{ title: 'Settings' }}
+          />
+          <Stack.Screen
+            name="Warrior"
+            component={WarriorScreen}
+            options={{ title: 'AI Warrior' }}
+          />
+          <Stack.Screen
+            name="ThreatAlerts"
+            component={ThreatAlertsScreen}
+            options={{ title: 'Threat Alerts' }}
+          />
+          <Stack.Screen
+            name="AgentManager"
+            component={AgentManagerScreen}
+            options={{ title: 'Agent Manager' }}
+          />
+          <Stack.Screen
+            name="SpywareScan"
+            component={SpywareScanScreen}
+            options={{ title: 'Spyware Scan' }}
           />
         </Stack.Navigator>
       </NavigationContainer>

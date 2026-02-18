@@ -17,10 +17,12 @@ import './types/privacy';
 import './types/device';
 import './types/user';
 import './types/auth';
+import './types/warrior';
 
 // Import resolvers
 import './resolvers/auth';
 import './resolvers/query';
+import './resolvers/warrior';
 
 // Build and export schema
 export const schema = builder.toSchema();
