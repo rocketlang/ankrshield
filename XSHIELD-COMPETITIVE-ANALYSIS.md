@@ -23,35 +23,67 @@
 
 ## Competitor Matrix
 
-### Tier 1 — Pure Enterprise ($50K–$200K/year)
+### Tier 0 — Ultra-Enterprise ($100K–$415K/year)
 
-| Company                          | Key USP                                                | Detection Sources                             | Weakness                                                  |
-| -------------------------------- | ------------------------------------------------------ | --------------------------------------------- | --------------------------------------------------------- |
-| **Recorded Future**              | 12B+ indexed data points, SOC integration              | Surface + deep + dark web, OSINT              | $100K+ minimum, requires professional services onboarding |
-| **ZeroFox**                      | 180+ platform coverage, rapid takedowns (2.6hr median) | Social media, dark web, 12B signals           | Enterprise only, no API for developers                    |
-| **Digital Shadows / ReliaQuest** | Analyst-curated alerts, attack surface mgmt            | Open + deep + dark web                        | $95K–$105K/year, complex onboarding                       |
-| **Flashpoint**                   | Illicit community expertise, financial fraud focus     | Closed dark web forums, criminal marketplaces | Expensive, narrow focus                                   |
+| Company             | Key USP                                        | Price (verified)     | Critical Weakness                                          |
+| ------------------- | ---------------------------------------------- | -------------------- | ---------------------------------------------------------- |
+| **Constella Intel** | 180B+ identity attributes, ATO prevention      | **$315K–$415K/year** | Identity-only; absolutely no SME offering                  |
+| **Recorded Future** | 200B+ node Intelligence Graph, Insikt analysts | **$60K–$100K+/year** | Takedowns outsourced at **$200K per 500**; noisy alerts    |
+| **ZeroFox**         | 180+ platforms, social media takedowns         | Enterprise custom    | Duplicate alerts not merged (documented); mindshare −3.3pp |
+| **Digital Shadows** | Human analyst curation, weekly briefings       | **$95K–$105K/year**  | Weekly cadence too slow; post-acquisition confusion        |
+| **Flashpoint**      | 3.6 PB dark web, invite-only forum access      | Enterprise custom    | Clunky UI; complexity overwhelms most buyers               |
 
-### Tier 2 — Mid-Market ($15K–$50K/year)
+### Tier 1 — Enterprise ($15K–$50K/year)
 
-| Company             | Key USP                                                | Detection Sources                    | Weakness                                 |
-| ------------------- | ------------------------------------------------------ | ------------------------------------ | ---------------------------------------- |
-| **Resecurity**      | Unified "Resecurity One" platform, identity protection | CTI + dark web + supply chain + xDR  | Still $15K+ minimum, US/enterprise focus |
-| **Brandefense**     | SMB positioning, brand + exposure monitoring           | Open/deep/dark web, brand mentions   | Opaque pricing, still complex            |
-| **Cyble**           | Gen 3 Agentic AI, autonomous threat detection          | AI-native, attack surface + dark web | Requires custom pricing                  |
-| **ThreatMon**       | AI-powered CTI, attack surface intelligence            | Threat intel + ASM + fraud detection | Subscription tiers not transparent       |
-| **CloudSEK XVigil** | AI-based external threat monitoring                    | Surface + deep web, social media     | Subscription tiers opaque                |
+| Company             | Key USP                                                | Detection Sources                    | Weakness                              |
+| ------------------- | ------------------------------------------------------ | ------------------------------------ | ------------------------------------- |
+| **Resecurity**      | Unified "Resecurity One" platform, identity protection | CTI + dark web + supply chain + xDR  | 0.4% market mindshare; MENA/gov focus |
+| **Brandefense**     | SMB positioning, brand + exposure monitoring           | Open/deep/dark web, brand mentions   | Opaque pricing; slow sales process    |
+| **Cyble**           | Gen 3 Agentic AI, autonomous threat detection          | AI-native, attack surface + dark web | Custom pricing only                   |
+| **ThreatMon**       | AI-powered CTI, attack surface intelligence            | Threat intel + ASM + fraud detection | Subscription tiers not transparent    |
+| **CloudSEK XVigil** | AI-based external threat monitoring                    | Surface + deep web, social media     | Subscription tiers opaque             |
 
-### Critical Gap Identified
+### Critical Gap — Zero Vendors Offer
 
-**Zero vendors offer**:
+- A free tier / instant self-serve sign-up (no "contact sales")
+- Developer-first REST API accessible without a contract
+- Sub-30-second on-demand risk assessment
+- LLM-powered plain-English threat narrative (replacing the analyst team)
+- Native DevOps integrations (GitHub Actions, Jira, Slack) out of the box
+- Transparent per-report or per-month pricing
+- Contractual SLA on takedown speed
 
-- A free tier / instant self-serve sign-up
-- Developer-first REST API with no sales call
-- Sub-30-second risk assessment on demand
-- LLM-powered plain-English threat narrative (replacing $5K/month analyst)
-- Native DevOps integrations (GitHub Actions, Jira, Slack)
-- Transparent API pricing by the call
+---
+
+## Verified Pricing Intelligence (From Procurement Data)
+
+| Vendor                   | Verified Price                    | Source                             |
+| ------------------------ | --------------------------------- | ---------------------------------- |
+| Constella Intelligence   | $315K–$415K/year                  | Vendr transaction data             |
+| Recorded Future          | $60K–$100K+/year                  | Vendr + user reviews               |
+| Digital Shadows          | $95K–$105K/year                   | PeerSpot user data                 |
+| ZeroFox                  | Undisclosed; enterprise           | No public pricing                  |
+| Flashpoint               | Undisclosed; enterprise           | No public pricing                  |
+| Resecurity               | Undisclosed; estimated $15K–$50K  | No public pricing                  |
+| Brandefense              | Custom subscription packs         | Free trial, no self-serve purchase |
+| **xShield AI (planned)** | **Free tier + $99/month Starter** | **Public, self-serve**             |
+
+---
+
+## Systemic Industry Weaknesses (All Vendors)
+
+| Problem                | Evidence                                                            | Impact                     |
+| ---------------------- | ------------------------------------------------------------------- | -------------------------- |
+| Alert fatigue          | SOCs average **960 alerts/day**; 90% report alert backlog           | Analysts miss real threats |
+| Slow takedowns         | Phishing lives 4–8h; vendors SLA: 24–72h                            | Real victims before action |
+| SME lockout            | 44% of DRP market is SME at 16.94% CAGR; min price $15K+            | $840M unserved segment     |
+| No self-serve          | Every vendor: "contact sales"                                       | Weeks to first report      |
+| UI complexity          | ZeroFox, Recorded Future, Flashpoint all rated steep learning curve | Low utilization            |
+| Takedown cost          | Recorded Future: $200K per 500 takedowns                            | Prohibitive for most       |
+| No ROI proof           | All vendors sell on fear; no contractual outcomes                   | Procurement friction       |
+| Alert deduplication    | ZeroFox documented duplicate alert bug                              | Analyst noise              |
+| Operationalization gap | Organizations without CTI analysts can't use Recorded Future        | Wasted spend               |
+| Non-English coverage   | Russian/Chinese/Arabic/Portuguese forums underserved by all         | Intelligence blindspots    |
 
 ---
 
@@ -214,6 +246,57 @@ Let Managed Security Service Providers (MSSPs) resell xShield under their own br
 
 **Revenue Model**: $0.05/report wholesale, MSSP marks up 10–20x.
 
+### 🔥 Game-Changer #8: Automated Takedown Orchestration with Contractual SLA
+
+**Status**: 📋 Planned
+
+Phishing sites live 4–8 hours. Every vendor's SLA is 24–72 hours. No vendor offers a contractual guarantee. xShield builds:
+
+- Simultaneous abuse reports to registrar + hosting + ICANN + Google Safe Browsing + Microsoft SmartScreen
+- Automated waterfall of registrar-specific workflows
+- Contractual **sub-2-hour median takedown SLA** (backed by automation, not humans)
+- "Honeypot victim" injection while takedown proceeds (poisons attacker data)
+
+**Revenue impact**: Recorded Future charges $200K per 500 takedowns via outsourcing. xShield includes them in the plan.
+
+### 🔥 Game-Changer #9: Attack Story Engine — Full Timeline Reconstruction
+
+**Status**: 📋 Planned
+
+No vendor reconstructs the _narrative_ of an attack. xShield's Attack Story engine auto-correlates:
+
+- When the threat actor registered the lookalike domain
+- When they set up the phishing kit
+- When credentials first appeared on paste sites
+- Which employees clicked — correlated with email gateway data
+
+Generates one-click board-ready PDF: _"This campaign began 47 days ago when..."_
+
+### 🔥 Game-Changer #10: Supply Chain Blast-Radius Modeling
+
+**Status**: 📋 Planned
+
+Beyond "we monitor your vendors" — xShield models _how a vendor breach becomes your breach_:
+
+- Map the full vendor ecosystem
+- Run blast-radius simulation: "If this SaaS vendor is compromised, here is your exposed data"
+- Early warning: dark web chatter about a vendor before they're breached
+
+Post-SolarWinds / MOVEit / Change Healthcare: this is an immediate board-level concern.
+
+### 🔥 Game-Changer #11: Outcome-Based Pricing with ROI Dashboard
+
+**Status**: 📋 Planned
+
+The entire DRP industry sells on fear. xShield sells on outcomes:
+
+- Live ROI dashboard: threats detected before impact, takedowns completed, credentials remediated
+- Dollar-value estimates using industry breach cost models
+- Peer benchmarking (anonymized industry comparison)
+- **Security outcomes contract**: if fewer than X phishing attacks detected per quarter → partial refund
+
+No competitor has contractual ROI guarantees. This wins procurement.
+
 ---
 
 ## Positioning Statement
@@ -230,21 +313,31 @@ Let Managed Security Service Providers (MSSPs) resell xShield under their own br
 
 ## Investor Pitch — Key Numbers
 
-| Metric                       | Value                            |
-| ---------------------------- | -------------------------------- |
-| Addressable Market (SME DRP) | $840M (2025) → $2.5B (2035)      |
-| SME CAGR                     | 16.94%                           |
-| Competitor minimum price     | $15,000–$50,000/year             |
-| xShield Starter price        | $99/month ($1,188/year)          |
-| Price ratio vs. Resecurity   | **42x cheaper**                  |
-| Intelligence sources         | 13 (competitors: 5–8)            |
-| Time to first report         | <30 seconds (competitors: weeks) |
-| LLM threat narrative         | ✅ xShield only                  |
-| Developer API                | ✅ xShield only                  |
-| Free tier                    | ✅ xShield only                  |
-| SMB self-serve onboarding    | ✅ xShield only                  |
+| Metric                              | Value                                      |
+| ----------------------------------- | ------------------------------------------ |
+| DRP Market 2025                     | **$1.9 Billion**                           |
+| DRP Market 2035                     | **$5.7 Billion** (11.3% CAGR)              |
+| SME segment share                   | 44.3% — **16.94% CAGR** (fastest)          |
+| SME Addressable Market 2025         | **$840 Million**                           |
+| Constella Intelligence price        | **$315K–$415K/year** (Vendr verified)      |
+| Recorded Future price               | $60K–$100K+/yr + **$200K/500 takedowns**   |
+| Competitor minimum (any vendor)     | $15,000–$50,000/year                       |
+| xShield Starter price               | **$99/month ($1,188/year)**                |
+| Price ratio vs. Constella           | **265–350x cheaper**                       |
+| Price ratio vs. Recorded Future     | **50–80x cheaper**                         |
+| Intelligence sources (xShield v0.4) | **13 parallel** (competitors: 5–8)         |
+| Time to first report                | **<30 seconds** (competitors: days–weeks)  |
+| AI threat narrative (LLM)           | ✅ **xShield only** — via ANKR AI proxy $0 |
+| Developer REST API                  | ✅ **xShield only**                        |
+| Free tier (no credit card)          | ✅ **xShield only**                        |
+| Self-serve onboarding               | ✅ **xShield only**                        |
+| Contractual takedown SLA            | ✅ **xShield only** (planned v0.5)         |
+| Outcome-based pricing               | ✅ **xShield only** (planned v0.6)         |
+| Industry alert fatigue solved       | 960 alerts/day → 1 narrative per report    |
 
 ---
 
-_Generated from competitive analysis of Resecurity, ZeroFox, Digital Shadows/ReliaQuest,
-Recorded Future, Brandefense, Flashpoint, Cyble, ThreatMon, CloudSEK — February 2026_
+_Research sources: Vendr transaction data, Gartner Peer Insights, PeerSpot, MarketsandMarkets,
+Future Market Insights, Capterra, BusinessWire, Memcyco. Vendors: Resecurity, ZeroFox,
+Digital Shadows/ReliaQuest, Recorded Future, Brandefense, Flashpoint, Cyble, ThreatMon,
+CloudSEK, Constella Intelligence — February 2026_
