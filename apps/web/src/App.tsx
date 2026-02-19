@@ -17,6 +17,7 @@ import EvidenceReport from './pages/EvidenceReport';
 import Landing from './pages/Landing';
 import LiveThreats from './pages/LiveThreats';
 import Login from './pages/Login';
+import Onboarding from './pages/Onboarding';
 import Policies from './pages/Policies';
 import Pricing from './pages/Pricing';
 import Register from './pages/Register';
@@ -34,6 +35,16 @@ function AppRoutes() {
       <Route path="/register" element={<Register />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/developers" element={<Developers />} />
+
+      {/* Onboarding — protected, shown once after registration */}
+      <Route
+        path="/onboarding"
+        element={
+          <ProtectedRoute>
+            <Onboarding />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Protected Routes */}
       <Route
