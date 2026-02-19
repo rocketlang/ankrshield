@@ -9,6 +9,7 @@ import {
   runRiskEngine,
   scanIpWithGreyNoise,
   socialThreatsToWarriorEvents,
+  buildRemediationPlaybook,
 } from '@ankrshield/risk-intelligence';
 import { SpywareScanner } from '@ankrshield/spyware-detector';
 import Fastify from 'fastify';
@@ -1208,6 +1209,19 @@ Date: ${now.toLocaleDateString('en-IN')}`;
         }
       }
     );
+
+    // Remediation playbook — run risk engine then generate copy-pasteable fix steps
+    fastify.get<{ Querystring: { domain?: string } }>('/risk/playbook', async (request, reply) => {
+      const domain = request.query.domain?.trim();
+      if (!domain) return reply.status(400).send({ error: 'domain query param required' });
+      try {
+        const report = await runRiskEngine({ domain, shodanApiKey: process.env.SHODAN_API_KEY });
+        const playbook = buildRemediationPlaybook(report);
+        return playbook;
+      } catch (err: unknown) {
+        return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    });
 
     // GreyNoise classification for a single IP (useful for live threat feed)
     fastify.get<{ Params: { ip: string } }>('/risk/ip/:ip', async (request, reply) => {

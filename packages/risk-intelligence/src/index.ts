@@ -110,3 +110,14 @@ export { runRiskEngine } from './risk-engine.js';
 // ---------------------------------------------------------------------------
 export { socialThreatsToWarriorEvents } from './social-warrior-bridge.js';
 export type { SocialThreatEvent } from './social-warrior-bridge.js';
+
+// ---------------------------------------------------------------------------
+// Remediation Playbook Engine
+// ---------------------------------------------------------------------------
+export { buildRemediationPlaybook } from './playbooks/remediation-engine.js';
+export type {
+  RemediationPlaybook,
+  RemediationAction,
+  RemediationStep,
+  DNSRecord,
+} from './playbooks/remediation-engine.js';
