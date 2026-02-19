@@ -47,6 +47,16 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
         reactContext.addActivityEventListener(this);
     }
 
+    @Override
+    public void initialize() {
+        super.initialize();
+        // If VPN was already running before the app (re)started, register the
+        // broadcast receiver immediately so DNS events flow to JS right away.
+        if (DnsVpnService.running) {
+            registerDnsReceiver();
+        }
+    }
+
     @NonNull
     @Override
     public String getName() { return MODULE_NAME; }

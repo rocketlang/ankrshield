@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  Linking,
 } from 'react-native';
 
 import { vpnService } from '../services/VpnService';
@@ -112,15 +113,21 @@ export function SettingsScreen() {
 
         <TouchableOpacity style={styles.settingRow}>
           <Text style={styles.settingLabel}>Version</Text>
-          <Text style={styles.settingValue}>1.1.8</Text>
+          <Text style={styles.settingValue}>1.1.9</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.settingRow}>
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => Linking.openURL('https://xshieldai.com/privacy')}
+        >
           <Text style={styles.settingLabel}>Privacy Policy</Text>
           <Text style={styles.settingValue}>&gt;</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.settingRow}>
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => Linking.openURL('https://xshieldai.com/terms')}
+        >
           <Text style={styles.settingLabel}>Terms of Service</Text>
           <Text style={styles.settingValue}>&gt;</Text>
         </TouchableOpacity>
