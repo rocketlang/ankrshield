@@ -424,8 +424,8 @@ export default function Landing() {
                 DRP Platform · Live
               </Badge>
             )}
-            <Badge color="green">13 Intel Sources</Badge>
-            <Badge color="purple">AI Narrative · $0/report</Badge>
+            <Badge color="green">17 Intel Sources</Badge>
+            <Badge color="purple">AI Enabled · BYO Key</Badge>
           </div>
 
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-[1.05] mb-6">
@@ -441,7 +441,7 @@ export default function Landing() {
           </h1>
 
           <p className="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto mb-4 leading-relaxed">
-            Full Digital Risk Protection report in under 30 seconds. 13 parallel intelligence
+            Full Digital Risk Protection report in under 30 seconds. 17 parallel intelligence
             sources. AI threat narrative. One-click remediation. No sales call, no contract.
           </p>
           <p className="text-sm text-gray-500 mb-10">
@@ -469,11 +469,11 @@ export default function Landing() {
           </div>
 
           <div className="inline-flex items-center gap-8 bg-white/[0.06] border border-white/10 rounded-2xl px-8 py-4">
-            <StatBox value="13" label="Intel Sources" sub="running in parallel" />
+            <StatBox value="17" label="Intel Sources" sub="running in parallel" />
             <div className="w-px h-10 bg-white/15" />
             <StatBox value="350x" label="Cheaper" sub="vs Constella" />
             <div className="w-px h-10 bg-white/15" />
-            <StatBox value="$0" label="AI Cost" sub="per report" />
+            <StatBox value="🤖" label="AI Enabled" sub="BYO API key" />
             <div className="w-px h-10 bg-white/15" />
             <StatBox value="47" label="APT Groups" sub="tracked" />
             <div className="w-px h-10 bg-white/15" />
@@ -500,6 +500,10 @@ export default function Landing() {
               '🌐 Turla Penguin C2 · FSB APT · Serpent backdoor',
               '🧬 YARA match: BPFDoor_Linux_Backdoor @ /dev/shm/.init · confidence 90',
               '🚨 PwnKit exploit attempt · CVE-2021-4034 · BLOCKED',
+              '📷 QR Quishing blocked · xn--mcrsft-hdb.xyz/signin · score 100 · OAuth hijack detected',
+              '📤 Discord exfil · powershell.exe → webhook/1122334455 · MALWARE_EXFIL · score 95',
+              '🤖 Telegram C2 · AsyncRAT bot token · ThreatFox tag: telegram-bot · BLOCKED',
+              '🎭 Brand impersonation · @ankr_official_airdrop · Levenshtein 0 · score 91 · ALERT',
             ])
             .flat()
             .map((item, i) => (
@@ -514,7 +518,7 @@ export default function Landing() {
       <section id="features" className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
         <div className="text-center mb-14">
           <Badge color="cyan">Protection Layers</Badge>
-          <h2 className="text-4xl font-black text-white mt-4 mb-4">Six Shields. One Platform.</h2>
+          <h2 className="text-4xl font-black text-white mt-4 mb-4">Seven Shields. One Platform.</h2>
           <p className="text-gray-400 max-w-xl mx-auto">
             Each agent runs independently, correlating signals across your entire stack in real
             time. No cloud dependency. No telemetry. Fully self-hosted.
@@ -604,6 +608,20 @@ export default function Landing() {
               'CVE exploit attempt detection (PoC watchlist)',
               'Honeypot data shared with global defense network',
               'Dark web breach mention alerting',
+            ]}
+          />
+          <FeatureCard
+            icon="📡"
+            title="Social Shield"
+            accent="purple"
+            tagline="Messaging Platform Defense"
+            bullets={[
+              'QR phishing (quishing) — 10-signal heuristic detector',
+              'Discord / Telegram / Slack webhook exfil detection',
+              'Telegram Bot C2 — 100+ malware families tracked live',
+              'Social brand impersonation: Levenshtein + typosquat variants',
+              'Process-level exfil: powershell→webhook = MALWARE_EXFIL (95)',
+              'ThreatFox IOC lookup for social platform C2 tokens',
             ]}
           />
         </div>
@@ -926,14 +944,18 @@ export default function Landing() {
             name="Windows"
             badge="Endpoint &amp; Server Guard"
             heroStat="150+"
-            heroLabel="Active ransomware families tracked — LockBit, BlackCat, Cl0p, REvil, Conti and growing"
+            heroLabel="Active ransomware families + webhook exfil stealers tracked — LockBit, BlackCat, RedLine, Raccoon and growing"
             accent="blue"
             vectors={[
               { icon: '💀', label: 'LockBit · BlackCat · Cl0p · REvil · Conti IOCs' },
-              { icon: '🔗', label: 'Emotet → TrickBot ransomware delivery chain' },
+              {
+                icon: '📤',
+                label: 'Discord/Telegram webhook exfil — 40+ stealer families',
+                count: '40+',
+              },
               { icon: '📦', label: 'Supply chain attack indicators (SolarWinds TTPs)' },
               { icon: '🏠', label: 'Active Directory lateral movement detection' },
-              { icon: '🛠️', label: 'LOLBin abuse (living-off-the-land binaries)' },
+              { icon: '🛠️', label: 'LOLBin abuse — powershell/mshta/rundll32 exfil patterns' },
             ]}
           />
           <PlatformShieldCard
@@ -1161,8 +1183,8 @@ export default function Landing() {
             {[
               { icon: '🏛️', name: 'Amnesty Tech', label: 'Security Lab' },
               { icon: '🔭', name: 'Citizen Lab', label: 'Univ. of Toronto' },
-              { icon: '📡', name: 'Access Now', label: 'Digital Security' },
-              { icon: '🛡️', name: 'EFF', label: 'Electronic Frontier' },
+              { icon: '🐛', name: 'abuse.ch', label: 'Feodo · ThreatFox' },
+              { icon: '📱', name: 'SlashNext', label: 'QR Phishing Research' },
               { icon: '🦅', name: 'Mandiant', label: 'Google Threat Intel' },
               { icon: '🦁', name: 'CrowdStrike', label: 'Adversary Intel' },
               { icon: '🔎', name: 'ESET Research', label: 'Threat Reports' },
@@ -1384,7 +1406,7 @@ export default function Landing() {
               </div>
             </div>
             <div className="ml-auto text-[10px] text-gray-600 font-mono">
-              via groq/llama-3.3-70b · cost $0.00
+              AI Enabled · BYO Anthropic / Groq / OpenAI key
             </div>
           </div>
 
