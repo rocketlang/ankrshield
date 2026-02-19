@@ -1528,6 +1528,208 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── Remediate & Retest ── */}
+      <section className="border-t border-white/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
+          {/* Header */}
+          <div className="text-center mb-14">
+            <Badge color="amber">Remediation Engine</Badge>
+            <h2 className="text-4xl font-black text-white mt-4 mb-4">
+              A score is useless without a fix.
+              <br />
+              <span className="bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">
+                Diagnose → Fix → Verify.
+              </span>
+            </h2>
+            <p className="text-gray-400 max-w-2xl mx-auto text-base">
+              Every finding comes with a confidence level and a specific remediation step. Not
+              everything scoring high is equally urgent — we show you what to fix first, how to fix
+              it, and let you retest to confirm it's done. Misidentified? Dispute it.
+            </p>
+          </div>
+
+          {/* Workflow steps */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-14">
+            {[
+              {
+                step: '01',
+                label: 'Diagnose',
+                color: 'text-cyan-400',
+                border: 'border-cyan-500/20',
+                desc: 'Each finding is tagged with a confidence level (High / Medium / Low) and an evidence trail — the raw data that triggered the signal.',
+              },
+              {
+                step: '02',
+                label: 'Remediate',
+                color: 'text-amber-400',
+                border: 'border-amber-500/20',
+                desc: 'Exact fix instructions per finding — DNS records to add, configs to change, takedown request templates, firewall rules. No vague "improve your security posture."',
+              },
+              {
+                step: '03',
+                label: 'Verify',
+                color: 'text-emerald-400',
+                border: 'border-emerald-500/20',
+                desc: "Schedule a retest after you've applied the fix. xShield re-runs the relevant detectors and marks the finding resolved — with a timestamped evidence record.",
+              },
+            ].map((s) => (
+              <div key={s.step} className={`rounded-2xl border ${s.border} bg-white/[0.03] p-6`}>
+                <div className={`text-4xl font-black font-mono ${s.color} mb-3 opacity-40`}>
+                  {s.step}
+                </div>
+                <div className={`text-base font-black ${s.color} mb-2`}>{s.label}</div>
+                <p className="text-sm text-gray-400 leading-relaxed">{s.desc}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Sample remediation cards */}
+          <div className="mb-6 text-xs font-bold uppercase tracking-widest text-gray-500 flex items-center gap-3">
+            <span>Sample findings with remediation guidance</span>
+            <span className="flex-1 h-px bg-white/[0.06]" />
+          </div>
+
+          <div className="space-y-3 mb-12">
+            {[
+              {
+                severity: 'Critical',
+                severityColor: 'bg-red-500/15 text-red-400 border-red-500/30',
+                rowColor: 'border-red-500/20',
+                confidence: 'High',
+                confColor: 'text-emerald-400',
+                source: 'DNS Audit',
+                finding: 'No DMARC record — email spoofing fully open',
+                fix: 'Add TXT record: _dmarc.yourdomain.com → "v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com"',
+                retestIn: '~2 hours after DNS propagation',
+                ee: false,
+              },
+              {
+                severity: 'Critical',
+                severityColor: 'bg-red-500/15 text-red-400 border-red-500/30',
+                rowColor: 'border-red-500/20',
+                confidence: 'High',
+                confColor: 'text-emerald-400',
+                source: 'DNS Validator',
+                finding: '12 registered lookalike domains detected (typosquats)',
+                fix: 'File UDRP/URS takedown via ICANN. Template generated. Priority: domains with MX records active.',
+                retestIn: '7–14 days after takedown filed',
+                ee: false,
+              },
+              {
+                severity: 'Medium',
+                severityColor: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
+                rowColor: 'border-yellow-500/20',
+                confidence: 'Medium',
+                confColor: 'text-yellow-400',
+                source: 'OTX / GreyNoise',
+                finding: 'IP appears in 2 OTX pulses — may be old scan data or researcher activity',
+                fix: 'Cross-reference pulse author. GreyNoise tags this IP as "riot" (researcher). Likely false positive — dispute to remove from your report.',
+                retestIn: 'Dispute clears within 48h',
+                ee: false,
+              },
+              {
+                severity: 'Low',
+                severityColor: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+                rowColor: 'border-blue-500/20',
+                confidence: 'High',
+                confColor: 'text-emerald-400',
+                source: 'CAA Check',
+                finding: 'No CAA record — any CA can issue SSL certs for your domain',
+                fix: 'Add DNS record: yourdomain.com CAA 0 issue "letsencrypt.org" (or your CA of choice)',
+                retestIn: '~2 hours after DNS propagation',
+                ee: false,
+              },
+              {
+                severity: 'High',
+                severityColor: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+                rowColor: 'border-orange-500/30',
+                confidence: 'High',
+                confColor: 'text-emerald-400',
+                source: 'Brand Monitor',
+                finding:
+                  '"official-yourdomain" Telegram channel impersonating your brand (1,200 members)',
+                fix: 'File Telegram abuse report + DMCA takedown. EE tier generates pre-filled legal notice and monitors for recurrence.',
+                retestIn: '24–72h post-takedown',
+                ee: true,
+              },
+            ].map((r, i) => (
+              <div key={i} className={`rounded-xl border ${r.rowColor} bg-white/[0.02] px-5 py-4`}>
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                  {/* Left: severity + finding */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                      <span
+                        className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${r.severityColor}`}
+                      >
+                        {r.severity}
+                      </span>
+                      <span className="text-[10px] text-gray-600 font-mono">{r.source}</span>
+                      <span className={`text-[10px] font-semibold ${r.confColor}`}>
+                        {r.confidence} confidence
+                      </span>
+                      {r.ee && (
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                          EE
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-white font-medium mb-2">{r.finding}</p>
+                    <div className="rounded-lg bg-black/30 border border-white/[0.06] px-3 py-2">
+                      <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider mr-2">
+                        Fix →
+                      </span>
+                      <span className="text-xs text-gray-300">{r.fix}</span>
+                    </div>
+                  </div>
+                  {/* Right: retest + dispute */}
+                  <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 shrink-0">
+                    <div className="text-right">
+                      <div className="text-[9px] text-gray-600 uppercase tracking-wider">
+                        Retest after
+                      </div>
+                      <div className="text-[10px] text-gray-400 font-mono">{r.retestIn}</div>
+                    </div>
+                    <button className="text-[10px] font-bold px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-400 transition-colors whitespace-nowrap">
+                      Schedule Retest ↺
+                    </button>
+                    <button className="text-[10px] text-gray-600 hover:text-gray-400 transition-colors underline underline-offset-2">
+                      Dispute finding
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* EE callout */}
+          <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.03] p-7 flex flex-col sm:flex-row items-center gap-6">
+            <div className="text-4xl shrink-0">🔁</div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm font-black text-amber-400">
+                  Enterprise EE — Automated Remediation Tracking
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                  EE
+                </span>
+              </div>
+              <p className="text-sm text-gray-400 leading-relaxed">
+                EE tier adds automated retest scheduling, remediation SLA tracking, evidence
+                packages for auditors, and a compliance dashboard showing your fix history over
+                time. Findings disputed by your team are reviewed by our analysts within 24h —
+                keeping your risk score accurate, not inflated.
+              </p>
+            </div>
+            <a
+              href="mailto:enterprise@xshieldai.com"
+              className="shrink-0 text-sm font-bold px-5 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 transition-colors whitespace-nowrap"
+            >
+              Talk to us →
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* ── Ransomware Defense ── */}
       <section className="border-t border-white/10 bg-white/[0.02]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
