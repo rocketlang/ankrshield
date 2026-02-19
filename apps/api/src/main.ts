@@ -3,6 +3,7 @@
  */
 
 import { execSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
 import os from 'node:os';
 
 import {
@@ -12,7 +13,10 @@ import {
   buildRemediationPlaybook,
 } from '@ankrshield/risk-intelligence';
 import { SpywareScanner } from '@ankrshield/spyware-detector';
+import fastifySwagger from '@fastify/swagger';
+import fastifySwaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
+import Redis from 'ioredis';
 import mercurius from 'mercurius';
 
 import { prisma } from './graphql/builder';
@@ -23,6 +27,47 @@ import authPlugin from './plugins/auth';
 import securityPlugin from './plugins/security';
 import { getWarrior, startWarrior, stopWarrior } from './warrior/warrior-service';
 import { startDomainWatcher, stopDomainWatcher } from './watch/domain-watcher.js';
+
+// ─── API Key helpers ──────────────────────────────────────────────────────────
+
+function generateApiKey(): { raw: string; prefix: string; hash: string } {
+  const random = randomBytes(24).toString('hex'); // 48 hex chars
+  const raw = `xsh_live_${random}`;
+  const prefix = raw.slice(0, 8); // "xsh_live" first 8 chars shown in UI
+  const hash = createHash('sha256').update(raw).digest('hex');
+  return { raw, prefix, hash };
+}
+
+function hashApiKey(raw: string): string {
+  return createHash('sha256').update(raw).digest('hex');
+}
+
+// ─── Redis rate limiter ───────────────────────────────────────────────────────
+
+const redis = process.env.REDIS_URL
+  ? new Redis(process.env.REDIS_URL)
+  : new Redis({ host: '127.0.0.1', port: 6379, lazyConnect: true });
+
+// Returns true if under limit, false if over limit
+async function checkRateLimit(keyId: string, tier: string): Promise<boolean> {
+  if (tier === 'PRO') return true; // unlimited
+
+  const limit = tier === 'STARTER' ? 500 : 10; // FREE = 10/month
+  const ym = new Date().toISOString().slice(0, 7); // "2026-02"
+  const redisKey = `rl:apikey:${keyId}:${ym}`;
+
+  try {
+    const count = await redis.incr(redisKey);
+    if (count === 1) {
+      // Set TTL to 35 days so it cleans up after the month ends
+      await redis.expire(redisKey, 35 * 24 * 60 * 60);
+    }
+    return count <= limit;
+  } catch {
+    // Redis unavailable → fail open (don't block the user)
+    return true;
+  }
+}
 
 const fastify = Fastify({
   logger: {
@@ -38,6 +83,40 @@ const start = async () => {
 
     // Auth plugin (JWT)
     await fastify.register(authPlugin);
+
+    // ─── Swagger / OpenAPI docs ───────────────────────────────────────────────
+    await fastify.register(fastifySwagger, {
+      openapi: {
+        info: {
+          title: 'xShield Risk Intelligence API',
+          description:
+            'Enterprise digital risk intelligence — IP reputation, attack surface, breach monitoring, phishing detection, and more.',
+          version: '1.0.0',
+        },
+        servers: [{ url: 'https://xshieldai.com', description: 'Production' }],
+        components: {
+          securitySchemes: {
+            apiKey: {
+              type: 'http',
+              scheme: 'bearer',
+              bearerFormat: 'xsh_live_<key>',
+              description: 'Pass your xShield API key as a Bearer token.',
+            },
+          },
+        },
+        security: [{ apiKey: [] }],
+        tags: [
+          { name: 'risk', description: 'Domain & IP risk intelligence' },
+          { name: 'watch', description: 'Domain watch / continuous monitoring' },
+          { name: 'auth', description: 'API key management' },
+        ],
+      },
+    });
+    await fastify.register(fastifySwaggerUi, {
+      routePrefix: '/api/docs',
+      uiConfig: { docExpansion: 'list', deepLinking: true },
+      staticCSP: true,
+    });
 
     // ─── AbuseIPDB Pre-Identification Middleware ──────────────────────────────
     // Checks every unique incoming IP against AbuseIPDB before any route runs.
@@ -1207,6 +1286,167 @@ Date: ${now.toLocaleDateString('en-IN')}`;
             .status(500)
             .send({ error: err instanceof Error ? err.message : String(err) });
         }
+      }
+    );
+
+    // ─── API Key bearer token middleware ─────────────────────────────────────
+    // Applied to all /risk/* routes. Accepts either:
+    //   Authorization: Bearer xsh_live_<key>   (API key auth)
+    //   Authorization: Bearer <jwt>             (JWT auth, existing behaviour)
+
+    fastify.addHook('onRequest', async (request, reply) => {
+      // Only guard /risk/* endpoints
+      if (!request.url.startsWith('/risk/')) return;
+
+      const authHeader = request.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) return; // no header → let route decide
+
+      const token = authHeader.slice(7);
+      if (!token.startsWith('xsh_live_')) return; // JWT path — leave for existing JWT logic
+
+      // API key path
+      const hash = hashApiKey(token);
+      const apiKey = await prisma.apiKey.findUnique({ where: { hash } });
+
+      if (!apiKey || !apiKey.isActive) {
+        return reply.status(401).send({ error: 'invalid or revoked API key' });
+      }
+
+      const allowed = await checkRateLimit(apiKey.id, apiKey.tier);
+      if (!allowed) {
+        return reply.status(429).send({
+          error: 'monthly rate limit exceeded',
+          tier: apiKey.tier,
+          upgradeUrl: 'https://xshieldai.com/pricing',
+        });
+      }
+
+      // Update lastUsedAt (fire-and-forget)
+      prisma.apiKey
+        .update({ where: { id: apiKey.id }, data: { lastUsedAt: new Date() } })
+        .catch(() => {});
+
+      // Attach userId to request for downstream use
+      (request as unknown as Record<string, unknown>).apiKeyUserId = apiKey.userId;
+    });
+
+    // ─── API Key management endpoints ────────────────────────────────────────
+
+    // POST /auth/api-keys — create a new API key (requires JWT auth)
+    fastify.post<{ Body: { name: string; tier?: string } }>(
+      '/auth/api-keys',
+      {
+        schema: {
+          tags: ['auth'],
+          summary: 'Create API key',
+          body: {
+            type: 'object',
+            required: ['name'],
+            properties: {
+              name: { type: 'string', minLength: 1, maxLength: 64 },
+              tier: { type: 'string', enum: ['FREE', 'STARTER', 'PRO'] },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        // Require JWT
+        try {
+          await request.jwtVerify();
+        } catch {
+          return reply.status(401).send({ error: 'JWT authentication required' });
+        }
+
+        const { name, tier } = request.body;
+        const user = request.user as { id?: string; userId?: string };
+        const userId = user?.id ?? user?.userId;
+        if (!userId) return reply.status(401).send({ error: 'could not determine user' });
+
+        const validTier = ['FREE', 'STARTER', 'PRO'].includes(tier ?? '') ? tier : 'STARTER';
+
+        const { raw, prefix, hash } = generateApiKey();
+
+        await prisma.apiKey.create({
+          data: {
+            userId,
+            name,
+            prefix,
+            hash,
+            tier: validTier as 'FREE' | 'STARTER' | 'PRO',
+          },
+        });
+
+        return reply.status(201).send({ key: raw, prefix, name, tier: validTier });
+      }
+    );
+
+    // GET /auth/api-keys — list caller's API keys (JWT required)
+    fastify.get(
+      '/auth/api-keys',
+      {
+        schema: {
+          tags: ['auth'],
+          summary: 'List API keys',
+        },
+      },
+      async (request, reply) => {
+        try {
+          await request.jwtVerify();
+        } catch {
+          return reply.status(401).send({ error: 'JWT authentication required' });
+        }
+        const user = request.user as { id?: string; userId?: string };
+        const userId = user?.id ?? user?.userId;
+        if (!userId) return reply.status(401).send({ error: 'could not determine user' });
+
+        const keys = await prisma.apiKey.findMany({
+          where: { userId, isActive: true },
+          select: {
+            id: true,
+            name: true,
+            prefix: true,
+            tier: true,
+            monthlyRequestCount: true,
+            lastUsedAt: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        return { keys };
+      }
+    );
+
+    // DELETE /auth/api-keys/:id — revoke a key (JWT required, must own the key)
+    fastify.delete<{ Params: { id: string } }>(
+      '/auth/api-keys/:id',
+      {
+        schema: {
+          tags: ['auth'],
+          summary: 'Revoke API key',
+          params: {
+            type: 'object',
+            properties: { id: { type: 'string' } },
+          },
+        },
+      },
+      async (request, reply) => {
+        try {
+          await request.jwtVerify();
+        } catch {
+          return reply.status(401).send({ error: 'JWT authentication required' });
+        }
+        const user = request.user as { id?: string; userId?: string };
+        const userId = user?.id ?? user?.userId;
+        if (!userId) return reply.status(401).send({ error: 'could not determine user' });
+
+        const { id } = request.params;
+        const key = await prisma.apiKey.findUnique({ where: { id } });
+        if (!key || key.userId !== userId) {
+          return reply.status(404).send({ error: 'API key not found' });
+        }
+
+        await prisma.apiKey.update({ where: { id }, data: { isActive: false } });
+        return { revoked: true, id };
       }
     );
 

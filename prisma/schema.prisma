@@ -137,6 +137,7 @@ model User {
   policies     Policy[]
   privacyScores PrivacyScore[]
   alerts       Alert[]
+  apiKeys      ApiKey[]
 
   @@index([email])
   @@index([tier])
@@ -662,6 +663,45 @@ model AlertHistory {
   @@index([watchId])
   @@index([triggeredAt(sort: Desc)])
   @@map("alert_history")
+}
+
+// ============================================================================
+// API KEY MANAGEMENT
+// ============================================================================
+
+enum ApiKeyTier {
+  FREE      // 10 req/month (unauthenticated IP-based)
+  STARTER   // 500 req/month
+  PRO       // unlimited
+
+  @@map("api_key_tier")
+}
+
+// API keys for programmatic access to the risk/scan endpoints
+model ApiKey {
+  id          String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId      String     @db.Uuid
+  name        String     // user-assigned label, e.g. "CI Scanner"
+  prefix      String     @db.Char(8)   // first 8 chars — shown in UI for identification
+  hash        String     @unique       // SHA-256 of the full key — never stored raw
+  tier        ApiKeyTier @default(STARTER)
+
+  // Usage tracking
+  monthlyRequestCount Int      @default(0)
+  lastUsedAt          DateTime?
+
+  // Lifecycle
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([hash])
+  @@index([prefix])
+  @@index([isActive])
+  @@map("api_keys")
 }
 
 // ============================================================================

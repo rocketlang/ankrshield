@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 // Pages
 import Analytics from './pages/Analytics';
+import ApiKeys from './pages/ApiKeys';
 import CommandCenter from './pages/CommandCenter';
 import Dashboard from './pages/Dashboard';
 import Devices from './pages/Devices';
@@ -15,6 +16,7 @@ import Landing from './pages/Landing';
 import LiveThreats from './pages/LiveThreats';
 import Login from './pages/Login';
 import Policies from './pages/Policies';
+import Pricing from './pages/Pricing';
 import Register from './pages/Register';
 import Settings from './pages/Settings';
 
@@ -28,6 +30,7 @@ function App() {
         <Route path="/evidence" element={<EvidenceReport />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/pricing" element={<Pricing />} />
 
         {/* Protected Routes */}
         <Route
@@ -75,6 +78,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CommandCenter />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/api-keys"
+          element={
+            <ProtectedRoute>
+              <ApiKeys />
             </ProtectedRoute>
           }
         />
