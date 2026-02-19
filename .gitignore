@@ -68,3 +68,4 @@ temp/
 *.tgz
 *.zip
 !ankrshield-complete-documentation-*.zip
+apps/web/public/ankrshield.apk
