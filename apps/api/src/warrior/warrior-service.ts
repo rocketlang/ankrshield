@@ -131,7 +131,7 @@ export async function startWarrior(): Promise<void> {
             chainId: chain.id,
             agentId: chain.events[0]?.agentId,
             agentName: chain.events[0]?.agentName,
-            payload: chain as Record<string, unknown>,
+            payload: JSON.parse(JSON.stringify(chain)),
           },
         });
       } catch (_e) {
@@ -153,9 +153,7 @@ export async function startWarrior(): Promise<void> {
             confidence: policy.confidence,
             autoApplied: policy.autoApplied,
             requiresApproval: policy.requiresApproval,
-            rules: policy.rules as Parameters<
-              typeof prisma.warriorPolicy.create
-            >[0]['data']['rules'],
+            rules: JSON.parse(JSON.stringify(policy.rules)),
           },
         });
       } catch (_e) {
@@ -208,7 +206,7 @@ export async function startWarrior(): Promise<void> {
             totalAlertsGenerated: report.totalAlertsGenerated,
             topThreats: report.topThreats,
             recommendations: report.recommendations,
-            rawReport: report as Record<string, unknown>,
+            rawReport: JSON.parse(JSON.stringify(report)),
           },
         });
       } catch (_e) {

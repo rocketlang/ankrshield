@@ -3,12 +3,14 @@
  * Captures real network traffic and detects trackers
  */
 
-import { Pool } from 'pg';
 import { EventEmitter } from 'events';
+
+import { Pool } from 'pg';
 
 // Database connection
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://ankrshield:ankrshield123@localhost:5432/ankrshield',
+  connectionString:
+    process.env.DATABASE_URL || 'postgresql://ankrshield:ankrshield123@localhost:5432/ankrshield',
 });
 
 // Known tracker domains (subset of common ones)
@@ -116,10 +118,6 @@ class TrafficMonitor extends EventEmitter {
     }
   }
 
-  private isTracker(domain: string): boolean {
-    return KNOWN_TRACKERS.some(tracker => domain.includes(tracker));
-  }
-
   private async captureTrafficSample() {
     // Simulate 2-5 requests
     const requestsInBatch = Math.floor(Math.random() * 4) + 2;
@@ -143,7 +141,11 @@ class TrafficMonitor extends EventEmitter {
       domain = KNOWN_TRACKERS[Math.floor(Math.random() * KNOWN_TRACKERS.length)];
 
       // Determine type
-      if (domain.includes('analytics') || domain.includes('mixpanel') || domain.includes('segment')) {
+      if (
+        domain.includes('analytics') ||
+        domain.includes('mixpanel') ||
+        domain.includes('segment')
+      ) {
         eventType = 'TRACKER_BLOCKED';
       } else if (domain.includes('ad') || domain.includes('doubleclick')) {
         eventType = 'AD_BLOCKED';
@@ -195,7 +197,9 @@ class TrafficMonitor extends EventEmitter {
     // Log every 10 requests
     if (this.requestCount % 10 === 0) {
       const blockRate = ((this.blockedCount / this.requestCount) * 100).toFixed(1);
-      console.log(`📊 Captured ${this.requestCount} requests (${this.blockedCount} blocked - ${blockRate}%)`);
+      console.log(
+        `📊 Captured ${this.requestCount} requests (${this.blockedCount} blocked - ${blockRate}%)`
+      );
     }
   }
 
@@ -219,8 +223,10 @@ class TrafficMonitor extends EventEmitter {
       '?ref=' + Math.random().toString(36).substring(7),
     ];
 
-    return paths[Math.floor(Math.random() * paths.length)] +
-           params[Math.floor(Math.random() * params.length)];
+    return (
+      paths[Math.floor(Math.random() * paths.length)] +
+      params[Math.floor(Math.random() * params.length)]
+    );
   }
 
   private async storeEvent(event: NetworkEvent) {
@@ -256,12 +262,7 @@ class TrafficMonitor extends EventEmitter {
            total_requests = daily_stats.total_requests + 1,
            blocked_requests = daily_stats.blocked_requests + EXCLUDED.blocked_requests,
            allowed_requests = daily_stats.allowed_requests + EXCLUDED.allowed_requests`,
-        [
-          this.mockUserId,
-          today,
-          this.blockedCount > 0 ? 1 : 0,
-          this.blockedCount > 0 ? 0 : 1,
-        ]
+        [this.mockUserId, today, this.blockedCount > 0 ? 1 : 0, this.blockedCount > 0 ? 0 : 1]
       );
     } catch (error) {
       console.error('Error updating daily stats:', error);

@@ -20,7 +20,16 @@
  */
 
 import { EventEmitter } from 'node:events';
-import type { AIWarrior, AttackChain, GeneratedPolicy, ScopeViolation, IncidentReport, HoneypotAsset, QuarantinedAgent } from '@ankrshield/ai-warrior';
+
+import type {
+  AIWarrior,
+  AttackChain,
+  GeneratedPolicy,
+  ScopeViolation,
+  IncidentReport,
+  HoneypotAsset,
+  QuarantinedAgent,
+} from '@ankrshield/ai-warrior';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -51,7 +60,7 @@ interface AnkrEvent<T = unknown> {
   data: T;
   metadata?: {
     correlationId?: string;
-    channels?: string[];   // which notification channels to hit
+    channels?: string[]; // which notification channels to hit
     priority?: 'low' | 'medium' | 'high' | 'critical';
   };
 }
@@ -60,7 +69,8 @@ interface AnkrEvent<T = unknown> {
 
 export class WirePublisher extends EventEmitter {
   private config: Required<WirePublisherConfig>;
-  private ws: ReturnType<typeof import('socket.io-client').io> | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private ws: any | null = null;
   private connected = false;
   private queue: Array<AnkrEvent> = [];
   private reconnectTimer?: NodeJS.Timeout;
@@ -72,8 +82,8 @@ export class WirePublisher extends EventEmitter {
       wireRestUrl: config.wireRestUrl ?? process.env.ANKR_WIRE_URL ?? 'http://localhost:4007',
       source: config.source ?? 'ankrshield-api',
       minThreatScore: config.minThreatScore ?? 50,
-      enableWhatsApp: config.enableWhatsApp ?? (process.env.ANKR_WIRE_WHATSAPP !== 'false'),
-      enableTelegram: config.enableTelegram ?? (process.env.ANKR_WIRE_TELEGRAM !== 'false'),
+      enableWhatsApp: config.enableWhatsApp ?? process.env.ANKR_WIRE_WHATSAPP !== 'false',
+      enableTelegram: config.enableTelegram ?? process.env.ANKR_WIRE_TELEGRAM !== 'false',
       maxQueueSize: config.maxQueueSize ?? 1000,
     };
   }
@@ -83,7 +93,8 @@ export class WirePublisher extends EventEmitter {
   async connect(): Promise<void> {
     try {
       // Dynamically import socket.io-client (may not be installed — graceful degradation)
-      const { io } = await import('socket.io-client');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { io } = await import('socket.io-client' as any);
       this.ws = io(this.config.wireWsUrl, {
         reconnection: true,
         reconnectionDelay: 3000,
@@ -145,8 +156,9 @@ export class WirePublisher extends EventEmitter {
 
     warrior.on('scope-violation', (violation: ScopeViolation) => {
       this.publish('shield.scope.violation', violation, {
-        priority: violation.action === 'QUARANTINE' ? 'critical' : 'high',
-        channels: violation.action === 'QUARANTINE' ? this.notifyChannels(100) : ['notify.in_app'],
+        priority: violation.actionTaken === 'QUARANTINED' ? 'critical' : 'high',
+        channels:
+          violation.actionTaken === 'QUARANTINED' ? this.notifyChannels(100) : ['notify.in_app'],
       });
     });
 
@@ -165,22 +177,31 @@ export class WirePublisher extends EventEmitter {
     });
 
     warrior.on('incident-report', (report: IncidentReport) => {
-      this.publish('shield.incident.report', {
-        id: report.id,
-        riskScore: report.riskScore,
-        executiveSummary: report.executiveSummary,
-        topThreats: report.topThreats,
-        generatedAt: report.generatedAt,
-      }, {
-        priority: report.riskScore >= 70 ? 'high' : 'medium',
-        channels: report.riskScore >= 70 ? this.notifyChannels(report.riskScore) : ['notify.in_app'],
-      });
+      this.publish(
+        'shield.incident.report',
+        {
+          id: report.id,
+          riskScore: report.riskScore,
+          executiveSummary: report.executiveSummary,
+          topThreats: report.topThreats,
+          generatedAt: report.generatedAt,
+        },
+        {
+          priority: report.riskScore >= 70 ? 'high' : 'medium',
+          channels:
+            report.riskScore >= 70 ? this.notifyChannels(report.riskScore) : ['notify.in_app'],
+        }
+      );
     });
   }
 
   // ─── Publishing ────────────────────────────────────────────────────────────
 
-  publish(topic: string, data: unknown, meta?: { priority?: string; channels?: string[]; correlationId?: string }): void {
+  publish(
+    topic: string,
+    data: unknown,
+    meta?: { priority?: string; channels?: string[]; correlationId?: string }
+  ): void {
     const event: AnkrEvent = {
       id: `shield-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       topic,

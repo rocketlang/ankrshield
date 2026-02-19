@@ -127,7 +127,8 @@ builder.objectRef<AttackChain>('AttackChain').implement({
 
 // ─── GeneratedPolicyRule ──────────────────────────────────────────────────────
 
-builder.objectRef<GeneratedPolicyRule>('GeneratedPolicyRule').implement({
+const GeneratedPolicyRuleRef = builder.objectRef<GeneratedPolicyRule>('GeneratedPolicyRule');
+GeneratedPolicyRuleRef.implement({
   fields: (t) => ({
     type: t.expose('type', { type: 'PolicyRuleType' }),
     value: t.exposeString('value'),
@@ -137,7 +138,8 @@ builder.objectRef<GeneratedPolicyRule>('GeneratedPolicyRule').implement({
 
 // ─── GeneratedPolicy ─────────────────────────────────────────────────────────
 
-builder.objectRef<GeneratedPolicy>('GeneratedPolicy').implement({
+const GeneratedPolicyRef = builder.objectRef<GeneratedPolicy>('GeneratedPolicy');
+GeneratedPolicyRef.implement({
   fields: (t) => ({
     id: t.exposeString('id'),
     name: t.exposeString('name'),
@@ -148,7 +150,7 @@ builder.objectRef<GeneratedPolicy>('GeneratedPolicy').implement({
     requiresApproval: t.exposeBoolean('requiresApproval'),
     createdAt: t.expose('createdAt', { type: 'DateTime' }),
     rules: t.field({
-      type: ['GeneratedPolicyRule'],
+      type: [GeneratedPolicyRuleRef],
       resolve: (policy) => policy.rules,
     }),
   }),
@@ -171,7 +173,8 @@ builder.objectRef<HoneypotAsset>('HoneypotAsset').implement({
 
 // ─── QuarantinedAgent ────────────────────────────────────────────────────────
 
-builder.objectRef<QuarantinedAgent>('QuarantinedAgent').implement({
+const QuarantinedAgentRef = builder.objectRef<QuarantinedAgent>('QuarantinedAgent');
+QuarantinedAgentRef.implement({
   fields: (t) => ({
     agentId: t.exposeString('agentId'),
     agentName: t.exposeString('agentName'),
@@ -198,7 +201,8 @@ builder.objectRef<ScopeViolation>('WarriorScopeViolation').implement({
 
 // ─── TimelineEntry ────────────────────────────────────────────────────────────
 
-builder.objectRef<TimelineEntry>('TimelineEntry').implement({
+const TimelineEntryRef = builder.objectRef<TimelineEntry>('TimelineEntry');
+TimelineEntryRef.implement({
   fields: (t) => ({
     timestamp: t.expose('timestamp', { type: 'DateTime' }),
     severity: t.expose('severity', { type: 'ThreatSeverity' }),
@@ -230,15 +234,15 @@ builder.objectRef<IncidentReport>('IncidentReport').implement({
       resolve: (r) => r.honeypotTriggers,
     }),
     policiesGenerated: t.field({
-      type: ['GeneratedPolicy'],
+      type: [GeneratedPolicyRef],
       resolve: (r) => r.policiesGenerated,
     }),
     quarantinedAgents: t.field({
-      type: ['QuarantinedAgent'],
+      type: [QuarantinedAgentRef],
       resolve: (r) => r.quarantinedAgents,
     }),
     timeline: t.field({
-      type: ['TimelineEntry'],
+      type: [TimelineEntryRef],
       resolve: (r) => r.timeline,
     }),
   }),

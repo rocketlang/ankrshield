@@ -195,7 +195,8 @@ const start = async () => {
 </body>
 </html>`;
 
-    fastify.addHook('onRequest', async (request, reply) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fastify.addHook('onRequest', async (request: any, reply: any) => {
       // Skip non-GET/POST or exempt paths
       if (EXEMPT_PATHS.has(request.url)) return;
 
@@ -365,7 +366,7 @@ const start = async () => {
         .reverse()
         .map((c) => ({
           id: c.id,
-          type: c.type,
+          type: c.attackType,
           score: c.threatScore,
           narrative: c.narrative,
           startTime: c.startTime,
@@ -601,7 +602,7 @@ const start = async () => {
 
       const attackChainDetails = chains.map((c) => ({
         id: c.id,
-        type: c.type ?? 'unknown',
+        type: c.attackType ?? 'unknown',
         severity:
           c.threatScore >= 80
             ? 'CRITICAL'
@@ -616,10 +617,10 @@ const start = async () => {
         eventCount: c.events.length,
         events: c.events.map((e) => ({
           id: e.id,
-          type: e.type,
-          description: e.description,
+          type: e.action,
+          description: e.resource,
           timestamp: e.timestamp,
-          confidence: e.confidence,
+          confidence: e.severity,
         })),
       }));
 
@@ -627,7 +628,6 @@ const start = async () => {
         agentId: q.agentId,
         agentName: q.agentName,
         reason: q.reason,
-        threatScore: q.threatScore,
         quarantinedAt: q.quarantinedAt,
       }));
 
