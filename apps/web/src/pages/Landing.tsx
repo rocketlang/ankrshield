@@ -2015,175 +2015,249 @@ export default function Landing() {
       {/* ── Pricing ── */}
       <section id="pricing" className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
-          <div className="text-center mb-14">
+          {/* Header */}
+          <div className="text-center mb-6">
             <Badge color="green">Pricing</Badge>
             <h2 className="text-4xl font-black text-white mt-4 mb-4">
-              Transparent pricing.
+              Open source core.
               <br />
               <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
-                No sales call. No contract.
+                Enterprise when you need it.
               </span>
             </h2>
-            <p className="text-gray-400 max-w-xl mx-auto">
-              Every competitor says "contact sales." We put our prices on the internet. Start free.
-              Upgrade when you're ready.
+            <p className="text-gray-400 max-w-2xl mx-auto text-base">
+              Big orgs don't trust cheap security — and they shouldn't. So we open-sourced the
+              engine. Read every line of code. Deploy it yourself. When you need SLAs, SSO, SIEM
+              integrations, and a dedicated team — that's Enterprise EE.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-12">
-            {[
-              {
-                name: 'Free',
-                price: '$0',
-                sub: 'No credit card',
-                color: 'border-white/10',
-                badge: null,
-                features: [
-                  '10 risk reports / month',
-                  'Basic risk score (0–100)',
-                  'AI threat narrative',
-                  '13 intelligence sources',
-                  'No API key required',
-                ],
-                cta: 'Start Free',
-                ctaStyle: 'bg-white/10 hover:bg-white/15 border border-white/20 text-white',
-                to: '/register',
-              },
-              {
-                name: 'Starter',
-                price: '$99',
-                sub: '/month · vs $15K+ competitors',
-                color: 'border-cyan-500/30',
-                badge: 'Most Popular',
-                features: [
-                  '500 reports / month',
-                  'REST API key + webhooks',
-                  'Continuous domain watch',
-                  'Email + Slack alerts',
-                  'One-click remediation',
-                ],
-                cta: 'Start Starter',
-                ctaStyle: 'bg-cyan-500 hover:bg-cyan-400 text-black font-bold',
-                to: '/register?plan=starter',
-              },
-              {
-                name: 'Pro',
-                price: '$499',
-                sub: '/month · full platform',
-                color: 'border-violet-500/30',
-                badge: null,
-                features: [
-                  'Unlimited reports',
-                  'WhatsApp / Telegram alerts',
-                  'Supply chain monitor',
-                  'Attack story engine',
-                  'Jira / PagerDuty / GitHub Actions',
-                ],
-                cta: 'Start Pro',
-                ctaStyle: 'bg-violet-600 hover:bg-violet-500 text-white font-bold',
-                to: '/register?plan=pro',
-              },
-              {
-                name: 'Enterprise',
-                price: 'Custom',
-                sub: 'White-label · MSSP',
-                color: 'border-amber-500/30',
-                badge: null,
-                features: [
-                  'MSSP white-label API',
-                  'Automated takedown SLA',
-                  'Contractual outcome SLA',
-                  'ROI dashboard',
-                  'Dedicated support',
-                ],
-                cta: 'Contact Us',
-                ctaStyle:
-                  'bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300',
-                to: '/contact',
-              },
-            ].map((tier) => (
-              <div
-                key={tier.name}
-                className={`rounded-2xl border ${tier.color} bg-white/[0.04] p-7 flex flex-col relative`}
-              >
-                {tier.badge && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-black uppercase tracking-widest bg-cyan-500 text-black px-3 py-1 rounded-full">
-                    {tier.badge}
-                  </div>
-                )}
-                <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
-                  {tier.name}
-                </div>
-                <div className="text-4xl font-black font-mono text-white mb-1">{tier.price}</div>
-                <div className="text-xs text-gray-500 mb-6">{tier.sub}</div>
-                <ul className="space-y-2.5 flex-1 mb-8">
-                  {tier.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-gray-300">
-                      <span className="text-emerald-400 mt-0.5 shrink-0">›</span>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  to={tier.to}
-                  className={`text-center text-sm px-4 py-2.5 rounded-xl transition-colors ${tier.ctaStyle}`}
-                >
-                  {tier.cta}
-                </Link>
-              </div>
-            ))}
-          </div>
-
-          {/* Competitor comparison */}
-          <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
-            <div className="px-6 py-4 border-b border-white/10 text-center">
-              <p className="text-sm text-gray-400">
-                <span className="text-white font-semibold">vs the competition</span> — verified
-                pricing from Vendr 2025
+          {/* OSS Trust Banner */}
+          <div className="mb-12 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] px-6 py-5 flex flex-col sm:flex-row items-center gap-5">
+            <div className="text-3xl shrink-0">🔓</div>
+            <div className="flex-1 text-center sm:text-left">
+              <p className="text-sm font-semibold text-emerald-300 mb-0.5">
+                Why open source? Because security software you can't audit is a liability.
+              </p>
+              <p className="text-xs text-gray-500">
+                Every detector, every scoring algorithm, every AI prompt — on GitHub. No black box.
+                No hidden telemetry. Fork it. Audit it. Deploy it air-gapped.
               </p>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-white/[0.06]">
-              {[
-                { name: 'xShield AI', price: '$1,188', sub: '/year (Starter)', highlight: true },
-                { name: 'Resecurity', price: '$15K–50K', sub: '/year est.', highlight: false },
-                {
-                  name: 'Digital Shadows',
-                  price: '$95K–105K',
-                  sub: '/year (Vendr)',
-                  highlight: false,
-                },
-                {
-                  name: 'Recorded Future',
-                  price: '$60K–100K+',
-                  sub: '/year + takedowns',
-                  highlight: false,
-                },
-                {
-                  name: 'Constella Intel',
-                  price: '$315K–415K',
-                  sub: '/year (Vendr)',
-                  highlight: false,
-                },
-              ].map((c) => (
-                <div
-                  key={c.name}
-                  className={`px-4 py-5 text-center ${c.highlight ? 'bg-cyan-500/5' : ''}`}
-                >
-                  <div
-                    className={`text-lg font-black font-mono ${c.highlight ? 'text-cyan-400' : 'text-red-400'}`}
-                  >
-                    {c.price}
-                  </div>
-                  <div
-                    className={`text-xs font-semibold mt-1 ${c.highlight ? 'text-white' : 'text-gray-300'}`}
-                  >
-                    {c.name}
-                  </div>
-                  <div className="text-[10px] text-gray-600 mt-0.5">{c.sub}</div>
-                </div>
-              ))}
+            <a
+              href="https://github.com/rocketlang/ankrshield"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 text-xs font-bold px-4 py-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 transition-colors whitespace-nowrap"
+            >
+              View on GitHub →
+            </a>
+          </div>
+
+          {/* Tier Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-14">
+            {/* OSS Core */}
+            <div className="rounded-2xl border border-emerald-500/25 bg-white/[0.03] p-7 flex flex-col relative">
+              <div className="text-xs font-black uppercase tracking-widest text-emerald-400 mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+                OSS Core
+              </div>
+              <div className="text-5xl font-black font-mono text-white mb-1">FREE</div>
+              <div className="text-xs text-gray-500 mb-1">Apache 2.0 · Self-hosted · Forever</div>
+              <div className="text-[10px] text-emerald-600 font-semibold uppercase tracking-wider mb-6">
+                No account. No data sent to us.
+              </div>
+              <ul className="space-y-2.5 flex-1 mb-8">
+                {[
+                  'Full risk engine — all 17 detectors',
+                  'AIWarrior + attack chain correlation',
+                  'Social threat detection (QR, exfil, C2)',
+                  'Self-hosted web dashboard',
+                  'CLI tool for automation',
+                  'Community support via GitHub',
+                  'Audit every line of source code',
+                ].map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-gray-300">
+                    <span className="text-emerald-400 mt-0.5 shrink-0">›</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <a
+                href="https://github.com/rocketlang/ankrshield"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-center text-sm px-4 py-2.5 rounded-xl transition-colors bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 font-bold"
+              >
+                Clone on GitHub →
+              </a>
+            </div>
+
+            {/* Cloud Hosted */}
+            <div className="rounded-2xl border border-cyan-500/40 bg-white/[0.04] p-7 flex flex-col relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-black uppercase tracking-widest bg-cyan-500 text-black px-3 py-1 rounded-full">
+                Hosted
+              </div>
+              <div className="text-xs font-black uppercase tracking-widest text-cyan-400 mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 inline-block" />
+                xShield Cloud
+              </div>
+              <div className="text-5xl font-black font-mono text-white mb-1">$199</div>
+              <div className="text-xs text-gray-500 mb-1">/month · billed monthly</div>
+              <div className="text-[10px] text-cyan-600 font-semibold uppercase tracking-wider mb-6">
+                Everything in OSS + managed infrastructure
+              </div>
+              <ul className="space-y-2.5 flex-1 mb-8">
+                {[
+                  'Fully managed — no ops burden',
+                  'Up to 25 devices monitored',
+                  'Continuous domain watch + alerts',
+                  'Email · Slack · WhatsApp · Telegram',
+                  'REST API + webhooks',
+                  'Automatic threat feed updates',
+                  'Priority email support',
+                  '99.9% uptime SLA',
+                ].map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-gray-300">
+                    <span className="text-cyan-400 mt-0.5 shrink-0">›</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                to="/register?plan=cloud"
+                className="text-center text-sm px-4 py-2.5 rounded-xl transition-colors bg-cyan-500 hover:bg-cyan-400 text-black font-bold"
+              >
+                Start 14-day Trial
+              </Link>
+            </div>
+
+            {/* Enterprise EE */}
+            <div className="rounded-2xl border border-amber-500/40 bg-white/[0.04] p-7 flex flex-col relative overflow-hidden">
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute top-0 right-0 w-40 h-40 bg-amber-500/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
+              </div>
+              <div className="relative text-xs font-black uppercase tracking-widest text-amber-400 mb-3 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />
+                Enterprise EE
+              </div>
+              <div className="relative text-5xl font-black font-mono text-white mb-1">$25K+</div>
+              <div className="relative text-xs text-gray-500 mb-1">
+                /year · on-prem or dedicated cloud
+              </div>
+              <div className="relative text-[10px] text-amber-600 font-semibold uppercase tracking-wider mb-6">
+                Genuinely premium. Not a feature flag.
+              </div>
+              <ul className="relative space-y-2.5 flex-1 mb-8">
+                {[
+                  'On-prem or air-gapped deployment',
+                  'SAML / SSO (Okta, Azure AD)',
+                  'SIEM integrations (Splunk, Sentinel)',
+                  'SOC 2 / ISO 27001 evidence export',
+                  'AIWarrior fleet — cross-org correlation',
+                  'Custom LLM model (BYO fine-tune)',
+                  'Named CSM + 4-hr P1 SLA',
+                  'Quarterly threat briefings',
+                  'Multi-tenant console',
+                  'White-label option',
+                ].map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-gray-300">
+                    <span className="text-amber-400 mt-0.5 shrink-0">›</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <a
+                href="mailto:enterprise@xshieldai.com"
+                className="relative text-center text-sm px-4 py-2.5 rounded-xl transition-colors bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold"
+              >
+                Book a Call →
+              </a>
             </div>
           </div>
+
+          {/* Open Source vs Closed Black Box comparison */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden mb-8">
+            <div className="px-6 py-4 border-b border-white/10">
+              <p className="text-sm text-center text-gray-400">
+                <span className="text-white font-semibold">Open source vs black box</span> — why it
+                matters for enterprise security
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/[0.06]">
+                    <th className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-500">
+                      Capability
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-emerald-400">
+                      xShield OSS
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-amber-400">
+                      xShield EE
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-gray-500">
+                      Resecurity
+                    </th>
+                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-gray-500">
+                      Recorded Future
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.04]">
+                  {[
+                    ['Audit source code', '✓', '✓', '✗', '✗'],
+                    ['Self-host / air-gapped', '✓', '✓', '✗', '✗'],
+                    ['Data stays on your infra', '✓', '✓', '✗', '✗'],
+                    ['No vendor lock-in', '✓', '✓', '✗', '✗'],
+                    ['SSO / SAML', '—', '✓', '✓', '✓'],
+                    ['SIEM integrations', '—', '✓', '✓', '✓'],
+                    ['Compliance export (SOC2)', '—', '✓', '✓', '✓'],
+                    ['Dedicated CSM + SLA', '—', '✓', '✓', '✓'],
+                    ['Annual cost', 'FREE', '$25K+', '$15K–50K', '$60K–100K+'],
+                  ].map(([cap, oss, ee, res, rf]) => (
+                    <tr key={cap} className="hover:bg-white/[0.02] transition-colors">
+                      <td className="px-5 py-3 text-gray-300 font-medium">{cap}</td>
+                      <td
+                        className={`px-4 py-3 text-center font-mono font-bold ${oss === '✓' ? 'text-emerald-400' : oss === '✗' ? 'text-red-500' : oss === 'FREE' ? 'text-emerald-400' : 'text-gray-500'}`}
+                      >
+                        {oss}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-center font-mono font-bold ${ee === '✓' ? 'text-amber-400' : ee === '✗' ? 'text-red-500' : ee.startsWith('$') ? 'text-amber-400' : 'text-gray-500'}`}
+                      >
+                        {ee}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-center font-mono text-xs ${res === '✓' ? 'text-gray-400' : res === '✗' ? 'text-red-600' : 'text-gray-500'}`}
+                      >
+                        {res}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-center font-mono text-xs ${rf === '✓' ? 'text-gray-400' : rf === '✗' ? 'text-red-600' : 'text-gray-500'}`}
+                      >
+                        {rf}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Bottom note */}
+          <p className="text-center text-xs text-gray-600">
+            Competitor pricing from Vendr 2025 · xShield Enterprise starting price. Final pricing
+            depends on deployment size and support tier.
+            <span className="text-gray-500"> Questions? </span>
+            <a
+              href="mailto:enterprise@xshieldai.com"
+              className="text-cyan-600 hover:text-cyan-400 transition-colors"
+            >
+              enterprise@xshieldai.com
+            </a>
+          </p>
         </div>
       </section>
 
@@ -2193,13 +2267,13 @@ export default function Landing() {
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-cyan-600/10 rounded-full blur-3xl" />
         </div>
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 text-center">
-          <Badge color="cyan">Free Tier · No Credit Card · Start in 30 Seconds</Badge>
+          <Badge color="cyan">Open Source · Apache 2.0 · Self-hosted · No Account Required</Badge>
           <h2 className="text-4xl sm:text-5xl font-black text-white mt-6 mb-4">
-            Know your risk score now
+            Deploy it yourself. Own your data.
           </h2>
           <p className="text-gray-300 text-lg mb-14 max-w-xl mx-auto">
-            Enter your domain. Get 13 intelligence sources + AI threat narrative in under 30
-            seconds. Free tier includes 10 reports/month — no credit card, no sales call.
+            Clone the repo, run the engine, point it at your domain. 17 intelligence sources + AI
+            threat narrative — no account, no telemetry, no vendor trust required.
           </p>
 
           <div className="flex flex-col lg:flex-row items-center justify-center gap-10">
