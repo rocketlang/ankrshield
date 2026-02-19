@@ -138,6 +138,7 @@ model User {
   privacyScores PrivacyScore[]
   alerts       Alert[]
   apiKeys      ApiKey[]
+  integrations UserIntegration[]
 
   @@index([email])
   @@index([tier])
@@ -621,6 +622,7 @@ model WarriorQuarantine {
 // Domains under continuous 5-minute surveillance
 model DomainWatch {
   id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId         String?   @db.Uuid   // null = system-added; set for user-owned watches
   domain         String    @unique
   webhookUrl     String?   // POST alert payloads here on change
   isActive       Boolean   @default(true)
@@ -640,6 +642,7 @@ model DomainWatch {
 
   @@index([isActive])
   @@index([domain])
+  @@index([userId])
   @@map("domain_watches")
 }
 
@@ -663,6 +666,35 @@ model AlertHistory {
   @@index([watchId])
   @@index([triggeredAt(sort: Desc)])
   @@map("alert_history")
+}
+
+// ============================================================================
+// USER INTEGRATIONS (Slack, WhatsApp, Telegram, Jira, PagerDuty…)
+// ============================================================================
+
+// One row per integration per user. provider is a lowercase slug: "slack", "telegram", etc.
+model UserIntegration {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId      String   @db.Uuid
+  provider    String   // "slack" | "telegram" | "whatsapp" | "jira" | "pagerduty"
+
+  // Provider-specific config stored as JSON
+  // Slack:      { webhookUrl: "https://hooks.slack.com/services/..." }
+  // Telegram:   { botToken: "...", chatId: "..." }
+  // Jira:       { url: "...", token: "...", projectKey: "..." }
+  // PagerDuty:  { routingKey: "..." }
+  config      Json
+
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@index([provider])
+  @@map("user_integrations")
 }
 
 // ============================================================================

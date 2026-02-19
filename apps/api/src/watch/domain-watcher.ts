@@ -23,6 +23,8 @@ import { runRiskEngine } from '@ankrshield/risk-intelligence';
 import type { RiskReport } from '@ankrshield/risk-intelligence';
 import type { PrismaClient } from '@prisma/client';
 
+import { sendDomainWatchAlert } from '../integrations/slack.js';
+
 const POLL_INTERVAL_MS = parseInt(process.env.DOMAIN_WATCH_INTERVAL_MS ?? '300000', 10); // 5 min
 
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -153,7 +155,8 @@ async function scanWatch(
   watchId: string,
   domain: string,
   webhookUrl: string | null,
-  prev: { riskScore: number | null; riskLevel: string | null }
+  prev: { riskScore: number | null; riskLevel: string | null },
+  slackWebhookUrl: string | null
 ) {
   let report: RiskReport;
   try {
@@ -164,8 +167,9 @@ async function scanWatch(
   }
 
   const changes = detectChanges(prev, report);
+  const triggeredAt = new Date().toISOString();
 
-  // Persist alert rows
+  // Persist alert rows + dispatch webhooks
   for (const alert of changes) {
     let webhookStatus: string | null = null;
     if (webhookUrl) {
@@ -180,6 +184,18 @@ async function scanWatch(
         webhookStatus: webhookStatus ?? 'skipped',
       },
     });
+
+    // Fire Slack alert (fire-and-forget)
+    if (slackWebhookUrl) {
+      sendDomainWatchAlert(slackWebhookUrl, {
+        domain,
+        alertType: alert.alertType,
+        previousValue: alert.previousValue,
+        newValue: alert.newValue,
+        riskScore: report.riskScore,
+        triggeredAt,
+      }).catch(() => {});
+    }
   }
 
   // Update snapshot
@@ -198,12 +214,39 @@ async function scanWatch(
 
 async function pollAll(db: PrismaClient) {
   const watches = await db.domainWatch.findMany({ where: { isActive: true } });
+
+  // Pre-fetch Slack integrations for all users who own a watch (one query, not N).
+  const userIds = [
+    ...new Set(watches.map((w) => w.userId).filter((id): id is string => id != null)),
+  ];
+
+  const slackMap = new Map<string, string>(); // userId → Slack webhook URL
+  if (userIds.length > 0) {
+    const integrations = await db.userIntegration.findMany({
+      where: { provider: 'slack', isActive: true, userId: { in: userIds } },
+      select: { userId: true, config: true },
+    });
+    for (const i of integrations) {
+      const cfg = i.config as { webhookUrl?: string };
+      if (cfg?.webhookUrl) slackMap.set(i.userId, cfg.webhookUrl);
+    }
+  }
+
   for (const w of watches) {
+    const slackWebhookUrl = w.userId ? (slackMap.get(w.userId) ?? null) : null;
+
     // Fire and forget — don't await all in serial
-    scanWatch(db, w.id, w.domain, w.webhookUrl, {
-      riskScore: w.lastRiskScore,
-      riskLevel: w.lastRiskLevel,
-    }).catch(() => {
+    scanWatch(
+      db,
+      w.id,
+      w.domain,
+      w.webhookUrl,
+      {
+        riskScore: w.lastRiskScore,
+        riskLevel: w.lastRiskLevel,
+      },
+      slackWebhookUrl
+    ).catch(() => {
       /* swallow per-domain errors */
     });
   }

@@ -22,6 +22,7 @@ import mercurius from 'mercurius';
 import { prisma } from './graphql/builder';
 import type { Context } from './graphql/builder';
 import { schema } from './graphql/schema';
+import { sendTestAlert } from './integrations/slack.js';
 import { startMonitor, stopMonitor, getMonitor } from './monitor/traffic-monitor';
 import authPlugin from './plugins/auth';
 import securityPlugin from './plugins/security';
@@ -1286,6 +1287,143 @@ Date: ${now.toLocaleDateString('en-IN')}`;
             .status(500)
             .send({ error: err instanceof Error ? err.message : String(err) });
         }
+      }
+    );
+
+    // ─── Integrations — Slack ─────────────────────────────────────────────────
+
+    // POST /integrations/slack — save or update Slack incoming webhook URL
+    fastify.post<{ Body: { webhookUrl: string } }>(
+      '/integrations/slack',
+      {
+        schema: {
+          tags: ['integrations'],
+          summary: 'Save Slack webhook URL',
+          body: {
+            type: 'object',
+            required: ['webhookUrl'],
+            properties: {
+              webhookUrl: { type: 'string', format: 'uri' },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        try {
+          await request.jwtVerify();
+        } catch {
+          return reply.status(401).send({ error: 'JWT authentication required' });
+        }
+        const user = request.user as { id?: string; userId?: string };
+        const userId = user?.id ?? user?.userId;
+        if (!userId) return reply.status(401).send({ error: 'could not determine user' });
+
+        const { webhookUrl } = request.body;
+        if (!webhookUrl.startsWith('https://hooks.slack.com/')) {
+          return reply
+            .status(400)
+            .send({ error: 'webhookUrl must be a Slack incoming webhook URL' });
+        }
+
+        await prisma.userIntegration.upsert({
+          where: { userId_provider: { userId, provider: 'slack' } },
+          create: { userId, provider: 'slack', config: { webhookUrl }, isActive: true },
+          update: { config: { webhookUrl }, isActive: true },
+        });
+
+        return { saved: true, provider: 'slack' };
+      }
+    );
+
+    // GET /integrations/slack — get status (JWT required)
+    fastify.get(
+      '/integrations/slack',
+      { schema: { tags: ['integrations'], summary: 'Get Slack integration status' } },
+      async (request, reply) => {
+        try {
+          await request.jwtVerify();
+        } catch {
+          return reply.status(401).send({ error: 'JWT authentication required' });
+        }
+        const user = request.user as { id?: string; userId?: string };
+        const userId = user?.id ?? user?.userId;
+        if (!userId) return reply.status(401).send({ error: 'could not determine user' });
+
+        const integration = await prisma.userIntegration.findUnique({
+          where: { userId_provider: { userId, provider: 'slack' } },
+        });
+
+        if (!integration || !integration.isActive) {
+          return { connected: false };
+        }
+
+        const cfg = integration.config as { webhookUrl?: string };
+        return {
+          connected: true,
+          webhookUrl: cfg.webhookUrl
+            ? `${cfg.webhookUrl.slice(0, 40)}…` // never expose full URL
+            : null,
+          createdAt: integration.createdAt,
+          updatedAt: integration.updatedAt,
+        };
+      }
+    );
+
+    // DELETE /integrations/slack — remove Slack integration
+    fastify.delete(
+      '/integrations/slack',
+      { schema: { tags: ['integrations'], summary: 'Remove Slack integration' } },
+      async (request, reply) => {
+        try {
+          await request.jwtVerify();
+        } catch {
+          return reply.status(401).send({ error: 'JWT authentication required' });
+        }
+        const user = request.user as { id?: string; userId?: string };
+        const userId = user?.id ?? user?.userId;
+        if (!userId) return reply.status(401).send({ error: 'could not determine user' });
+
+        await prisma.userIntegration.updateMany({
+          where: { userId, provider: 'slack' },
+          data: { isActive: false },
+        });
+
+        return { disconnected: true };
+      }
+    );
+
+    // POST /integrations/slack/test — send a test Block Kit message
+    fastify.post(
+      '/integrations/slack/test',
+      { schema: { tags: ['integrations'], summary: 'Send Slack test alert' } },
+      async (request, reply) => {
+        try {
+          await request.jwtVerify();
+        } catch {
+          return reply.status(401).send({ error: 'JWT authentication required' });
+        }
+        const user = request.user as { id?: string; userId?: string };
+        const userId = user?.id ?? user?.userId;
+        if (!userId) return reply.status(401).send({ error: 'could not determine user' });
+
+        const integration = await prisma.userIntegration.findUnique({
+          where: { userId_provider: { userId, provider: 'slack' } },
+        });
+
+        if (!integration || !integration.isActive) {
+          return reply.status(400).send({ error: 'Slack integration not configured' });
+        }
+
+        const cfg = integration.config as { webhookUrl?: string };
+        if (!cfg.webhookUrl) {
+          return reply.status(400).send({ error: 'Slack webhook URL missing' });
+        }
+
+        const result = await sendTestAlert(cfg.webhookUrl);
+        if (result === 'sent') return { sent: true };
+        return reply
+          .status(502)
+          .send({ error: 'Slack returned an error — check your webhook URL' });
       }
     );
 
