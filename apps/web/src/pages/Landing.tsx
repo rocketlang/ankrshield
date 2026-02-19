@@ -1318,9 +1318,11 @@ export default function Landing() {
               One number that summarises your entire threat exposure
             </h3>
             <p className="text-gray-400 text-sm leading-relaxed mb-6">
-              xShield aggregates signals from GreyNoise, Shodan, HIBP, and urlscan.io into a single
-              0–100 risk score. Each source contributes weighted risk factors — so a single critical
-              finding (malicious IP classification) doesn't get washed out by minor findings.
+              xShield aggregates signals from 17 intelligence sources — GreyNoise, Shodan, HIBP,
+              urlscan.io, ThreatFox, QR heuristics, process-level exfil detection, and social brand
+              scanning — into a single 0–100 risk score. Each source contributes weighted risk
+              factors with diminishing returns, so a single critical finding doesn't get washed out
+              by minor noise.
             </p>
             <div className="flex flex-wrap gap-3">
               {[
@@ -1430,7 +1432,7 @@ export default function Landing() {
             {/* Intelligence Sources Used */}
             <div className="bg-black/30 border border-white/10 rounded-xl p-5">
               <div className="text-xs font-bold text-cyan-400 uppercase tracking-widest mb-3">
-                🔍 Intelligence Sources · 13 Parallel Checks
+                🔍 Intelligence Sources · 17 Parallel Checks
               </div>
               <div className="flex flex-wrap gap-2">
                 {[
@@ -1447,6 +1449,10 @@ export default function Landing() {
                   { label: 'ASN Reputation', color: 'text-indigo-400 border-indigo-500/30' },
                   { label: 'GitHub Dork', color: 'text-violet-400 border-violet-500/30' },
                   { label: 'RDAP', color: 'text-teal-400 border-teal-500/30' },
+                  { label: 'QR Heuristic', color: 'text-amber-400 border-amber-500/30' },
+                  { label: 'Process Monitor', color: 'text-lime-400 border-lime-500/30' },
+                  { label: 'ThreatFox Social', color: 'text-fuchsia-400 border-fuchsia-500/30' },
+                  { label: 'Brand Scan', color: 'text-sky-400 border-sky-500/30' },
                 ].map(({ label, color }) => (
                   <span
                     key={label}
@@ -1707,6 +1713,278 @@ export default function Landing() {
                   <div className="text-gray-400 animate-pulse mt-2">█</div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Social & Messaging Platform Threats ── */}
+      <section id="social-threats" className="border-t border-white/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
+          <div className="text-center mb-14">
+            <Badge color="purple">Emerging Threat Vectors</Badge>
+            <h2 className="text-4xl font-black text-white mt-4 mb-4">
+              Attackers moved to messaging apps.
+              <br />
+              <span className="text-purple-400">Your security didn't follow.</span>
+            </h2>
+            <p className="text-gray-400 max-w-2xl mx-auto">
+              Telegram, Discord, and WhatsApp are now active C2 infrastructure. QR codes bypass
+              email gateways. Social platforms host brand impersonation at scale. xShield v0.7
+              detects all of it.
+            </p>
+          </div>
+
+          {/* Stats strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-14">
+            {[
+              {
+                val: '587%',
+                label: 'QR phishing surge',
+                sub: 'SlashNext Threat Report 2023',
+                color: 'text-amber-400',
+              },
+              {
+                val: '40+',
+                label: 'Stealer families',
+                sub: 'use Discord webhook exfil',
+                color: 'text-purple-400',
+              },
+              {
+                val: '100+',
+                label: 'Malware families',
+                sub: 'use Telegram as C2 channel',
+                color: 'text-fuchsia-400',
+              },
+              {
+                val: '$3.1B',
+                label: 'BEC losses in 2023',
+                sub: 'via messaging & social platforms',
+                color: 'text-red-400',
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-5 text-center"
+              >
+                <div className={`text-3xl font-black font-mono ${s.color}`}>{s.val}</div>
+                <div className="text-gray-200 text-xs font-semibold mt-1">{s.label}</div>
+                <div className="text-gray-500 text-[10px] mt-0.5">{s.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Four threat cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-12">
+            {/* QR Quishing */}
+            <div className="bg-amber-600/5 border border-amber-500/30 rounded-2xl p-6 flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-3xl">📷</span>
+                <span className="text-[10px] font-bold text-gray-500 border border-white/10 rounded-full px-2.5 py-0.5 uppercase tracking-widest whitespace-nowrap">
+                  QR Detector v0.7
+                </span>
+              </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-widest mb-1 text-amber-400">
+                  QR Phishing / "Quishing"
+                </div>
+                <div className="text-white font-black text-lg leading-tight">
+                  QR codes bypass email security
+                </div>
+              </div>
+              <p className="text-gray-400 text-sm leading-relaxed flex-1">
+                Attackers embed phishing URLs in QR codes. Email gateways scan text, not images.
+                xShield decodes the URL and runs 10 heuristic checks — URL shortener, suspicious
+                TLD, IP-as-host, IDN homograph (punycode), OAuth redirect hijack, data URI payloads,
+                and ThreatFox IOC matching.
+              </p>
+              <ul className="space-y-1.5">
+                {[
+                  '10 detection signals scored 0–100',
+                  'OAuth redirect_uri hijack detection',
+                  'Punycode / IDN homograph attack',
+                  'ThreatFox IOC database lookup (+80)',
+                ].map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-xs text-gray-300">
+                    <span className="text-amber-400 text-[10px]">▶</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Discord/Telegram/Slack Exfil */}
+            <div className="bg-purple-600/5 border border-purple-500/30 rounded-2xl p-6 flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-3xl">📤</span>
+                <span className="text-[10px] font-bold text-gray-500 border border-white/10 rounded-full px-2.5 py-0.5 uppercase tracking-widest whitespace-nowrap">
+                  Exfil Detector v0.7
+                </span>
+              </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-widest mb-1 text-purple-400">
+                  Webhook Data Exfiltration
+                </div>
+                <div className="text-white font-black text-lg leading-tight">
+                  Stealers phone home via Discord & Telegram
+                </div>
+              </div>
+              <p className="text-gray-400 text-sm leading-relaxed flex-1">
+                Raccoon, Vidar, RedLine, AgentTesla and 40+ info-stealer families exfiltrate stolen
+                credentials, crypto wallets, and browser cookies to Discord webhooks. Process-level
+                detection identifies <code className="text-purple-300">powershell.exe</code>,{' '}
+                <code className="text-purple-300">python.exe</code>, and{' '}
+                <code className="text-purple-300">svchost.exe</code> calling webhook URLs —
+                near-zero false positives.
+              </p>
+              <ul className="space-y-1.5">
+                {[
+                  'Discord · Telegram · Slack · Teams webhooks',
+                  'Process allowlist: browsers = clean (score 5)',
+                  'powershell/cmd/python → webhook = MALWARE (95)',
+                  'Batch scan: filter non-zero findings only',
+                ].map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-xs text-gray-300">
+                    <span className="text-purple-400 text-[10px]">▶</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Telegram C2 */}
+            <div className="bg-fuchsia-600/5 border border-fuchsia-500/30 rounded-2xl p-6 flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-3xl">🤖</span>
+                <span className="text-[10px] font-bold text-gray-500 border border-white/10 rounded-full px-2.5 py-0.5 uppercase tracking-widest whitespace-nowrap">
+                  Social C2 Detector v0.7
+                </span>
+              </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-widest mb-1 text-fuchsia-400">
+                  Telegram Bot C2 Infrastructure
+                </div>
+                <div className="text-white font-black text-lg leading-tight">
+                  100+ malware families use Telegram as C2
+                </div>
+              </div>
+              <p className="text-gray-400 text-sm leading-relaxed flex-1">
+                AsyncRAT, ToxicEye, WarzoneRAT, and Lumma Stealer route C2 traffic through the
+                Telegram Bot API — encrypted, globally distributed, and never blocked by firewalls.
+                xShield checks domains and URLs for Telegram bot token patterns and queries
+                ThreatFox for tagged social C2 IOCs.
+              </p>
+              <ul className="space-y-1.5">
+                {[
+                  'Telegram bot token regex detection in URLs',
+                  'ThreatFox tags: telegram-bot, discord-c2',
+                  'AsyncRAT · ToxicEye · WarzoneRAT · Lumma',
+                  'Encrypted, CDN-backed, always-on channel',
+                ].map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-xs text-gray-300">
+                    <span className="text-fuchsia-400 text-[10px]">▶</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Brand Impersonation */}
+            <div className="bg-sky-600/5 border border-sky-500/30 rounded-2xl p-6 flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-2">
+                <span className="text-3xl">🎭</span>
+                <span className="text-[10px] font-bold text-gray-500 border border-white/10 rounded-full px-2.5 py-0.5 uppercase tracking-widest whitespace-nowrap">
+                  Brand Monitor v0.7
+                </span>
+              </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-widest mb-1 text-sky-400">
+                  Social Brand Impersonation
+                </div>
+                <div className="text-white font-black text-lg leading-tight">
+                  Fake accounts, fake airdrops, fake support
+                </div>
+              </div>
+              <p className="text-gray-400 text-sm leading-relaxed flex-1">
+                Attackers create Telegram channels, Discord servers, and Twitter accounts using
+                typosquatted brand names to run crypto scams, fake airdrops, and BEC attacks.
+                xShield uses Levenshtein distance, typosquat variant generation, and impersonation
+                suffix detection to catch them before victims are defrauded.
+              </p>
+              <ul className="space-y-1.5">
+                {[
+                  'Edit distance 1/2 Levenshtein matching',
+                  'Impersonation patterns: _official, _airdrop, _support',
+                  '30+ typosquat variant algorithms',
+                  'Telegram · Discord · Twitter · Instagram coverage',
+                ].map((f) => (
+                  <li key={f} className="flex items-center gap-2 text-xs text-gray-300">
+                    <span className="text-sky-400 text-[10px]">▶</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Terminal mockup — all 4 detectors firing */}
+          <div className="bg-[#080d14] border border-white/15 rounded-2xl overflow-hidden">
+            <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/10">
+              <span className="w-3 h-3 rounded-full bg-red-500/70" />
+              <span className="w-3 h-3 rounded-full bg-yellow-500/70" />
+              <span className="w-3 h-3 rounded-full bg-green-500/70" />
+              <span className="ml-3 text-gray-400 text-xs font-mono">
+                xshield-social-threat-detector — v0.7.0
+              </span>
+            </div>
+            <div className="p-5 font-mono text-xs space-y-1.5">
+              <div className="text-cyan-400">
+                🛡️ Social threat detectors loaded (QR · Exfil · Social C2 · Brand)
+              </div>
+              <div className="text-gray-500">──────────────────────────────────────────</div>
+              <div className="text-amber-300">
+                📷 [QR] xn--mcrsft-hdb.xyz/signin — score 100/100 CRITICAL
+              </div>
+              <div className="text-gray-400">
+                {' '}
+                Signals: punycode_domain · suspicious_tld · login_mimicry · oauth_redirect_abuse
+              </div>
+              <div className="text-amber-300">
+                {' '}
+                redirect_uri → http://45.142.212.100/steal ← raw IP + exfil endpoint
+              </div>
+              <div className="text-gray-500">──────────────────────────────────────────</div>
+              <div className="text-red-300">
+                📤 [EXFIL] powershell.exe → discord.com/api/webhooks/1122334455/stealer_output
+              </div>
+              <div className="text-red-300">
+                {' '}
+                Score 95/100 MALWARE_EXFIL · platform=discord · process=powershell.exe
+              </div>
+              <div className="text-red-300">
+                {' '}
+                Raccoon Stealer / RedLine pattern — credentials + clipboard likely exfiltrated
+              </div>
+              <div className="text-gray-500">──────────────────────────────────────────</div>
+              <div className="text-fuchsia-300">
+                🤖 [C2] api.telegram.org/bot987654321:AAAA/sendDocument ← svchost.exe
+              </div>
+              <div className="text-fuchsia-300">
+                {' '}
+                ThreatFox tag: telegram-bot · score 85/100 · AsyncRAT C2 pattern
+              </div>
+              <div className="text-gray-500">──────────────────────────────────────────</div>
+              <div className="text-sky-300">
+                🎭 [BRAND] @ankr_official_airdrop (Telegram) — impersonation score 91/100
+              </div>
+              <div className="text-sky-300">
+                {' '}
+                Edit distance 0 (exact brand match) + _official + _airdrop suffix
+              </div>
+              <div className="text-red-400">
+                🚨 4 social threat vectors detected · AI narrative generated · Alerts sent
+              </div>
+              <div className="text-gray-400 animate-pulse mt-2">█</div>
             </div>
           </div>
         </div>
