@@ -196,22 +196,55 @@ export async function validateTyposquats(
 
 /**
  * Convert registered typosquat list into RiskFactor entries.
+ *
+ * Scoring is adjusted by:
+ *   - Domain name length: short brands (≤5 chars) get omission variants discounted
+ *     because 2-3 letter .in/.io strings are commonly registered by unrelated parties
+ *   - Variant type: homoglyph/addition/transposition are classic phishing tactics
+ *     and score higher; omissions on short names are low-signal
  */
 export function typosquatsToFactors(squats: RegisteredTyposquat[], domain: string): RiskFactor[] {
   if (squats.length === 0) return [];
 
+  const base = domain.split('.')[0] ?? domain;
+  const isShortBrand = base.length <= 5;
+
+  // High-signal variants regardless of brand length
+  const HIGH_SIGNAL: string[] = ['homoglyph', 'addition', 'transposition', 'double_hit'];
+
   const impostors = squats.filter((s) => s.isImpostor);
   const parked = squats.filter((s) => !s.isImpostor);
 
+  // Split impostors into high-signal vs coincidental
+  const highSignal = impostors.filter((s) => HIGH_SIGNAL.includes(s.variantType) || !isShortBrand);
+  const coincidental = impostors.filter(
+    (s) => !HIGH_SIGNAL.includes(s.variantType) && isShortBrand
+  );
+
   const factors: RiskFactor[] = [];
 
-  if (impostors.length > 0) {
+  if (highSignal.length > 0) {
+    // Classic phishing variants — score normally
     factors.push({
       category: 'typosquat',
-      summary: `${impostors.length} registered lookalike domain(s) found for ${domain} pointing to DIFFERENT servers — potential phishing`,
-      score: Math.min(25 + impostors.length * 12, 75),
+      summary: `${highSignal.length} high-signal lookalike domain(s) found for ${domain} — potential phishing (homoglyph/addition/transposition)`,
+      score: Math.min(20 + highSignal.length * 12, 60),
       source: 'urlscan',
-      detail: impostors
+      detail: highSignal
+        .slice(0, 5)
+        .map((s) => `${s.domain} → ${s.ips[0]}`)
+        .join(' · '),
+    });
+  }
+
+  if (coincidental.length > 0) {
+    // Short-brand omissions — common registrations, low risk
+    factors.push({
+      category: 'typosquat',
+      summary: `${coincidental.length} short lookalike domain(s) for ${domain} exist (likely unrelated registrations, not active phishing)`,
+      score: Math.min(5 + coincidental.length * 2, 20),
+      source: 'urlscan',
+      detail: coincidental
         .slice(0, 5)
         .map((s) => `${s.domain} → ${s.ips[0]}`)
         .join(' · '),
@@ -222,7 +255,7 @@ export function typosquatsToFactors(squats: RegisteredTyposquat[], domain: strin
     factors.push({
       category: 'typosquat',
       summary: `${parked.length} registered lookalike domain(s) for ${domain} detected (parked/same host)`,
-      score: Math.min(10 + parked.length * 5, 30),
+      score: Math.min(5 + parked.length * 3, 20),
       source: 'urlscan',
       detail: parked
         .slice(0, 5)
