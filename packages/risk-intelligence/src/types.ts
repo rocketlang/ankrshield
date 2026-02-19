@@ -33,13 +33,28 @@ export interface RiskFactor {
     | 'code_secret_exposure'
     | 'ransomware_c2'
     | 'canary_modified'
-    | 'entropy_spike';
+    | 'entropy_spike'
+    | 'qr_threat'
+    | 'discord_exfil'
+    | 'social_c2'
+    | 'brand_impersonation';
   /** Human-readable summary of the finding */
   summary: string;
   /** Severity contribution 0–100 */
   score: number;
   /** Source that produced this finding */
-  source: 'greynoise' | 'shodan' | 'hibp' | 'urlscan' | 'internal' | 'abuse_ch' | 'threatfox';
+  source:
+    | 'greynoise'
+    | 'shodan'
+    | 'hibp'
+    | 'urlscan'
+    | 'internal'
+    | 'abuse_ch'
+    | 'threatfox'
+    | 'threatfox_social'
+    | 'qr_heuristic'
+    | 'process_monitor'
+    | 'brand_scan';
   /** Optional raw detail (URL, IP, port, domain, etc.) */
   detail?: string;
 }
@@ -171,6 +186,18 @@ export interface RiskReport {
   /** Entropy scan of local directories — spike = encryption in progress */
   entropyReports: import('./detectors/entropy-detector.js').EntropyReport[] | null;
 
+  /** QR code URL threat analysis */
+  qrResult: import('./detectors/qr-detector.js').QrThreatResult | null;
+
+  /** Discord / Slack / Telegram webhook exfiltration findings */
+  exfilResults: import('./detectors/discord-exfil-detector.js').ExfilResult[];
+
+  /** Social platform C2 detection (Telegram bot / Discord C2) */
+  socialC2Result: import('./detectors/social-c2-detector.js').SocialC2Result | null;
+
+  /** Brand impersonation findings across social platforms */
+  brandFindings: import('./detectors/social-brand-monitor.js').BrandMonitorResult | null;
+
   /**
    * Claude AI-generated threat narrative — plain-English analysis of all findings.
    * null when ANTHROPIC_API_KEY is not set.
@@ -222,6 +249,22 @@ export interface RiskEngineOptions {
   enableEntropy?: boolean;
   /** Directories to scan for entropy (uses defaults if omitted) */
   entropyDirectories?: string[];
+  /** Analyse a QR-decoded URL for phishing / OAuth hijack / C2. Default: false */
+  enableQr?: boolean;
+  /** The URL decoded from a QR code (required when enableQr: true) */
+  qrUrl?: string;
+  /** Detect data exfiltration via Discord/Slack/Telegram webhooks. Default: false */
+  enableExfilDetection?: boolean;
+  /** Active network connections to check for webhook exfil */
+  networkConnections?: import('./detectors/discord-exfil-detector.js').ExfilConnection[];
+  /** Check domain for social platform C2 usage. Default: true */
+  enableSocialC2?: boolean;
+  /** Monitor for brand impersonation on social platforms. Default: false */
+  enableBrandMonitor?: boolean;
+  /** Brand terms to protect (e.g. ['ankr', 'xshield']) */
+  brandTerms?: string[];
+  /** Candidates to check for impersonation (from platform search results) */
+  brandCandidates?: Array<{ name: string; platform?: string }>;
   /** Generate Claude AI threat narrative (requires ANTHROPIC_API_KEY). Default: true */
   enableThreatNarrative?: boolean;
   /** Anthropic API key override (defaults to ANTHROPIC_API_KEY env var) */

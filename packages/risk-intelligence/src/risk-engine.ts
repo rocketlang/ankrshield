@@ -34,6 +34,7 @@ import { lookupAsnReputation, asnToFactors } from './detectors/asn-reputation.js
 import { checkDomainBreaches, breachesToFactors } from './detectors/breach-monitor.js';
 import { checkCanaryFiles, canaryToFactors } from './detectors/canary-detector.js';
 import { monitorCertTransparency, certRecordsToFactors } from './detectors/cert-transparency.js';
+import { checkExfilConnections, exfilToFactors } from './detectors/discord-exfil-detector.js';
 import { auditDnsSecurity, dnsAuditToFactors } from './detectors/dns-security-audit.js';
 import { validateTyposquats, typosquatsToFactors } from './detectors/dns-validator.js';
 import { scanDomainThreats, domainThreatsToFactors } from './detectors/domain-guard.js';
@@ -43,8 +44,11 @@ import { scanIpWithGreyNoise, greyNoiseToFactors } from './detectors/greynoise-s
 import { scanIpWithOtx, scanDomainWithOtx, otxToFactors } from './detectors/otx-scanner.js';
 import { searchPastes, pasteHitsToFactors } from './detectors/paste-monitor.js';
 import { checkPhishingFeeds, phishingHitsToFactors } from './detectors/phishing-feeds.js';
+import { checkQrThreat, qrToFactors } from './detectors/qr-detector.js';
 import { checkRansomwareFeeds, ransomwareToFactors } from './detectors/ransomware-detector.js';
 import { scanIpWithShodan, shodanToFactors } from './detectors/shodan-scanner.js';
+import { checkBrandImpersonation, brandToFactors } from './detectors/social-brand-monitor.js';
+import { checkSocialC2, socialC2ToFactors } from './detectors/social-c2-detector.js';
 import { generateThreatNarrative } from './threat-narrative.js';
 import type { RiskEngineOptions, RiskFactor, RiskLevel, RiskReport } from './types.js';
 
@@ -124,6 +128,10 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
   const enableRansomware = options.enableRansomware ?? true;
   const enableCanary = options.enableCanary ?? false; // opt-in: only on local endpoints
   const enableEntropy = options.enableEntropy ?? false; // opt-in: only on local endpoints
+  const enableQr = options.enableQr ?? false;
+  const enableExfilDetection = options.enableExfilDetection ?? false;
+  const enableSocialC2 = options.enableSocialC2 ?? true;
+  const enableBrandMonitor = options.enableBrandMonitor ?? false;
 
   const enableThreatNarrative = options.enableThreatNarrative ?? true;
   const otxApiKey = options.otxApiKey ?? process.env['OTX_API_KEY'];
@@ -152,6 +160,9 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     ransomwareResult,
     canaryResult,
     entropyReports,
+    qrResult,
+    socialC2Result,
+    brandFindings,
   ] = await Promise.all([
     enableGreyNoise && serverIp ? scanIpWithGreyNoise(serverIp) : Promise.resolve(null),
     enableShodan && serverIp
@@ -175,7 +186,20 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     enableRansomware ? checkRansomwareFeeds(serverIp, domain) : Promise.resolve(null),
     enableCanary ? checkCanaryFiles(options.canaryPaths) : Promise.resolve(null),
     enableEntropy ? checkDirectoryEntropy(options.entropyDirectories) : Promise.resolve(null),
+    enableQr && options.qrUrl ? checkQrThreat(options.qrUrl) : Promise.resolve(null),
+    enableSocialC2 ? checkSocialC2(domain) : Promise.resolve(null),
+    Promise.resolve(
+      enableBrandMonitor && options.brandTerms && options.brandCandidates
+        ? checkBrandImpersonation(options.brandTerms, options.brandCandidates)
+        : null
+    ),
   ]);
+
+  // Exfil detection is synchronous — run separately
+  const exfilResults =
+    enableExfilDetection && options.networkConnections
+      ? checkExfilConnections(options.networkConnections)
+      : [];
 
   // Collect all risk factors
   const factors: RiskFactor[] = [];
@@ -196,6 +220,10 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
   if (ransomwareResult) factors.push(...ransomwareToFactors(ransomwareResult));
   if (canaryResult) factors.push(...canaryToFactors(canaryResult));
   if (entropyReports) factors.push(...entropyToFactors(entropyReports));
+  if (qrResult) factors.push(...qrToFactors(qrResult));
+  if (exfilResults.length > 0) factors.push(...exfilToFactors(exfilResults));
+  if (socialC2Result) factors.push(...socialC2ToFactors(socialC2Result));
+  if (brandFindings) factors.push(...brandToFactors(brandFindings));
 
   const riskScore = aggregateScore(factors);
   const riskLevel = scoreToLevel(riskScore);
@@ -224,6 +252,10 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     ransomwareResult,
     canaryResult,
     entropyReports,
+    qrResult,
+    exfilResults,
+    socialC2Result,
+    brandFindings,
     threatNarrative: null,
     durationMs: 0,
   };
@@ -256,6 +288,10 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     ransomwareResult,
     canaryResult,
     entropyReports,
+    qrResult,
+    exfilResults,
+    socialC2Result,
+    brandFindings,
     threatNarrative,
     durationMs: Date.now() - start,
   };

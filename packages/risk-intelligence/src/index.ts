@@ -78,6 +78,29 @@ export type { FileEntropyResult, EntropyReport } from './detectors/entropy-detec
 export { generateThreatNarrative } from './threat-narrative.js';
 
 // ---------------------------------------------------------------------------
+// Social / Messaging / QR threat detectors (v0.7.0)
+// ---------------------------------------------------------------------------
+export { checkQrThreat, qrToFactors } from './detectors/qr-detector.js';
+export type { QrThreatResult, QrSignal } from './detectors/qr-detector.js';
+
+export {
+  checkExfilConnection,
+  checkExfilConnections,
+  exfilToFactors,
+} from './detectors/discord-exfil-detector.js';
+export type { ExfilConnection, ExfilResult } from './detectors/discord-exfil-detector.js';
+
+export { checkSocialC2, socialC2ToFactors } from './detectors/social-c2-detector.js';
+export type { SocialC2Result } from './detectors/social-c2-detector.js';
+
+export {
+  checkBrandImpersonation,
+  analyseCandidateForBrand,
+  brandToFactors,
+} from './detectors/social-brand-monitor.js';
+export type { BrandFinding, BrandMonitorResult } from './detectors/social-brand-monitor.js';
+
+// ---------------------------------------------------------------------------
 // Main engine
 // ---------------------------------------------------------------------------
 export { runRiskEngine } from './risk-engine.js';
