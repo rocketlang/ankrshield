@@ -219,9 +219,10 @@ export async function checkQrThreat(url: string): Promise<QrThreatResult> {
     score += 25;
   }
 
-  // 2. Suspicious TLD
-  if (domain) {
-    const tld = extractTld(domain);
+  // 2. Suspicious TLD — also check raw URL via regex when domain parse failed
+  const domainForTld = domain ?? url.match(/https?:\/\/([^/?#]+)/)?.[1] ?? '';
+  if (domainForTld) {
+    const tld = extractTld(domainForTld);
     if (SUSPICIOUS_TLDS.has(tld)) {
       signals.push({
         name: 'suspicious_tld',
@@ -232,8 +233,9 @@ export async function checkQrThreat(url: string): Promise<QrThreatResult> {
     }
   }
 
-  // 3. IP address as host
-  if (domain && /^\d{1,3}(\.\d{1,3}){3}$/.test(domain)) {
+  // 3. IP address as host — check raw URL too (in case invalid URL)
+  const rawIpMatch = url.match(/https?:\/\/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+  if ((domain && /^\d{1,3}(\.\d{1,3}){3}$/.test(domain)) || rawIpMatch) {
     signals.push({
       name: 'ip_as_host',
       description: 'URL uses raw IP address instead of domain — bypasses DNS filtering',
@@ -242,8 +244,9 @@ export async function checkQrThreat(url: string): Promise<QrThreatResult> {
     score += 30;
   }
 
-  // 4. Unicode homograph / punycode
-  if (domain && (domain.startsWith('xn--') || domain.includes('.xn--'))) {
+  // 4. Unicode homograph / punycode — check raw URL string too (in case parser normalised/rejected)
+  const rawHasPunycode = /xn--[a-z0-9-]+/i.test(url);
+  if (rawHasPunycode || (domain && (domain.startsWith('xn--') || domain.includes('.xn--')))) {
     signals.push({
       name: 'punycode_domain',
       description:
@@ -266,6 +269,7 @@ export async function checkQrThreat(url: string): Promise<QrThreatResult> {
 
   // 6. OAuth redirect abuse
   let oauthAbuse = false;
+  // First try structured URL parsing
   try {
     const parsed = new URL(url);
     for (const param of REDIRECT_PARAMS) {
@@ -291,7 +295,25 @@ export async function checkQrThreat(url: string): Promise<QrThreatResult> {
       }
     }
   } catch {
-    /* invalid URL */
+    // Fallback: regex-based redirect param detection for malformed/rejected URLs
+    const redirectMatch = url.match(/[?&](?:redirect_uri|redirect_url|next|url|return)=([^&]+)/i);
+    if (redirectMatch && redirectMatch[1]) {
+      const raw = decodeURIComponent(redirectMatch[1]);
+      try {
+        const redirectDomain = new URL(raw).hostname.toLowerCase();
+        if (!OAUTH_WHITELIST.has(redirectDomain)) {
+          oauthAbuse = true;
+          signals.push({
+            name: 'oauth_redirect_abuse',
+            description: `OAuth redirect points to non-whitelisted domain (${redirectDomain})`,
+            score: 45,
+          });
+          score += 45;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   // 7. Double encoding
@@ -314,13 +336,14 @@ export async function checkQrThreat(url: string): Promise<QrThreatResult> {
     score += 15;
   }
 
-  // 9. Login page mimicry on suspicious domain
-  if (domain && !OAUTH_WHITELIST.has(domain)) {
+  // 9. Login page mimicry on suspicious domain (also check raw URL string)
+  const effectiveDomain = domain ?? '';
+  if (!OAUTH_WHITELIST.has(effectiveDomain)) {
     const path = (() => {
       try {
         return new URL(url).pathname.toLowerCase();
       } catch {
-        return '';
+        return urlLower;
       }
     })();
     const mimicsLogin = LOGIN_PATHS.some((p) => path.includes(p));
