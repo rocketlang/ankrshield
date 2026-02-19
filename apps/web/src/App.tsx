@@ -11,6 +11,7 @@ import Analytics from './pages/Analytics';
 import ApiKeys from './pages/ApiKeys';
 import CommandCenter from './pages/CommandCenter';
 import Dashboard from './pages/Dashboard';
+import Developers from './pages/Developers';
 import Devices from './pages/Devices';
 import EvidenceReport from './pages/EvidenceReport';
 import Landing from './pages/Landing';
@@ -32,6 +33,7 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/pricing" element={<Pricing />} />
+      <Route path="/developers" element={<Developers />} />
 
       {/* Protected Routes */}
       <Route

@@ -368,6 +368,9 @@ export default function Landing() {
             <a href="#pricing" className="hover:text-white transition-colors">
               Pricing
             </a>
+            <Link to="/developers" className="hover:text-white transition-colors">
+              Developers
+            </Link>
             <a
               href={LIVE_URL}
               target="_blank"

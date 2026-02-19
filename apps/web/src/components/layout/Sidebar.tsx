@@ -11,6 +11,7 @@ import {
   Settings,
   Terminal,
   Key,
+  Code2,
 } from 'lucide-react';
 import type { JSX } from 'react';
 import { Link, useLocation } from 'react-router-dom';
@@ -56,6 +57,11 @@ const navItems: NavItem[] = [
     label: 'API Keys',
     path: '/api-keys',
     icon: <Key className="w-5 h-5" />,
+  },
+  {
+    label: 'Developers',
+    path: '/developers',
+    icon: <Code2 className="w-5 h-5" />,
   },
 ];
 
