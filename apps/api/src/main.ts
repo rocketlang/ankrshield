@@ -11,6 +11,8 @@ import {
   scanIpWithGreyNoise,
   socialThreatsToWarriorEvents,
   buildRemediationPlaybook,
+  scanSupplyChain,
+  parseManifest,
 } from '@ankrshield/risk-intelligence';
 import { SpywareScanner } from '@ankrshield/spyware-detector';
 import fastifyCookie from '@fastify/cookie';
@@ -1797,6 +1799,104 @@ Date: ${now.toLocaleDateString('en-IN')}`;
         return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) });
       }
     });
+
+    // ─── Supply Chain endpoints ────────────────────────────────────────────────
+
+    // POST /risk/supply-chain — scan a list of packages
+    fastify.post<{
+      Body: { packages?: Array<{ ecosystem: string; name: string; version?: string }> };
+    }>(
+      '/risk/supply-chain',
+      {
+        schema: {
+          tags: ['risk'],
+          summary: 'Scan packages for supply chain risks',
+          body: {
+            type: 'object',
+            required: ['packages'],
+            properties: {
+              packages: {
+                type: 'array',
+                maxItems: 50,
+                items: {
+                  type: 'object',
+                  required: ['ecosystem', 'name'],
+                  properties: {
+                    ecosystem: { type: 'string', enum: ['npm', 'pypi'] },
+                    name: { type: 'string' },
+                    version: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const { packages } = request.body ?? {};
+        if (!Array.isArray(packages) || packages.length === 0) {
+          return reply.status(400).send({ error: 'packages array is required' });
+        }
+        const valid = packages.filter(
+          (p) =>
+            (p.ecosystem === 'npm' || p.ecosystem === 'pypi') &&
+            typeof p.name === 'string' &&
+            p.name.trim()
+        ) as Array<{ ecosystem: 'npm' | 'pypi'; name: string; version?: string }>;
+        if (valid.length === 0) {
+          return reply
+            .status(400)
+            .send({ error: 'No valid packages. ecosystem must be "npm" or "pypi"' });
+        }
+        try {
+          return await scanSupplyChain(valid);
+        } catch (err: unknown) {
+          return reply
+            .status(500)
+            .send({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    );
+
+    // POST /risk/supply-chain/manifest — parse a manifest file and scan all deps
+    fastify.post<{
+      Body: { manifest?: string; ecosystem?: string };
+    }>(
+      '/risk/supply-chain/manifest',
+      {
+        schema: {
+          tags: ['risk'],
+          summary: 'Parse a manifest (package.json / requirements.txt) and scan all deps',
+          body: {
+            type: 'object',
+            required: ['manifest'],
+            properties: {
+              manifest: { type: 'string' },
+              ecosystem: { type: 'string', enum: ['npm', 'pypi', 'auto'] },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const { manifest, ecosystem = 'auto' } = request.body ?? {};
+        if (!manifest?.trim())
+          return reply.status(400).send({ error: 'manifest content is required' });
+        const hint = ecosystem === 'npm' || ecosystem === 'pypi' ? ecosystem : 'auto';
+        const packages = parseManifest(manifest, hint);
+        if (packages.length === 0) {
+          return reply
+            .status(400)
+            .send({ error: 'Could not parse any packages from the provided manifest' });
+        }
+        try {
+          return await scanSupplyChain(packages);
+        } catch (err: unknown) {
+          return reply
+            .status(500)
+            .send({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    );
 
     // GreyNoise classification for a single IP (useful for live threat feed)
     fastify.get<{ Params: { ip: string } }>('/risk/ip/:ip', async (request, reply) => {

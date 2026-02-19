@@ -22,6 +22,7 @@ import Policies from './pages/Policies';
 import Pricing from './pages/Pricing';
 import Register from './pages/Register';
 import Settings from './pages/Settings';
+import SupplyChain from './pages/SupplyChain';
 
 function AppRoutes() {
   useTokenRefresh();
@@ -100,6 +101,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <ApiKeys />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/supply-chain"
+        element={
+          <ProtectedRoute>
+            <SupplyChain />
           </ProtectedRoute>
         }
       />

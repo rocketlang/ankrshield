@@ -101,6 +101,18 @@ export {
 export type { BrandFinding, BrandMonitorResult } from './detectors/social-brand-monitor.js';
 
 // ---------------------------------------------------------------------------
+// Supply Chain Scanner (v0.8.0)
+// ---------------------------------------------------------------------------
+export { scanSupplyChain, parseManifest } from './detectors/supply-chain-scanner.js';
+export type {
+  SupplyChainEcosystem,
+  PackageCheck,
+  SupplyChainFinding,
+  PackageRisk,
+  SupplyChainReport,
+} from './detectors/supply-chain-scanner.js';
+
+// ---------------------------------------------------------------------------
 // Main engine
 // ---------------------------------------------------------------------------
 export { runRiskEngine } from './risk-engine.js';
