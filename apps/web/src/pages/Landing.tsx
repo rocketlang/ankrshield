@@ -391,12 +391,14 @@ export default function Landing() {
             >
               Sign in
             </Link>
-            <Link
-              to="/register"
-              className="text-sm font-semibold bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-1.5 rounded-lg transition-colors"
+            <a
+              href="https://github.com/rocketlang/ankrshield"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-semibold bg-emerald-500 hover:bg-emerald-400 text-black px-4 py-1.5 rounded-lg transition-colors"
             >
-              Start Free
-            </Link>
+              GitHub →
+            </a>
           </div>
         </div>
       </nav>
@@ -432,31 +434,32 @@ export default function Landing() {
             <span className="text-white">Enterprise Threat</span>
             <br />
             <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-300 bg-clip-text text-transparent">
-              Intelligence at
+              Intelligence.
             </span>
             <br />
-            <span className="bg-gradient-to-r from-cyan-300 to-emerald-400 bg-clip-text text-transparent">
-              $99 / month
+            <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+              Open Source.
             </span>
           </h1>
 
           <p className="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto mb-4 leading-relaxed">
-            Full Digital Risk Protection report in under 30 seconds. 17 parallel intelligence
-            sources. AI threat narrative. One-click remediation. No sales call, no contract.
+            Full Digital Risk Protection in under 30 seconds. 17 parallel intelligence sources. AI
+            threat narrative. Self-hosted free forever — or managed cloud from $199/month.
           </p>
           <p className="text-sm text-gray-500 mb-10">
-            Constella charges <span className="text-red-400 font-semibold">$415,000/year</span> for
-            the same intelligence. We charge{' '}
-            <span className="text-cyan-400 font-semibold">$99/month</span>.
+            Apache 2.0 · Audit every line of code · No black box · No vendor lock-in ·{' '}
+            <span className="text-emerald-400 font-semibold">Enterprise EE from $25K/year</span>
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-            <Link
-              to="/register"
-              className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-8 py-4 rounded-xl transition-colors shadow-lg shadow-cyan-500/20 text-base"
+            <a
+              href="https://github.com/rocketlang/ankrshield"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-8 py-4 rounded-xl transition-colors shadow-lg shadow-emerald-500/20 text-base"
             >
-              <span>🚀</span> Start Free — No Credit Card
-            </Link>
+              <span>⭐</span> Star on GitHub — Free Forever
+            </a>
             <a
               href={LIVE_URL}
               target="_blank"
@@ -2176,81 +2179,165 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* Open Source vs Closed Black Box comparison */}
-          <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden mb-8">
-            <div className="px-6 py-4 border-b border-white/10">
-              <p className="text-sm text-center text-gray-400">
-                <span className="text-white font-semibold">Open source vs black box</span> — why it
-                matters for enterprise security
-              </p>
+          {/* Feature comparison — 6 platforms */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden mb-6">
+            <div className="px-6 py-4 border-b border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <p className="text-sm font-semibold text-white">Feature comparison — 6 platforms</p>
+              <p className="text-xs text-gray-500">Based on public documentation · Q1 2026</p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-sm min-w-[720px]">
                 <thead>
                   <tr className="border-b border-white/[0.06]">
-                    <th className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-500">
+                    <th className="text-left px-5 py-3 text-xs font-bold uppercase tracking-wider text-gray-500 w-52">
                       Capability
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-emerald-400">
+                    <th className="px-3 py-3 text-center text-xs font-bold uppercase tracking-wider text-emerald-400">
                       xShield OSS
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-amber-400">
+                    <th className="px-3 py-3 text-center text-xs font-bold uppercase tracking-wider text-amber-400">
                       xShield EE
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-gray-500">
+                    <th className="px-3 py-3 text-center text-xs font-bold uppercase tracking-wider text-blue-400">
+                      Wazuh
+                    </th>
+                    <th className="px-3 py-3 text-center text-xs font-bold uppercase tracking-wider text-gray-400">
                       Resecurity
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-bold uppercase tracking-wider text-gray-500">
-                      Recorded Future
+                    <th className="px-3 py-3 text-center text-xs font-bold uppercase tracking-wider text-gray-400">
+                      Rec. Future
+                    </th>
+                    <th className="px-3 py-3 text-center text-xs font-bold uppercase tracking-wider text-gray-400">
+                      Darktrace
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.04]">
-                  {[
-                    ['Audit source code', '✓', '✓', '✗', '✗'],
-                    ['Self-host / air-gapped', '✓', '✓', '✗', '✗'],
-                    ['Data stays on your infra', '✓', '✓', '✗', '✗'],
-                    ['No vendor lock-in', '✓', '✓', '✗', '✗'],
-                    ['SSO / SAML', '—', '✓', '✓', '✓'],
-                    ['SIEM integrations', '—', '✓', '✓', '✓'],
-                    ['Compliance export (SOC2)', '—', '✓', '✓', '✓'],
-                    ['Dedicated CSM + SLA', '—', '✓', '✓', '✓'],
-                    ['Annual cost', 'FREE', '$25K+', '$15K–50K', '$60K–100K+'],
-                  ].map(([cap, oss, ee, res, rf]) => (
+                  {(
+                    [
+                      // [label, xShield OSS, xShield EE, Wazuh, Resecurity, Recorded Future, Darktrace]
+                      ['Open source / auditable', '✓', '✓', '✓', '✗', '✗', '✗'],
+                      ['Self-host / air-gapped', '✓', '✓', '✓', '✗', '✗', '~'],
+                      ['Data stays on your infra', '✓', '✓', '✓', '✗', '✗', '~'],
+                      ['No vendor lock-in', '✓', '✓', '✓', '✗', '✗', '✗'],
+                      ['BYO AI model (open key)', '✓', '✓', '✗', '✗', '✗', '✗'],
+                      ['Social threat detection', '✓', '✓', '✗', '✗', '✗', '✗'],
+                      ['QR / webhook / C2 detection', '✓', '✓', '✗', '✗', '✗', '✗'],
+                      ['SSO / SAML', '✗', '✓', '✓', '✓', '✓', '✓'],
+                      ['SIEM integrations', '✗', '✓', '✓', '✓', '✓', '✓'],
+                      ['Compliance export (SOC 2)', '✗', '✓', '✗', '✓', '✓', '✓'],
+                      ['Dedicated CSM + SLA', '✗', '✓', '✗', '✓', '✓', '✓'],
+                    ] as const
+                  ).map(([cap, oss, ee, wazuh, res, rf, dt]) => (
                     <tr key={cap} className="hover:bg-white/[0.02] transition-colors">
-                      <td className="px-5 py-3 text-gray-300 font-medium">{cap}</td>
-                      <td
-                        className={`px-4 py-3 text-center font-mono font-bold ${oss === '✓' ? 'text-emerald-400' : oss === '✗' ? 'text-red-500' : oss === 'FREE' ? 'text-emerald-400' : 'text-gray-500'}`}
-                      >
-                        {oss}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-center font-mono font-bold ${ee === '✓' ? 'text-amber-400' : ee === '✗' ? 'text-red-500' : ee.startsWith('$') ? 'text-amber-400' : 'text-gray-500'}`}
-                      >
-                        {ee}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-center font-mono text-xs ${res === '✓' ? 'text-gray-400' : res === '✗' ? 'text-red-600' : 'text-gray-500'}`}
-                      >
-                        {res}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-center font-mono text-xs ${rf === '✓' ? 'text-gray-400' : rf === '✗' ? 'text-red-600' : 'text-gray-500'}`}
-                      >
-                        {rf}
-                      </td>
+                      <td className="px-5 py-2.5 text-gray-300 font-medium text-xs">{cap}</td>
+                      {(
+                        [
+                          {
+                            val: oss,
+                            yes: 'text-emerald-400',
+                            no: 'text-red-500/60',
+                            part: 'text-yellow-500/70',
+                          },
+                          {
+                            val: ee,
+                            yes: 'text-amber-400',
+                            no: 'text-red-500/60',
+                            part: 'text-yellow-500/70',
+                          },
+                          {
+                            val: wazuh,
+                            yes: 'text-blue-400',
+                            no: 'text-red-500/50',
+                            part: 'text-yellow-500/60',
+                          },
+                          {
+                            val: res,
+                            yes: 'text-gray-400',
+                            no: 'text-red-600/50',
+                            part: 'text-yellow-600/50',
+                          },
+                          {
+                            val: rf,
+                            yes: 'text-gray-400',
+                            no: 'text-red-600/50',
+                            part: 'text-yellow-600/50',
+                          },
+                          {
+                            val: dt,
+                            yes: 'text-gray-400',
+                            no: 'text-red-600/50',
+                            part: 'text-yellow-600/50',
+                          },
+                        ] as const
+                      ).map(({ val, yes, no, part }, i) => (
+                        <td
+                          key={i}
+                          className={`px-3 py-2.5 text-center font-mono font-bold text-sm ${val === '✓' ? yes : val === '✗' ? no : val === '~' ? part : 'text-gray-600'}`}
+                        >
+                          {val}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            <div className="px-5 py-3 border-t border-white/[0.05] text-[10px] text-gray-600">
+              ~ = available in enterprise / on-prem tier only &nbsp;·&nbsp; ✗ = not publicly
+              available &nbsp;·&nbsp; Based on vendor public documentation
+            </div>
           </div>
 
-          {/* Bottom note */}
+          {/* Market Pricing Context — separate from feature table */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden mb-6">
+            <div className="px-6 py-4 border-b border-white/10">
+              <p className="text-sm text-center text-gray-400">
+                <span className="text-white font-semibold">Market pricing context</span> — price
+                signals the business model
+              </p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-y divide-white/[0.06]">
+              {[
+                { name: 'xShield OSS', price: 'FREE', sub: 'Apache 2.0 · forever', hl: 'emerald' },
+                { name: 'xShield EE', price: 'from $25K', sub: '/year · enterprise', hl: 'amber' },
+                { name: 'Wazuh', price: 'FREE / $2K+', sub: '/year · cloud managed', hl: null },
+                { name: 'Resecurity', price: '$15K–50K', sub: '/year · Vendr 2025', hl: null },
+                { name: 'Rec. Future', price: '$60K–100K+', sub: '/year · Vendr 2025', hl: null },
+                { name: 'Darktrace', price: '$30K–100K+', sub: '/year · Vendr 2025', hl: null },
+              ].map((c) => (
+                <div
+                  key={c.name}
+                  className={`px-4 py-5 text-center ${c.hl === 'emerald' ? 'bg-emerald-500/5' : c.hl === 'amber' ? 'bg-amber-500/5' : ''}`}
+                >
+                  <div
+                    className={`text-sm font-black font-mono ${c.hl === 'emerald' ? 'text-emerald-400' : c.hl === 'amber' ? 'text-amber-400' : 'text-gray-500'}`}
+                  >
+                    {c.price}
+                  </div>
+                  <div
+                    className={`text-xs font-semibold mt-1 ${c.hl ? 'text-white' : 'text-gray-400'}`}
+                  >
+                    {c.name}
+                  </div>
+                  <div className="text-[10px] text-gray-600 mt-0.5">{c.sub}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Disclaimer */}
           <p className="text-center text-xs text-gray-600">
-            Competitor pricing from Vendr 2025 · xShield Enterprise starting price. Final pricing
-            depends on deployment size and support tier.
-            <span className="text-gray-500"> Questions? </span>
+            Feature comparison based on public documentation as of Q1 2026. Pricing estimates from
+            Vendr 2025, G2 buyer reports, and vendor public pricing pages — enterprise deals vary
+            significantly by scope and negotiation.{' '}
+            <a
+              href="mailto:enterprise@xshieldai.com"
+              className="text-gray-500 hover:text-cyan-400 underline transition-colors"
+            >
+              Dispute a claim →
+            </a>
+            {' · '}
             <a
               href="mailto:enterprise@xshieldai.com"
               className="text-cyan-600 hover:text-cyan-400 transition-colors"
