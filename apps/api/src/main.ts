@@ -13,12 +13,14 @@ import {
   buildRemediationPlaybook,
 } from '@ankrshield/risk-intelligence';
 import { SpywareScanner } from '@ankrshield/spyware-detector';
+import fastifyCookie from '@fastify/cookie';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
 import Redis from 'ioredis';
 import mercurius from 'mercurius';
 
+import { hashPassword, comparePassword } from './auth/password.js';
 import { prisma } from './graphql/builder';
 import type { Context } from './graphql/builder';
 import { schema } from './graphql/schema';
@@ -84,6 +86,9 @@ const start = async () => {
 
     // Auth plugin (JWT)
     await fastify.register(authPlugin);
+
+    // Cookie plugin (for httpOnly refresh token)
+    await fastify.register(fastifyCookie);
 
     // ─── Swagger / OpenAPI docs ───────────────────────────────────────────────
     await fastify.register(fastifySwagger, {
@@ -1287,6 +1292,198 @@ Date: ${now.toLocaleDateString('en-IN')}`;
             .status(500)
             .send({ error: err instanceof Error ? err.message : String(err) });
         }
+      }
+    );
+
+    // ─── Auth REST endpoints ──────────────────────────────────────────────────
+    // Standalone register/login/refresh/logout — independent of GraphQL auth.
+    // Access token: JWT 24h (returned in body, stored client-side).
+    // Refresh token: 7-day random token stored in httpOnly cookie xsh_refresh.
+
+    const REFRESH_COOKIE = 'xsh_refresh';
+    const REFRESH_TTL_DAYS = 7;
+
+    const signJwt = (userId: string, email: string, tier: string): string =>
+      fastify.jwt.sign({ userId, email, tier });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const setCookieRefresh = (reply: any, refreshToken: string) => {
+      void reply.setCookie(REFRESH_COOKIE, refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: REFRESH_TTL_DAYS * 24 * 60 * 60,
+      });
+    };
+
+    // POST /auth/register
+    fastify.post<{ Body: { email: string; password: string; name?: string } }>(
+      '/auth/register',
+      {
+        schema: {
+          tags: ['auth'],
+          summary: 'Register a new user',
+          body: {
+            type: 'object',
+            required: ['email', 'password'],
+            properties: {
+              email: { type: 'string', format: 'email' },
+              password: { type: 'string', minLength: 8 },
+              name: { type: 'string' },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const { email, password, name } = request.body;
+
+        const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+        if (existing) return reply.status(409).send({ error: 'Email already registered' });
+
+        const hashed = await hashPassword(password);
+        const user = await prisma.user.create({
+          data: { email: email.toLowerCase(), password: hashed, name: name ?? null },
+        });
+
+        const token = signJwt(user.id, user.email, user.tier);
+        const refreshToken = randomBytes(64).toString('hex');
+        await prisma.session.create({
+          data: {
+            userId: user.id,
+            token,
+            refreshToken,
+            expiresAt: new Date(Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000),
+          },
+        });
+
+        setCookieRefresh(reply as Parameters<typeof setCookieRefresh>[0], refreshToken);
+
+        return reply.status(201).send({
+          token,
+          user: { id: user.id, email: user.email, name: user.name, tier: user.tier },
+        });
+      }
+    );
+
+    // POST /auth/login
+    fastify.post<{ Body: { email: string; password: string } }>(
+      '/auth/login',
+      {
+        schema: {
+          tags: ['auth'],
+          summary: 'Log in with email + password',
+          body: {
+            type: 'object',
+            required: ['email', 'password'],
+            properties: {
+              email: { type: 'string', format: 'email' },
+              password: { type: 'string' },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const { email, password } = request.body;
+
+        const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+        if (!user) return reply.status(401).send({ error: 'Invalid email or password' });
+
+        const valid = await comparePassword(password, user.password);
+        if (!valid) return reply.status(401).send({ error: 'Invalid email or password' });
+
+        const token = signJwt(user.id, user.email, user.tier);
+        const refreshToken = randomBytes(64).toString('hex');
+        await prisma.session.create({
+          data: {
+            userId: user.id,
+            token,
+            refreshToken,
+            expiresAt: new Date(Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000),
+          },
+        });
+
+        setCookieRefresh(reply as Parameters<typeof setCookieRefresh>[0], refreshToken);
+
+        return {
+          token,
+          user: { id: user.id, email: user.email, name: user.name, tier: user.tier },
+        };
+      }
+    );
+
+    // POST /auth/refresh — exchange httpOnly cookie for new access token
+    fastify.post(
+      '/auth/refresh',
+      { schema: { tags: ['auth'], summary: 'Refresh access token' } },
+      async (request, reply) => {
+        const refreshToken = (request.cookies as Record<string, string | undefined>)[
+          REFRESH_COOKIE
+        ];
+        if (!refreshToken) return reply.status(401).send({ error: 'No refresh token' });
+
+        const session = await prisma.session.findUnique({ where: { refreshToken } });
+        if (!session || session.expiresAt < new Date()) {
+          return reply.status(401).send({ error: 'Refresh token expired or invalid' });
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: session.userId } });
+        if (!user) return reply.status(401).send({ error: 'User not found' });
+
+        const token = signJwt(user.id, user.email, user.tier);
+        const newRefresh = randomBytes(64).toString('hex');
+
+        // Rotate: delete old session, create new one
+        await prisma.session.delete({ where: { refreshToken } });
+        await prisma.session.create({
+          data: {
+            userId: user.id,
+            token,
+            refreshToken: newRefresh,
+            expiresAt: new Date(Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000),
+          },
+        });
+
+        setCookieRefresh(reply as Parameters<typeof setCookieRefresh>[0], newRefresh);
+        return { token };
+      }
+    );
+
+    // POST /auth/logout
+    fastify.post(
+      '/auth/logout',
+      { schema: { tags: ['auth'], summary: 'Log out (clears cookie + session)' } },
+      async (request, reply) => {
+        const refreshToken = (request.cookies as Record<string, string | undefined>)[
+          REFRESH_COOKIE
+        ];
+        if (refreshToken) {
+          await prisma.session.deleteMany({ where: { refreshToken } });
+        }
+        void reply.clearCookie(REFRESH_COOKIE, { path: '/' });
+        return { ok: true };
+      }
+    );
+
+    // GET /auth/me — return current user from JWT
+    fastify.get(
+      '/auth/me',
+      { schema: { tags: ['auth'], summary: 'Get current user' } },
+      async (request, reply) => {
+        try {
+          await request.jwtVerify();
+        } catch {
+          return reply.status(401).send({ error: 'Unauthorized' });
+        }
+        const payload = request.user as { userId?: string };
+        if (!payload?.userId) return reply.status(401).send({ error: 'Unauthorized' });
+
+        const user = await prisma.user.findUnique({
+          where: { id: payload.userId },
+          select: { id: true, email: true, name: true, tier: true },
+        });
+        if (!user) return reply.status(404).send({ error: 'User not found' });
+        return user;
       }
     );
 

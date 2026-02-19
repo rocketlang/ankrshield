@@ -1,10 +1,8 @@
 /**
- * Register Page — wired to ANKR SSO (port 4260)
+ * Register Page — wired directly to xShield API (/auth/register)
  *
- * Flow: email + password → POST /auth/register → OTP sent to email
- *       user enters OTP  → POST /auth/otp/verify → JWT issued → dashboard
- *
- * Password field: live strength meter via POST /auth/password-strength (debounced 400ms)
+ * Password strength is computed locally (no round-trip).
+ * Registration returns a JWT immediately — no OTP step.
  */
 
 import { Shield } from 'lucide-react';
@@ -14,12 +12,62 @@ import { Link, useNavigate } from 'react-router-dom';
 import Alert from '../components/ui/Alert';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
-import { sso, type PasswordStrength } from '../lib/ssoClient';
+import { apiClient, type AuthUser } from '../lib/apiClient';
 import { useAuthStore } from '../stores/authStore';
 
-type Step = 'form' | 'verify';
+// ── Local password strength ───────────────────────────────────────────────────
 
-// Strength bar config indexed by score 0–4
+interface PasswordStrength {
+  score: number; // 0–4
+  label: string;
+  acceptable: boolean;
+  feedback: string[];
+  crackTime: string;
+}
+
+function calcPasswordStrength(pw: string): PasswordStrength {
+  if (!pw) {
+    return {
+      score: 0,
+      label: 'very_weak',
+      acceptable: false,
+      feedback: ['Password is required'],
+      crackTime: 'instant',
+    };
+  }
+
+  let score = 0;
+  const feedback: string[] = [];
+
+  if (pw.length >= 8) score++;
+  else feedback.push('Use at least 8 characters');
+
+  if (/[A-Z]/.test(pw)) score++;
+  else feedback.push('Add uppercase letters');
+
+  if (/[0-9]/.test(pw)) score++;
+  else feedback.push('Add numbers');
+
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  else feedback.push('Add special characters (!@#$…)');
+
+  // Bonus: longer passwords
+  if (pw.length >= 14) score = Math.min(score + 1, 4);
+
+  const labels = ['very_weak', 'weak', 'fair', 'strong', 'very_strong'];
+  const crackTimes = ['instant', 'minutes', 'hours', 'days', 'years+'];
+
+  return {
+    score,
+    label: labels[score],
+    acceptable: score >= 2,
+    feedback: feedback.length ? feedback : ['Strong password!'],
+    crackTime: crackTimes[score],
+  };
+}
+
+// ── Strength bar config ───────────────────────────────────────────────────────
+
 const STRENGTH_CONFIG = [
   { label: 'Very Weak', color: 'bg-red-500', textColor: 'text-red-400', bars: 1 },
   { label: 'Weak', color: 'bg-orange-500', textColor: 'text-orange-400', bars: 2 },
@@ -32,7 +80,6 @@ function PasswordStrengthMeter({ strength }: { strength: PasswordStrength }) {
   const cfg = STRENGTH_CONFIG[Math.min(strength.score, 4)];
   return (
     <div className="mt-2 space-y-1.5">
-      {/* 5-segment bar */}
       <div className="flex gap-1">
         {[0, 1, 2, 3, 4].map((i) => (
           <div
@@ -43,14 +90,10 @@ function PasswordStrengthMeter({ strength }: { strength: PasswordStrength }) {
           />
         ))}
       </div>
-
-      {/* Label + crack time */}
       <div className="flex items-center justify-between text-xs">
         <span className={`font-medium ${cfg.textColor}`}>{cfg.label}</span>
         <span className="text-gray-500">crack time: {strength.crackTime}</span>
       </div>
-
-      {/* Feedback */}
       {strength.feedback.length > 0 && strength.feedback[0] !== 'Strong password!' && (
         <ul className="space-y-0.5">
           {strength.feedback.map((f, i) => (
@@ -65,25 +108,22 @@ function PasswordStrengthMeter({ strength }: { strength: PasswordStrength }) {
   );
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function Register() {
-  const [step, setStep] = useState<Step>('form');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [otpCode, setOtpCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [devPreview, setDevPreview] = useState<string | null>(null);
-
-  // Password strength state
   const [strength, setStrength] = useState<PasswordStrength | null>(null);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const navigate = useNavigate();
-  const login = useAuthStore((state) => state.login);
+  const loginStore = useAuthStore((state) => state.login);
 
-  // Live password strength — debounced 400ms
+  // Live password strength — debounced 300ms
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!password) {
@@ -91,17 +131,26 @@ export default function Register() {
       return;
     }
 
-    debounceRef.current = setTimeout(async () => {
-      const result = await sso.passwordStrength(password);
-      setStrength(result);
-    }, 400);
+    debounceRef.current = setTimeout(() => {
+      setStrength(calcPasswordStrength(password));
+    }, 300);
 
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [password]);
 
-  // Step 1 — create account → SSO sends OTP to email
+  function storeAndGo(token: string, user: AuthUser) {
+    loginStore(token, {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      tier: user.tier,
+      role: user.role,
+    });
+    navigate('/dashboard');
+  }
+
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
@@ -123,47 +172,10 @@ export default function Register() {
 
     setLoading(true);
     try {
-      const res = await sso.register(email, password, name);
-      if (res.devOtpPreview) {
-        setDevPreview(res.devOtpPreview);
-        console.log('[dev] OTP preview:', res.devOtpPreview);
-      }
-      setStep('verify');
+      const { token, user } = await apiClient.register(email, password, name);
+      storeAndGo(token, user);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Registration failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Step 2 — verify email OTP → get JWT → go to dashboard
-  const handleVerify = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (!otpCode || otpCode.length !== 6) {
-      return setError('Enter the 6-digit code from your email');
-    }
-
-    setLoading(true);
-    try {
-      const tokens = await sso.verifyOtp(email, otpCode);
-
-      login(
-        tokens.accessToken,
-        {
-          id: tokens.user.id,
-          email: tokens.user.email,
-          name: tokens.user.name,
-          tier: tokens.user.role === 'admin' ? 'enterprise' : 'free',
-          role: tokens.user.role,
-        },
-        tokens.refreshToken
-      );
-
-      navigate('/dashboard');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed');
     } finally {
       setLoading(false);
     }
@@ -178,9 +190,7 @@ export default function Register() {
             <Shield className="w-12 h-12 text-blue-400" />
             <span className="text-3xl font-bold text-white">xShield</span>
           </div>
-          <p className="text-gray-400">
-            {step === 'form' ? 'Create your account' : 'Verify your email'}
-          </p>
+          <p className="text-gray-400">Create your account</p>
         </div>
 
         {/* Form card */}
@@ -191,147 +201,59 @@ export default function Register() {
             </Alert>
           )}
 
-          {/* Dev OTP preview */}
-          {devPreview && (
-            <div className="mb-4 p-3 bg-yellow-900/40 border border-yellow-700 rounded text-yellow-300 text-xs">
-              <span className="font-semibold">Dev mode:</span>{' '}
-              <a href={devPreview} target="_blank" rel="noreferrer" className="underline">
-                Preview OTP email
-              </a>
-            </div>
-          )}
+          <form onSubmit={handleRegister} className="space-y-6">
+            <Input
+              type="text"
+              label="Name"
+              placeholder="Jane Smith"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              autoComplete="name"
+            />
+            <Input
+              type="email"
+              label="Email"
+              placeholder="you@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
 
-          {step === 'form' ? (
-            <form onSubmit={handleRegister} className="space-y-6">
-              <Input
-                type="text"
-                label="Name"
-                placeholder="Jane Smith"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                autoComplete="name"
-              />
-              <Input
-                type="email"
-                label="Email"
-                placeholder="you@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-
-              {/* Password field + live strength meter */}
-              <div>
-                <Input
-                  type="password"
-                  label="Password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="new-password"
-                />
-                {strength && <PasswordStrengthMeter strength={strength} />}
-              </div>
-
+            {/* Password + live strength meter */}
+            <div>
               <Input
                 type="password"
-                label="Confirm Password"
+                label="Password"
                 placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="new-password"
               />
+              {strength && <PasswordStrengthMeter strength={strength} />}
+            </div>
 
-              <Button
-                type="submit"
-                fullWidth
-                isLoading={loading}
-                disabled={loading || (strength !== null && !strength.acceptable)}
-              >
-                Create Account
-              </Button>
+            <Input
+              type="password"
+              label="Confirm Password"
+              placeholder="••••••••"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              autoComplete="new-password"
+            />
 
-              {/* OAuth shortcuts */}
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-600" />
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-gray-800 text-gray-400">or sign up with</span>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <a
-                  href={sso.oauthUrl('google')}
-                  className="flex items-center justify-center gap-2 py-2 px-3 border border-gray-600 rounded-lg text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 48 48">
-                    <path
-                      fill="#EA4335"
-                      d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-                    />
-                    <path
-                      fill="#4285F4"
-                      d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"
-                    />
-                    <path
-                      fill="#FBBC05"
-                      d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"
-                    />
-                    <path
-                      fill="#34A853"
-                      d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-                    />
-                  </svg>
-                  Google
-                </a>
-                <a
-                  href={sso.oauthUrl('github')}
-                  className="flex items-center justify-center gap-2 py-2 px-3 border border-gray-600 rounded-lg text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
-                  </svg>
-                  GitHub
-                </a>
-              </div>
-            </form>
-          ) : (
-            /* Step 2 — OTP verification */
-            <form onSubmit={handleVerify} className="space-y-6">
-              <div className="text-center text-sm text-gray-400 mb-2">
-                A 6-digit code was sent to <span className="text-white font-medium">{email}</span>
-              </div>
-              <Input
-                type="text"
-                label="Verification Code"
-                placeholder="123456"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                required
-                autoComplete="one-time-code"
-                inputMode="numeric"
-              />
-              <Button type="submit" fullWidth isLoading={loading}>
-                Verify & Enter Dashboard
-              </Button>
-              <button
-                type="button"
-                onClick={() => {
-                  setStep('form');
-                  setError('');
-                  setOtpCode('');
-                }}
-                className="w-full text-sm text-gray-500 hover:text-gray-300 transition-colors"
-              >
-                ← Back to registration
-              </button>
-            </form>
-          )}
+            <Button
+              type="submit"
+              fullWidth
+              isLoading={loading}
+              disabled={loading || (strength !== null && !strength.acceptable)}
+            >
+              Create Account
+            </Button>
+          </form>
 
           <div className="mt-6 text-center">
             <p className="text-gray-400">

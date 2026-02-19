@@ -5,6 +5,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 import ProtectedRoute from './components/ProtectedRoute';
+import { useTokenRefresh } from './hooks/useTokenRefresh';
 // Pages
 import Analytics from './pages/Analytics';
 import ApiKeys from './pages/ApiKeys';
@@ -20,79 +21,86 @@ import Pricing from './pages/Pricing';
 import Register from './pages/Register';
 import Settings from './pages/Settings';
 
+function AppRoutes() {
+  useTokenRefresh();
+  return (
+    <Routes>
+      {/* Public Routes */}
+      <Route path="/" element={<Landing />} />
+      <Route path="/live" element={<LiveThreats />} />
+      <Route path="/evidence" element={<EvidenceReport />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/pricing" element={<Pricing />} />
+
+      {/* Protected Routes */}
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/devices"
+        element={
+          <ProtectedRoute>
+            <Devices />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/analytics"
+        element={
+          <ProtectedRoute>
+            <Analytics />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/policies"
+        element={
+          <ProtectedRoute>
+            <Policies />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <Settings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/command-center"
+        element={
+          <ProtectedRoute>
+            <CommandCenter />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/api-keys"
+        element={
+          <ProtectedRoute>
+            <ApiKeys />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* 404 Not Found */}
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<Landing />} />
-        <Route path="/live" element={<LiveThreats />} />
-        <Route path="/evidence" element={<EvidenceReport />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/pricing" element={<Pricing />} />
-
-        {/* Protected Routes */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/devices"
-          element={
-            <ProtectedRoute>
-              <Devices />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/analytics"
-          element={
-            <ProtectedRoute>
-              <Analytics />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/policies"
-          element={
-            <ProtectedRoute>
-              <Policies />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <ProtectedRoute>
-              <Settings />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/command-center"
-          element={
-            <ProtectedRoute>
-              <CommandCenter />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/api-keys"
-          element={
-            <ProtectedRoute>
-              <ApiKeys />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* 404 Not Found */}
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <AppRoutes />
     </BrowserRouter>
   );
 }

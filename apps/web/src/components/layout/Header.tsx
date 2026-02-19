@@ -5,6 +5,8 @@
 
 import { Shield, User, LogOut, Settings } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+
+import { apiClient } from '../../lib/apiClient';
 import { useAuthStore, useUser } from '../../stores/authStore';
 
 export default function Header() {
@@ -12,7 +14,8 @@ export default function Header() {
   const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await apiClient.logout(); // revoke server-side session + clear cookie
     logout();
     navigate('/login');
   };
@@ -33,9 +36,7 @@ export default function Header() {
               <div className="flex items-center space-x-2 text-gray-300">
                 <User className="w-5 h-5" />
                 <span>{user.name || user.email}</span>
-                <span className="text-xs bg-blue-600 px-2 py-1 rounded">
-                  {user.tier}
-                </span>
+                <span className="text-xs bg-blue-600 px-2 py-1 rounded">{user.tier}</span>
               </div>
 
               <Link
