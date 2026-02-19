@@ -1912,6 +1912,225 @@ Date: ${now.toLocaleDateString('en-IN')}`;
       }
     });
 
+    // ─── Session / Room System ─────────────────────────────────────────────────
+    // In-memory store — survives as long as the process is running.
+    // Each session holds: code, devices[], events ring-buffer, SSE clients[].
+
+    interface SessionDevice {
+      deviceId: string;
+      name: string; // "Device-A4B2" (anonymised)
+      joinedAt: number;
+    }
+
+    interface SessionEvent {
+      id: string;
+      ts: number;
+      deviceId: string;
+      deviceName: string;
+      tracker: string;
+      company: string;
+      category: string;
+      dataType: string;
+      blocked: boolean;
+      bytes: number;
+    }
+
+    interface Session {
+      code: string;
+      label: string;
+      createdAt: number;
+      devices: Map<string, SessionDevice>;
+      events: SessionEvent[]; // ring-buffer, capped at 500
+      sseClients: Set<NodeJS.Timeout>; // we'll use reply objects below
+    }
+
+    // SSE reply set per session
+    const sessionSseClients = new Map<string, Set<{ raw: import('http').ServerResponse }>>();
+    const sessions = new Map<string, Session>();
+
+    const makeCode = (): string => Math.random().toString(36).slice(2, 8).toUpperCase();
+
+    const broadcastSse = (code: string, data: unknown) => {
+      const clients = sessionSseClients.get(code);
+      if (!clients) return;
+      const payload = `data: ${JSON.stringify(data)}\n\n`;
+      for (const c of clients) {
+        try {
+          c.raw.write(payload);
+        } catch {
+          /* client gone */
+        }
+      }
+    };
+
+    // POST /session/create
+    fastify.post<{ Body: { label?: string } }>('/session/create', async (request, reply) => {
+      const code = makeCode();
+      sessions.set(code, {
+        code,
+        label: request.body?.label ?? `Room ${code}`,
+        createdAt: Date.now(),
+        devices: new Map(),
+        events: [],
+        sseClients: new Set(),
+      });
+      sessionSseClients.set(code, new Set());
+      return reply.send({
+        code,
+        label: sessions.get(code)!.label,
+        joinUrl: `/live?room=${code}`,
+        qrData: `https://xshieldai.com/live?room=${code}`,
+        createdAt: new Date().toISOString(),
+      });
+    });
+
+    // POST /session/:code/join
+    fastify.post<{ Params: { code: string }; Body: { deviceAlias?: string } }>(
+      '/session/:code/join',
+      async (request, reply) => {
+        const { code } = request.params;
+        const session = sessions.get(code.toUpperCase());
+        if (!session) return reply.status(404).send({ error: 'Room not found' });
+        const deviceId = Math.random().toString(36).slice(2, 8).toUpperCase();
+        const name = request.body?.deviceAlias ?? `Device-${deviceId}`;
+        session.devices.set(deviceId, { deviceId, name, joinedAt: Date.now() });
+        broadcastSse(code.toUpperCase(), {
+          type: 'device_joined',
+          deviceId,
+          name,
+          totalDevices: session.devices.size,
+        });
+        return reply.send({ deviceId, name, code: code.toUpperCase() });
+      }
+    );
+
+    // POST /session/:code/event  — device reports a tracker hit
+    fastify.post<{
+      Params: { code: string };
+      Body: {
+        deviceId: string;
+        tracker: string;
+        company: string;
+        category: string;
+        dataType: string;
+        blocked: boolean;
+        bytes?: number;
+      };
+    }>('/session/:code/event', async (request, reply) => {
+      const { code } = request.params;
+      const session = sessions.get(code.toUpperCase());
+      if (!session) return reply.status(404).send({ error: 'Room not found' });
+      const device = session.devices.get(request.body.deviceId);
+      const ev: SessionEvent = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        ts: Date.now(),
+        deviceId: request.body.deviceId,
+        deviceName: device?.name ?? `Device-${request.body.deviceId}`,
+        tracker: request.body.tracker,
+        company: request.body.company,
+        category: request.body.category,
+        dataType: request.body.dataType,
+        blocked: request.body.blocked,
+        bytes: request.body.bytes ?? 5000,
+      };
+      session.events.push(ev);
+      if (session.events.length > 500) session.events.shift();
+      broadcastSse(code.toUpperCase(), { type: 'tracker_event', event: ev });
+      return reply.send({ ok: true });
+    });
+
+    // GET /session/:code/stats
+    fastify.get<{ Params: { code: string } }>('/session/:code/stats', async (request, reply) => {
+      const { code } = request.params;
+      const session = sessions.get(code.toUpperCase());
+      if (!session) return reply.status(404).send({ error: 'Room not found' });
+      const evs = session.events;
+      const blocked = evs.filter((e) => e.blocked).length;
+      const companies = new Set(evs.map((e) => e.company));
+      const byTracker: Record<string, number> = {};
+      for (const e of evs) byTracker[e.tracker] = (byTracker[e.tracker] ?? 0) + 1;
+      const topTrackers = Object.entries(byTracker)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([tracker, count]) => ({ tracker, count }));
+      return reply.send({
+        code: session.code,
+        label: session.label,
+        devices: Array.from(session.devices.values()),
+        totalDevices: session.devices.size,
+        totalEvents: evs.length,
+        totalBlocked: blocked,
+        blockedPct: evs.length > 0 ? Math.round((blocked / evs.length) * 100) : 0,
+        uniqueCompanies: companies.size,
+        topTrackers,
+        totalBytes: evs.reduce((s, e) => s + e.bytes, 0),
+        createdAt: new Date(session.createdAt).toISOString(),
+      });
+    });
+
+    // GET /session/:code/stream  — SSE stream for live room updates
+    fastify.get<{ Params: { code: string } }>('/session/:code/stream', async (request, reply) => {
+      const { code } = request.params;
+      const session = sessions.get(code.toUpperCase());
+      if (!session) return reply.status(404).send({ error: 'Room not found' });
+
+      const raw = reply.raw;
+      raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+      });
+
+      // Send recent events as catch-up
+      const catchUp = session.events.slice(-50);
+      raw.write(
+        `data: ${JSON.stringify({
+          type: 'catchup',
+          events: catchUp,
+          stats: {
+            totalDevices: session.devices.size,
+            totalEvents: session.events.length,
+            totalBlocked: session.events.filter((e) => e.blocked).length,
+          },
+        })}\n\n`
+      );
+
+      const client = { raw };
+      const clients = sessionSseClients.get(code.toUpperCase())!;
+      clients.add(client);
+
+      // Heartbeat every 15s
+      const heartbeat = setInterval(() => {
+        try {
+          raw.write(': ping\n\n');
+        } catch {
+          clearInterval(heartbeat);
+        }
+      }, 15000);
+
+      request.socket.on('close', () => {
+        clearInterval(heartbeat);
+        clients.delete(client);
+      });
+
+      return reply;
+    });
+
+    // GET /session/list  — debug: list active sessions
+    fastify.get('/session/list', async (_request, reply) => {
+      const list = Array.from(sessions.values()).map((s) => ({
+        code: s.code,
+        label: s.label,
+        devices: s.devices.size,
+        events: s.events.length,
+        createdAt: new Date(s.createdAt).toISOString(),
+      }));
+      return reply.send({ sessions: list });
+    });
+
+    // ─── End Session System ────────────────────────────────────────────────────
+
     // Start server
     const port = parseInt(process.env.PORT || '4250', 10);
     const host = process.env.HOST || '0.0.0.0';
