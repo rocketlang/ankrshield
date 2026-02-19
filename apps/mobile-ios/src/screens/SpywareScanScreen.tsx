@@ -12,6 +12,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
+import { API_BASE } from '../config';
+
 interface SpywareIndicator {
   family: string;
   type: string;
@@ -31,7 +33,7 @@ interface ScanResult {
   scanDurationMs: number;
 }
 
-const API_URL = process.env.ANKRSHIELD_API_URL?.replace('/graphql', '') || 'http://localhost:4250';
+// API_BASE imported from config — points to https://xshieldai.com/api
 
 const FAMILY_COLORS: Record<string, string> = {
   pegasus: '#f44336',
@@ -59,12 +61,19 @@ function IndicatorCard({ indicator }: { indicator: SpywareIndicator }) {
           </Text>
         </View>
         <View style={styles.confidenceBar}>
-          <View style={[styles.confidenceFill, { width: `${indicator.confidence}%` as any, backgroundColor: familyColor }]} />
+          <View
+            style={[
+              styles.confidenceFill,
+              { width: `${indicator.confidence}%` as any, backgroundColor: familyColor },
+            ]}
+          />
         </View>
         <Text style={[styles.confidenceNum, { color: familyColor }]}>{indicator.confidence}%</Text>
       </View>
       <Text style={styles.indicatorType}>{indicator.type.replace(/_/g, ' ')}</Text>
-      <Text style={styles.indicatorValue} numberOfLines={1}>{indicator.value}</Text>
+      <Text style={styles.indicatorValue} numberOfLines={1}>
+        {indicator.value}
+      </Text>
       <Text style={styles.indicatorDesc}>{indicator.description}</Text>
     </View>
   );
@@ -73,21 +82,26 @@ function IndicatorCard({ indicator }: { indicator: SpywareIndicator }) {
 export function SpywareScanScreen() {
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [_error, setError] = useState<string | null>(null);
 
   const runScan = async () => {
     setScanning(true);
     setError(null);
     setResult(null);
     try {
-      const res = await fetch(`${API_URL}/warrior/spyware-scan`, {
+      const res = await fetch(`${API_BASE}/warrior/spyware-scan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enableNetworkScan: true, enableProcessScan: true, enableFileScan: true }),
+        body: JSON.stringify({
+          enableNetworkScan: true,
+          enableProcessScan: true,
+          enableFileScan: true,
+        }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setResult(await res.json());
-    } catch (e: any) {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Scan failed');
       // Fallback: mock result for demo if API not yet wired
       setResult({
         scannedAt: new Date().toISOString(),
@@ -104,7 +118,9 @@ export function SpywareScanScreen() {
     }
   };
 
-  const severityColor = result?.severity ? SEVERITY_COLORS[result.severity] ?? '#607D8B' : '#4CAF50';
+  const severityColor = result?.severity
+    ? (SEVERITY_COLORS[result.severity] ?? '#607D8B')
+    : '#4CAF50';
 
   return (
     <ScrollView style={styles.container}>
@@ -113,7 +129,8 @@ export function SpywareScanScreen() {
         <Text style={styles.heroIcon}>{result?.isClean === false ? '⚠️' : '🔬'}</Text>
         <Text style={styles.heroTitle}>Spyware Detection</Text>
         <Text style={styles.heroSub}>
-          Detects Pegasus, Candiru, Predator, FinFisher & Hermit using behavioral IOCs, process scanning, and network indicators.
+          Detects Pegasus, Candiru, Predator, FinFisher & Hermit using behavioral IOCs, process
+          scanning, and network indicators.
         </Text>
       </View>
 
@@ -124,10 +141,11 @@ export function SpywareScanScreen() {
           onPress={runScan}
           disabled={scanning}
         >
-          {scanning
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.scanBtnText}>Run Full Scan</Text>
-          }
+          {scanning ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.scanBtnText}>Run Full Scan</Text>
+          )}
         </TouchableOpacity>
         {scanning && (
           <Text style={styles.scanningHint}>Checking processes, files, and network IOCs...</Text>
@@ -138,7 +156,12 @@ export function SpywareScanScreen() {
       {result && (
         <View style={styles.resultSection}>
           {/* Status Banner */}
-          <View style={[styles.statusBanner, { backgroundColor: result.isClean ? '#0d2a0d' : '#2a0d0d' }]}>
+          <View
+            style={[
+              styles.statusBanner,
+              { backgroundColor: result.isClean ? '#0d2a0d' : '#2a0d0d' },
+            ]}
+          >
             <Text style={styles.statusIcon}>{result.isClean ? '✅' : '🚨'}</Text>
             <View>
               <Text style={[styles.statusTitle, { color: result.isClean ? '#4CAF50' : '#f44336' }]}>
@@ -150,7 +173,8 @@ export function SpywareScanScreen() {
                 </Text>
               )}
               <Text style={styles.scanMeta}>
-                Scan completed in {result.scanDurationMs}ms · {new Date(result.scannedAt).toLocaleTimeString()}
+                Scan completed in {result.scanDurationMs}ms ·{' '}
+                {new Date(result.scannedAt).toLocaleTimeString()}
               </Text>
             </View>
           </View>
@@ -161,7 +185,10 @@ export function SpywareScanScreen() {
               <Text style={styles.sectionTitle}>Detected Families</Text>
               <View style={styles.familyList}>
                 {result.families.map((f) => (
-                  <View key={f} style={[styles.familyChip, { borderColor: FAMILY_COLORS[f] ?? '#607D8B' }]}>
+                  <View
+                    key={f}
+                    style={[styles.familyChip, { borderColor: FAMILY_COLORS[f] ?? '#607D8B' }]}
+                  >
                     <Text style={[styles.familyChipText, { color: FAMILY_COLORS[f] ?? '#607D8B' }]}>
                       {f.toUpperCase()}
                     </Text>
@@ -200,9 +227,9 @@ export function SpywareScanScreen() {
       <View style={styles.infoBox}>
         <Text style={styles.infoTitle}>About This Scan</Text>
         <Text style={styles.infoText}>
-          IOCs sourced from Amnesty International MVT, Citizen Lab, Lookout Security, and Google TAG research.
-          This scan checks network connections, running processes, and known file artifacts.
-          It does NOT require a jailbroken device.
+          IOCs sourced from Amnesty International MVT, Citizen Lab, Lookout Security, and Google TAG
+          research. This scan checks network connections, running processes, and known file
+          artifacts. It does NOT require a jailbroken device.
         </Text>
       </View>
     </ScrollView>
@@ -241,7 +268,13 @@ const styles = StyleSheet.create({
   severityLabel: { fontSize: 13, marginTop: 2 },
   scanMeta: { color: '#666', fontSize: 11, marginTop: 4 },
   section: { marginBottom: 20 },
-  sectionTitle: { color: '#666', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 },
+  sectionTitle: {
+    color: '#666',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
   familyList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   familyChip: { borderWidth: 1, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4 },
   familyChipText: { fontSize: 12, fontWeight: '700' },
@@ -263,7 +296,13 @@ const styles = StyleSheet.create({
   },
   confidenceFill: { height: 4, borderRadius: 2 },
   confidenceNum: { fontSize: 12, fontWeight: '600', width: 36, textAlign: 'right' },
-  indicatorType: { color: '#aaa', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 },
+  indicatorType: {
+    color: '#aaa',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
   indicatorValue: { color: '#fff', fontSize: 13, fontWeight: '500', marginBottom: 4 },
   indicatorDesc: { color: '#666', fontSize: 12 },
   recRow: { flexDirection: 'row', marginBottom: 8, gap: 10 },
@@ -277,6 +316,12 @@ const styles = StyleSheet.create({
   },
   recText: { color: '#ccc', fontSize: 13, flex: 1, lineHeight: 19 },
   infoBox: { margin: 16, padding: 14, backgroundColor: '#111', borderRadius: 10, marginBottom: 40 },
-  infoTitle: { color: '#666', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+  infoTitle: {
+    color: '#666',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
   infoText: { color: '#555', fontSize: 12, lineHeight: 18 },
 });

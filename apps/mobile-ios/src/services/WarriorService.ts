@@ -1,16 +1,15 @@
 /**
  * Warrior Service — GraphQL client for AI Warrior data
  */
-
-const API_URL = process.env.ANKRSHIELD_API_URL || 'http://localhost:4250/graphql';
+import { GRAPHQL_URL } from '../config';
 
 async function gql(query: string, variables?: Record<string, unknown>) {
-  const res = await fetch(API_URL, {
+  const res = await fetch(GRAPHQL_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ query, variables }),
   });
-  const json = await res.json();
+  const json = (await res.json()) as { data?: unknown; errors?: Array<{ message: string }> };
   if (json.errors?.length) throw new Error(json.errors[0].message);
   return json.data;
 }
@@ -76,19 +75,22 @@ export class WarriorService {
         }
       }
     `);
-    return data.warriorStatus;
+    return (data as { warriorStatus: WarriorStatus }).warriorStatus;
   }
 
   async getAttackChains(limit = 20): Promise<AttackChain[]> {
-    const data = await gql(`
+    const data = await gql(
+      `
       query($limit: Int) {
         attackChains(limit: $limit) {
           id detectedAt attackType threatScore narrative
           affectedAssets suggestedActions autoActionsApplied
         }
       }
-    `, { limit });
-    return data.attackChains;
+    `,
+      { limit }
+    );
+    return (data as { attackChains: AttackChain[] }).attackChains;
   }
 
   async getQuarantinedAgents(): Promise<QuarantinedAgent[]> {
@@ -99,18 +101,21 @@ export class WarriorService {
         }
       }
     `);
-    return data.quarantinedAgents;
+    return (data as { quarantinedAgents: QuarantinedAgent[] }).quarantinedAgents;
   }
 
   async getScopeViolations(limit = 50): Promise<ScopeViolation[]> {
-    const data = await gql(`
+    const data = await gql(
+      `
       query($limit: Int) {
         scopeViolations(limit: $limit) {
           agentId agentName violationType action resource reason timestamp
         }
       }
-    `, { limit });
-    return data.scopeViolations;
+    `,
+      { limit }
+    );
+    return (data as { scopeViolations: ScopeViolation[] }).scopeViolations;
   }
 
   async getHoneypots(): Promise<HoneypotAsset[]> {
@@ -121,21 +126,24 @@ export class WarriorService {
         }
       }
     `);
-    return data.honeypotAssets;
+    return (data as { honeypotAssets: HoneypotAsset[] }).honeypotAssets;
   }
 
   async releaseAgent(agentId: string): Promise<boolean> {
-    const data = await gql(`
+    const data = await gql(
+      `
       mutation($agentId: String!) {
         releaseAgent(agentId: $agentId)
       }
-    `, { agentId });
-    return data.releaseAgent;
+    `,
+      { agentId }
+    );
+    return (data as { releaseAgent: boolean }).releaseAgent;
   }
 
   async deployHoneypots(): Promise<boolean> {
     const data = await gql(`mutation { deployDefaultHoneypots }`);
-    return data.deployDefaultHoneypots;
+    return (data as { deployDefaultHoneypots: boolean }).deployDefaultHoneypots;
   }
 
   formatUptime(ms: number): string {
@@ -150,9 +158,9 @@ export class WarriorService {
   }
 
   threatColor(score: number): string {
-    if (score >= 85) return '#f44336'; // red
-    if (score >= 65) return '#FF9800'; // orange
-    if (score >= 45) return '#FFC107'; // amber
-    return '#4CAF50';                  // green
+    if (score >= 85) return '#f44336';
+    if (score >= 65) return '#FF9800';
+    if (score >= 45) return '#FFC107';
+    return '#4CAF50';
   }
 }

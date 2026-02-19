@@ -17,8 +17,61 @@ import {
   StatusBar,
 } from 'react-native';
 
-const API_URL = process.env.ANKRSHIELD_API_URL ?? 'http://localhost:4250';
+import { API_BASE } from '../config';
+
 const POLL_INTERVAL = 5000; // 5 seconds
+
+// ─── API response shape from GET /warrior/threats/live ───────────────────────
+interface ServerLiveResponse {
+  ok: boolean;
+  timestamp: string;
+  server: {
+    uptimeSeconds: number;
+    platform: string;
+    hostname: string;
+    loadAvg1m: number;
+    memUsedMb: number;
+    memTotalMb: number;
+  };
+  warrior: {
+    running: boolean;
+    overallThreatScore: number;
+    attackChainsTotal: number;
+    activeQuarantines: number;
+    recentChains: Array<{ id: string; type: string; score: number; startTime: string }>;
+    quarantinedAgents: Array<{ agentId: string; agentName: string }>;
+  };
+}
+
+function scoreToLevel(score: number): LiveThreatData['threatLevel'] {
+  if (score < 20) return 'safe';
+  if (score < 40) return 'low';
+  if (score < 60) return 'medium';
+  if (score < 80) return 'high';
+  return 'critical';
+}
+
+function transformResponse(raw: ServerLiveResponse): LiveThreatData {
+  const score = raw.warrior.overallThreatScore;
+  return {
+    timestamp: raw.timestamp,
+    overallThreatScore: score,
+    threatLevel: scoreToLevel(score),
+    serverPlatform: `${raw.server.platform} (${raw.server.hostname})`,
+    uptime: raw.server.uptimeSeconds,
+    activeThreats: {
+      attackChains: raw.warrior.attackChainsTotal,
+      quarantinedAgents: raw.warrior.activeQuarantines,
+      honeypotTriggers: 0, // fetched separately by Command Center
+      scopeViolations: 0, // fetched separately by Command Center
+    },
+    lastSpywareScan: null,
+    recentEvents: raw.warrior.recentChains.map((c) => ({
+      type: c.type ?? 'threat-detected',
+      at: c.startTime,
+    })),
+  };
+}
 
 interface LiveThreatData {
   timestamp: string;
@@ -76,9 +129,10 @@ export function LiveThreatsScreen() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/warrior/threats/live`);
+      const res = await fetch(`${API_BASE}/warrior/threats/live`);
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      const json = (await res.json()) as LiveThreatData;
+      const raw = (await res.json()) as ServerLiveResponse;
+      const json = transformResponse(raw);
       setData(json);
       setError(null);
       setLastUpdated(new Date());
