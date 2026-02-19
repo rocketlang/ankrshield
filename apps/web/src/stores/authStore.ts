@@ -10,20 +10,22 @@ export interface User {
   id: string;
   email: string;
   name: string | null;
-  tier: string;
+  tier: string; // mapped from SSO role
+  role?: string; // raw SSO role
 }
 
 interface AuthState {
   // State
   user: User | null;
   token: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 
   // Actions
   setUser: (user: User) => void;
   setToken: (token: string) => void;
-  login: (token: string, user: User) => void;
+  login: (token: string, user: User, refreshToken?: string) => void;
   logout: () => void;
   setLoading: (loading: boolean) => void;
 }
@@ -34,6 +36,7 @@ export const useAuthStore = create<AuthState>()(
       // Initial state
       user: null,
       token: null,
+      refreshToken: null,
       isAuthenticated: false,
       isLoading: false,
 
@@ -49,13 +52,16 @@ export const useAuthStore = create<AuthState>()(
           token,
         }),
 
-      login: (token, user) => {
+      login: (token, user, refreshToken) => {
         // Store token in localStorage for Apollo Client
         localStorage.setItem('ankrshield_token', token);
+        localStorage.setItem('ankr_access_token', token); // SSO-compatible key
         localStorage.setItem('ankrshield_user', JSON.stringify(user));
+        if (refreshToken) localStorage.setItem('ankr_refresh_token', refreshToken);
 
         set({
           token,
+          refreshToken: refreshToken ?? null,
           user,
           isAuthenticated: true,
           isLoading: false,
@@ -65,11 +71,14 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         // Clear localStorage
         localStorage.removeItem('ankrshield_token');
+        localStorage.removeItem('ankr_access_token');
+        localStorage.removeItem('ankr_refresh_token');
         localStorage.removeItem('ankrshield_user');
 
         set({
           user: null,
           token: null,
+          refreshToken: null,
           isAuthenticated: false,
           isLoading: false,
         });
@@ -85,6 +94,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         user: state.user,
         token: state.token,
+        refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
     }
