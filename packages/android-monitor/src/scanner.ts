@@ -213,6 +213,11 @@ export class AndroidMonitor {
    */
   private evaluateApp(app: AppPermissions): SuspiciousApp | null {
     const knownMalicious = KNOWN_STALKERWARE_PACKAGES.has(app.packageName);
+
+    // System apps are pre-installed by the OEM/Google and can't be removed
+    // by a user anyway — skip unless they match a known IOC.
+    if (app.isSystemApp && !knownMalicious) return null;
+
     const analysis = analyzePermissions(app, knownMalicious);
 
     // Only surface apps with at least 'suspicious' risk

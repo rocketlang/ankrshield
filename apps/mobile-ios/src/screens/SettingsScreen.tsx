@@ -113,7 +113,7 @@ export function SettingsScreen() {
 
         <TouchableOpacity style={styles.settingRow}>
           <Text style={styles.settingLabel}>Version</Text>
-          <Text style={styles.settingValue}>1.2.1</Text>
+          <Text style={styles.settingValue}>1.2.2</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

@@ -252,6 +252,11 @@ function findTriggeredCombos(appPerms: readonly string[]): HighRiskCombo[] {
 /**
  * Map a confidence score (0–100) and a count of dangerous permissions
  * to a SpyRiskLevel bucket.
+ *
+ * Thresholds are calibrated against real-device scans:
+ *   - Many legitimate apps (WhatsApp, Chrome, Gmail) hold 3–6 dangerous perms
+ *   - Only a combination of permissions + sideload source should raise 'suspicious'
+ *   - System apps are excluded upstream before this function is reached
  */
 function deriveRiskLevel(
   confidence: number,
@@ -259,9 +264,9 @@ function deriveRiskLevel(
   knownMalicious: boolean
 ): SpyRiskLevel {
   if (knownMalicious) return 'critical';
-  if (confidence >= 80 || dangerousPermCount >= 8) return 'critical';
-  if (confidence >= 60 || dangerousPermCount >= 5) return 'high';
-  if (confidence >= 30 || dangerousPermCount >= 3) return 'suspicious';
+  if (confidence >= 85 || dangerousPermCount >= 12) return 'critical';
+  if (confidence >= 65 || dangerousPermCount >= 9) return 'high';
+  if (confidence >= 48 || dangerousPermCount >= 7) return 'suspicious';
   return 'clean';
 }
 
@@ -292,27 +297,26 @@ export function analyzePermissions(
     reasons.push(combo.reason);
   }
 
-  // If no combo was triggered but the app holds 3+ dangerous permissions,
-  // flag it generically as a data_harvester
-  if (triggeredCombos.length === 0 && dangerousPerms.length >= 3) {
+  // If no combo was triggered but the app holds 8+ dangerous permissions,
+  // flag it generically as a data_harvester (raised from 3 — many legitimate
+  // apps such as WhatsApp, Chrome, Maps hold 4–6 dangerous permissions).
+  if (triggeredCombos.length === 0 && dangerousPerms.length >= 8) {
     categorySet.add('data_harvester');
     reasons.push(
-      `Holds ${dangerousPerms.length} sensitive permissions (${dangerousPerms.slice(0, 4).join(', ')}${dangerousPerms.length > 4 ? '…' : ''}) with no matching legitimate-app profile`
+      `Holds ${dangerousPerms.length} sensitive permissions (${dangerousPerms.slice(0, 4).join(', ')}…) with an unusually broad permission scope`
     );
   }
 
-  // Unknown install source boosts suspicion
+  // Sideloaded apps get an extra reason — but only if already flagged by combos,
+  // and only for explicit non-Play-Store sources (adb, file_manager, other).
+  // 'unknown' is treated as neutral (covers system apps and migrated installs).
   if (
-    app.installSource !== 'play_store' &&
-    app.installSource !== 'unknown' &&
+    triggeredCombos.length > 0 &&
+    (app.installSource === 'adb' || app.installSource === 'file_manager') &&
     dangerousPerms.length >= 2
   ) {
     reasons.push(
-      `App was sideloaded via "${app.installSource}" — not from Play Store, which bypasses Google Play Protect vetting`
-    );
-  } else if (app.installSource === 'unknown' && dangerousPerms.length >= 2) {
-    reasons.push(
-      'App has no identifiable install source (unknown) — may have been installed by another app covertly'
+      `App was sideloaded (${app.installSource}) — not from Play Store, which bypasses Google Play Protect vetting`
     );
   }
 
@@ -327,11 +331,13 @@ export function analyzePermissions(
     confidence = Math.min(50, dangerousPerms.length * 8);
   }
 
-  // Install source penalty
-  if (app.installSource === 'adb' || app.installSource === 'file_manager') {
+  // Sideload penalty — only for explicit non-Play-Store sources, and only
+  // when combos already fired (avoids false positives on system/migrated apps).
+  if (
+    triggeredCombos.length > 0 &&
+    (app.installSource === 'adb' || app.installSource === 'file_manager')
+  ) {
     confidence = Math.min(100, confidence + 15);
-  } else if (app.installSource === 'unknown') {
-    confidence = Math.min(100, confidence + 8);
   }
 
   // Known malicious instantly maximises confidence
