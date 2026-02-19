@@ -286,68 +286,71 @@ export function analyzePermissions(
   knownMalicious = false
 ): PermissionAnalysisResult {
   const dangerousPerms = findDangerousPermissions(app.permissions);
-  const triggeredCombos = findTriggeredCombos(app.permissions);
 
+  // IOC match — always critical, regardless of source
+  if (knownMalicious) {
+    return {
+      riskLevel: 'critical',
+      categories: ['stalkerware'],
+      reasons: ['Package name matches a known stalkerware/spyware IOC database entry'],
+      dangerousPerms,
+      confidence: 100,
+    };
+  }
+
+  // ── Play Store apps ──────────────────────────────────────────────────────
+  // Real stalkerware is virtually never on Google Play. Legitimate apps
+  // (Chrome, WhatsApp, Maps, Gmail) share the same permission combos for
+  // entirely benign reasons — combo analysis is ~100% false-positive for
+  // Play Store apps. Only flag extreme outliers (12+ dangerous permissions).
+  if (app.installSource === 'play_store') {
+    if (dangerousPerms.length >= 12) {
+      return {
+        riskLevel: 'suspicious',
+        categories: ['data_harvester'],
+        reasons: [
+          `Holds ${dangerousPerms.length} sensitive permissions — unusually broad for a Play Store app`,
+        ],
+        dangerousPerms,
+        confidence: Math.min(55, dangerousPerms.length * 4),
+      };
+    }
+    return { riskLevel: 'clean', categories: [], reasons: [], dangerousPerms, confidence: 0 };
+  }
+
+  // ── Sideloaded / unknown-source apps — full combo analysis ───────────────
+  const triggeredCombos = findTriggeredCombos(app.permissions);
   const categorySet = new Set<SpyCategory>();
   const reasons: string[] = [];
 
-  // Collect categories and reasons from triggered combos
   for (const combo of triggeredCombos) {
     categorySet.add(combo.category);
     reasons.push(combo.reason);
   }
 
-  // If no combo was triggered but the app holds 8+ dangerous permissions,
-  // flag it generically as a data_harvester (raised from 3 — many legitimate
-  // apps such as WhatsApp, Chrome, Maps hold 4–6 dangerous permissions).
   if (triggeredCombos.length === 0 && dangerousPerms.length >= 8) {
     categorySet.add('data_harvester');
     reasons.push(
-      `Holds ${dangerousPerms.length} sensitive permissions (${dangerousPerms.slice(0, 4).join(', ')}…) with an unusually broad permission scope`
+      `Holds ${dangerousPerms.length} sensitive permissions (${dangerousPerms.slice(0, 4).join(', ')}…) — unusually broad for a non-Play-Store app`
     );
   }
 
-  // Sideloaded apps get an extra reason — but only if already flagged by combos,
-  // and only for explicit non-Play-Store sources (adb, file_manager, other).
-  // 'unknown' is treated as neutral (covers system apps and migrated installs).
-  if (
-    triggeredCombos.length > 0 &&
-    (app.installSource === 'adb' || app.installSource === 'file_manager') &&
-    dangerousPerms.length >= 2
-  ) {
-    reasons.push(
-      `App was sideloaded (${app.installSource}) — not from Play Store, which bypasses Google Play Protect vetting`
-    );
-  }
-
-  // Compute aggregate confidence: max of individual combo scores, boosted by
-  // dangerous-permission count and install-source risk
   let confidence = 0;
   if (triggeredCombos.length > 0) {
     confidence = Math.max(...triggeredCombos.map((c) => c.baseConfidence));
-    // Bonus for multiple combos firing
     confidence = Math.min(100, confidence + (triggeredCombos.length - 1) * 5);
-  } else if (dangerousPerms.length >= 3) {
-    confidence = Math.min(50, dangerousPerms.length * 8);
+  } else if (dangerousPerms.length >= 8) {
+    confidence = Math.min(55, dangerousPerms.length * 6);
   }
 
-  // Sideload penalty — only for explicit non-Play-Store sources, and only
-  // when combos already fired (avoids false positives on system/migrated apps).
-  if (
-    triggeredCombos.length > 0 &&
-    (app.installSource === 'adb' || app.installSource === 'file_manager')
-  ) {
-    confidence = Math.min(100, confidence + 15);
+  if (app.installSource === 'adb' || app.installSource === 'file_manager') {
+    if (triggeredCombos.length > 0 || dangerousPerms.length >= 4) {
+      confidence = Math.min(100, confidence + 15);
+      reasons.push(`Sideloaded (${app.installSource}) — bypasses Google Play Protect`);
+    }
   }
 
-  // Known malicious instantly maximises confidence
-  if (knownMalicious) {
-    confidence = 100;
-    categorySet.add('stalkerware');
-    reasons.unshift('Package name matches a known stalkerware/spyware IOC database entry');
-  }
-
-  const riskLevel = deriveRiskLevel(confidence, dangerousPerms.length, knownMalicious);
+  const riskLevel = deriveRiskLevel(confidence, dangerousPerms.length, false);
 
   return {
     riskLevel,
