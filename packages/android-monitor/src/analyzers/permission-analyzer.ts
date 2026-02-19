@@ -298,19 +298,23 @@ export function analyzePermissions(
     };
   }
 
-  // ── Play Store apps ──────────────────────────────────────────────────────
-  // Real stalkerware is virtually never on Google Play. Legitimate apps
-  // (Chrome, WhatsApp, Maps, Gmail) share the same permission combos for
-  // entirely benign reasons — combo analysis is ~100% false-positive for
-  // Play Store apps. Only flag extreme outliers (12+ dangerous permissions).
-  if (app.installSource === 'play_store') {
+  // ── Store / unknown-source apps ───────────────────────────────────────────
+  // Real stalkerware is virtually never on Google Play (or installed through
+  // a known package manager). Legitimate apps (Chrome, WhatsApp, Maps, Gmail)
+  // share the same permission combos for entirely benign reasons.
+  //
+  // We only run full combo analysis when the install source is CONFIRMED as
+  // a manual sideload (file_manager = APK from browser/Files, adb = Dev).
+  // For 'play_store', 'other', and 'unknown' (API gap on Android 12+) we give
+  // the benefit of the doubt and only flag extreme outliers (12+ perms).
+  const isSideloaded = app.installSource === 'file_manager' || app.installSource === 'adb';
+
+  if (!isSideloaded) {
     if (dangerousPerms.length >= 12) {
       return {
         riskLevel: 'suspicious',
         categories: ['data_harvester'],
-        reasons: [
-          `Holds ${dangerousPerms.length} sensitive permissions — unusually broad for a Play Store app`,
-        ],
+        reasons: [`Holds ${dangerousPerms.length} sensitive permissions — unusually broad`],
         dangerousPerms,
         confidence: Math.min(55, dangerousPerms.length * 4),
       };
@@ -318,7 +322,7 @@ export function analyzePermissions(
     return { riskLevel: 'clean', categories: [], reasons: [], dangerousPerms, confidence: 0 };
   }
 
-  // ── Sideloaded / unknown-source apps — full combo analysis ───────────────
+  // ── Confirmed sideloaded apps — full combo analysis ───────────────────────
   const triggeredCombos = findTriggeredCombos(app.permissions);
   const categorySet = new Set<SpyCategory>();
   const reasons: string[] = [];
@@ -331,7 +335,7 @@ export function analyzePermissions(
   if (triggeredCombos.length === 0 && dangerousPerms.length >= 8) {
     categorySet.add('data_harvester');
     reasons.push(
-      `Holds ${dangerousPerms.length} sensitive permissions (${dangerousPerms.slice(0, 4).join(', ')}…) — unusually broad for a non-Play-Store app`
+      `Holds ${dangerousPerms.length} sensitive permissions (${dangerousPerms.slice(0, 4).join(', ')}…) — unusually broad for a sideloaded app`
     );
   }
 
