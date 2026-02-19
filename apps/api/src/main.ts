@@ -5,7 +5,11 @@
 import { execSync } from 'node:child_process';
 import os from 'node:os';
 
-import { runRiskEngine, scanIpWithGreyNoise } from '@ankrshield/risk-intelligence';
+import {
+  runRiskEngine,
+  scanIpWithGreyNoise,
+  socialThreatsToWarriorEvents,
+} from '@ankrshield/risk-intelligence';
 import { SpywareScanner } from '@ankrshield/spyware-detector';
 import Fastify from 'fastify';
 import mercurius from 'mercurius';
@@ -1067,6 +1071,18 @@ Date: ${now.toLocaleDateString('en-IN')}`;
           domain,
           shodanApiKey: process.env.SHODAN_API_KEY,
         });
+
+        // Forward social threat signals to AIWarrior for cross-platform correlation
+        const socialEvents = socialThreatsToWarriorEvents(report);
+        if (socialEvents.length > 0) {
+          const w = getWarrior();
+          for (const e of socialEvents) w.ingest(e);
+          fastify.log.info(
+            { domain, eventCount: socialEvents.length },
+            '⚔️  Social threats forwarded to AI Warrior'
+          );
+        }
+
         return report;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);

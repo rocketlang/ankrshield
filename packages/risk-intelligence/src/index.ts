@@ -104,3 +104,9 @@ export type { BrandFinding, BrandMonitorResult } from './detectors/social-brand-
 // Main engine
 // ---------------------------------------------------------------------------
 export { runRiskEngine } from './risk-engine.js';
+
+// ---------------------------------------------------------------------------
+// Social Threat → AI Warrior bridge
+// ---------------------------------------------------------------------------
+export { socialThreatsToWarriorEvents } from './social-warrior-bridge.js';
+export type { SocialThreatEvent } from './social-warrior-bridge.js';

@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 // Pages
 import Analytics from './pages/Analytics';
+import CommandCenter from './pages/CommandCenter';
 import Dashboard from './pages/Dashboard';
 import Devices from './pages/Devices';
 import EvidenceReport from './pages/EvidenceReport';
@@ -66,6 +67,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/command-center"
+          element={
+            <ProtectedRoute>
+              <CommandCenter />
             </ProtectedRoute>
           }
         />

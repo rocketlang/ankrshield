@@ -3,7 +3,7 @@
  * Side navigation with menu items
  */
 
-import { LayoutDashboard, Smartphone, BarChart3, Shield, Settings } from 'lucide-react';
+import { LayoutDashboard, Smartphone, BarChart3, Shield, Settings, Terminal } from 'lucide-react';
 import type { JSX } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
@@ -38,6 +38,11 @@ const navItems: NavItem[] = [
     label: 'Settings',
     path: '/settings',
     icon: <Settings className="w-5 h-5" />,
+  },
+  {
+    label: 'Command Center',
+    path: '/command-center',
+    icon: <Terminal className="w-5 h-5" />,
   },
 ];
 
