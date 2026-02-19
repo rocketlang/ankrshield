@@ -1,0 +1,531 @@
+/**
+ * ConferenceScreen
+ *
+ * Lets a phone join a live conference room by entering the 6-char code
+ * displayed on the big screen.  Once joined the device appears on the
+ * /live?room=CODE dashboard and sends simulated tracker events every 5 s.
+ *
+ * State machine:
+ *   idle → joining → joined (→ left)
+ */
+
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
+const API_BASE = 'https://xshieldai.com/api'; // change to localhost:4250 for dev
+
+// Simulated tracker domains the phone reports (mirrors the TRACKERS list in LiveThreats.tsx)
+const TRACKERS = [
+  { tracker: 'google-analytics.com', company: 'Google', category: 'Analytics' },
+  { tracker: 'doubleclick.net', company: 'Google', category: 'Advertising' },
+  { tracker: 'connect.facebook.net', company: 'Meta', category: 'Social' },
+  { tracker: 'amazon-adsystem.com', company: 'Amazon', category: 'Advertising' },
+  { tracker: 'analytics.tiktok.com', company: 'TikTok', category: 'Analytics' },
+  { tracker: 'hotjar.com', company: 'Hotjar', category: 'Session Recording' },
+  { tracker: 'segment.io', company: 'Twilio', category: 'Data Broker' },
+  { tracker: 'criteo.com', company: 'Criteo', category: 'Retargeting' },
+  { tracker: 'adnxs.com', company: 'AppNexus', category: 'Advertising' },
+  { tracker: 'data.microsoft.com', company: 'Microsoft', category: 'Telemetry' },
+];
+
+const DATA_TYPES = [
+  'Device ID',
+  'Location (GPS)',
+  'Browsing history',
+  'App usage',
+  'Purchase history',
+  'Search queries',
+];
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// ─── Types ──────────────────────────────────────────────────────────────────
+
+interface JoinResult {
+  deviceId: string;
+  name: string;
+  code: string;
+}
+
+// ─── Main Screen ─────────────────────────────────────────────────────────────
+
+export function ConferenceScreen(_props: { navigation: unknown }) {
+  const [code, setCode] = useState('');
+  const [status, setStatus] = useState<'idle' | 'joining' | 'joined' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [session, setSession] = useState<JoinResult | null>(null);
+  const [eventCount, setEventCount] = useState(0);
+  const [blockedCount, setBlockedCount] = useState(0);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Send a simulated tracker event to the room
+  const sendEvent = useCallback(async (deviceId: string, roomCode: string) => {
+    const t = pick(TRACKERS);
+    const dataType = pick(DATA_TYPES);
+    const blocked = Math.random() < 0.89;
+    const bytes = Math.floor(Math.random() * 50000) + 2000;
+
+    try {
+      await fetch(`${API_BASE}/session/${roomCode}/event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deviceId,
+          tracker: t.tracker,
+          company: t.company,
+          category: t.category,
+          dataType,
+          blocked,
+          bytes,
+        }),
+      });
+      setEventCount((n) => n + 1);
+      if (blocked) setBlockedCount((n) => n + 1);
+    } catch {
+      // ignore — network may be slow at a conference
+    }
+  }, []);
+
+  // Start sending events once joined
+  useEffect(() => {
+    if (status !== 'joined' || !session) return;
+
+    // Send first event immediately
+    void sendEvent(session.deviceId, session.code);
+
+    intervalRef.current = setInterval(() => {
+      void sendEvent(session.deviceId, session.code);
+    }, 5000);
+
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [status, session, sendEvent]);
+
+  async function join() {
+    const trimmed = code.trim().toUpperCase();
+    if (trimmed.length !== 6) {
+      setErrorMsg('Enter the 6-character room code from the big screen.');
+      return;
+    }
+
+    setStatus('joining');
+    setErrorMsg('');
+
+    try {
+      const res = await fetch(`${API_BASE}/session/${trimmed}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: `Phone-${trimmed.slice(0, 4)}` }),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json()) as { error?: string };
+        throw new Error(err.error ?? 'Room not found');
+      }
+
+      const data = (await res.json()) as JoinResult;
+      setSession(data);
+      setStatus('joined');
+    } catch (e) {
+      setStatus('error');
+      setErrorMsg((e as Error).message ?? 'Could not join room. Check the code and try again.');
+    }
+  }
+
+  function leave() {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setStatus('idle');
+    setSession(null);
+    setCode('');
+    setEventCount(0);
+    setBlockedCount(0);
+  }
+
+  // ─── Joined state ───────────────────────────────────────────────────────────
+
+  if (status === 'joined' && session) {
+    const blockedPct = eventCount > 0 ? Math.round((blockedCount / eventCount) * 100) : 0;
+
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentPadded}>
+        {/* Header */}
+        <View style={styles.joinedHeader}>
+          <Text style={styles.joinedEmoji}>🎤</Text>
+          <Text style={styles.joinedTitle}>You're Live!</Text>
+          <Text style={styles.joinedSubtitle}>
+            Your device appears on the conference screen as{' '}
+            <Text style={styles.deviceName}>{session.name}</Text>
+          </Text>
+        </View>
+
+        {/* Room code pill */}
+        <View style={styles.roomCodePill}>
+          <Text style={styles.roomCodeLabel}>Room</Text>
+          <Text style={styles.roomCode}>{session.code}</Text>
+        </View>
+
+        {/* Live stats */}
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{eventCount}</Text>
+            <Text style={styles.statLabel}>Events sent</Text>
+          </View>
+          <View style={[styles.statCard, { borderColor: '#10b981' }]}>
+            <Text style={[styles.statValue, { color: '#10b981' }]}>{blockedPct}%</Text>
+            <Text style={styles.statLabel}>Blocked</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={[styles.statValue, { color: '#3b82f6' }]}>{blockedCount}</Text>
+            <Text style={styles.statLabel}>Protected</Text>
+          </View>
+        </View>
+
+        {/* Status line */}
+        <View style={styles.statusLine}>
+          <View style={styles.pulseDot} />
+          <Text style={styles.statusText}>Sending tracker data every 5 seconds…</Text>
+        </View>
+
+        {/* Privacy notice */}
+        <View style={styles.privacyBox}>
+          <Text style={styles.privacyTitle}>🔒 Privacy Notice</Text>
+          <Text style={styles.privacyText}>
+            Your device appears as <Text style={styles.highlight}>{session.name}</Text> — no
+            personal data is shared. Events are anonymized tracker domain names only (e.g.
+            "google-analytics.com was blocked"). No IP address, no identity, no real browsing data
+            leaves this device.
+          </Text>
+        </View>
+
+        {/* Leave button */}
+        <TouchableOpacity style={styles.leaveButton} onPress={leave}>
+          <Text style={styles.leaveButtonText}>Leave Room</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
+
+  // ─── Idle / joining / error state ──────────────────────────────────────────
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentPadded}>
+      {/* Hero */}
+      <View style={styles.hero}>
+        <Text style={styles.heroEmoji}>📺</Text>
+        <Text style={styles.heroTitle}>Join Conference Room</Text>
+        <Text style={styles.heroSubtitle}>
+          Enter the 6-character code displayed on the conference screen to appear live on the
+          tracker visualization.
+        </Text>
+      </View>
+
+      {/* Code input */}
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Room Code</Text>
+        <TextInput
+          style={styles.codeInput}
+          value={code}
+          onChangeText={(t) =>
+            setCode(
+              t
+                .toUpperCase()
+                .replace(/[^A-Z0-9]/g, '')
+                .slice(0, 6)
+            )
+          }
+          placeholder="CONF24"
+          placeholderTextColor="#444"
+          autoCapitalize="characters"
+          autoCorrect={false}
+          maxLength={6}
+          keyboardType="default"
+        />
+        {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+      </View>
+
+      {/* Join button */}
+      <TouchableOpacity
+        style={[styles.joinButton, status === 'joining' && styles.joinButtonDisabled]}
+        onPress={join}
+        disabled={status === 'joining'}
+      >
+        {status === 'joining' ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.joinButtonText}>Join Room →</Text>
+        )}
+      </TouchableOpacity>
+
+      {/* Privacy notice */}
+      <View style={styles.privacyBox}>
+        <Text style={styles.privacyTitle}>🔒 What gets shared?</Text>
+        <Text style={styles.privacyText}>
+          Only anonymized tracker domain names. Your device appears as a random ID like
+          "Device-A4B2". No personal data, no real browsing history, no IP address is shared with
+          other attendees.
+        </Text>
+      </View>
+
+      {/* How it works */}
+      <View style={styles.howItWorksBox}>
+        <Text style={styles.howItWorksTitle}>How it works</Text>
+        {[
+          '1. Enter the room code from the big screen',
+          '2. Your phone joins the live visualization',
+          '3. AnkrShield reports which trackers it blocked',
+          '4. Watch the big screen fill up with real data',
+        ].map((step) => (
+          <Text key={step} style={styles.howItWorksStep}>
+            {step}
+          </Text>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
+// ─── Styles ─────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#080c14',
+  },
+  contentPadded: {
+    padding: 20,
+    gap: 20,
+  },
+
+  // Hero
+  hero: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  heroEmoji: {
+    fontSize: 56,
+    marginBottom: 12,
+  },
+  heroTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  heroSubtitle: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // Input
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  codeInput: {
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#374151',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#3b82f6',
+    letterSpacing: 8,
+    textAlign: 'center',
+    fontFamily: 'monospace',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 13,
+    marginTop: 4,
+  },
+
+  // Join button
+  joinButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  joinButtonDisabled: {
+    opacity: 0.6,
+  },
+  joinButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
+  // Privacy box
+  privacyBox: {
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#1e3a5f',
+    borderRadius: 12,
+    padding: 16,
+    gap: 6,
+  },
+  privacyTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#60a5fa',
+  },
+  privacyText: {
+    fontSize: 13,
+    color: '#6b7280',
+    lineHeight: 18,
+  },
+  highlight: {
+    color: '#93c5fd',
+    fontWeight: '600',
+  },
+
+  // How it works
+  howItWorksBox: {
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    padding: 16,
+    gap: 8,
+  },
+  howItWorksTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#9ca3af',
+    marginBottom: 4,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  howItWorksStep: {
+    fontSize: 13,
+    color: '#d1d5db',
+    lineHeight: 20,
+  },
+
+  // Joined state
+  joinedHeader: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  joinedEmoji: {
+    fontSize: 56,
+    marginBottom: 12,
+  },
+  joinedTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#10b981',
+    marginBottom: 6,
+  },
+  joinedSubtitle: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+  },
+  deviceName: {
+    color: '#60a5fa',
+    fontWeight: '700',
+    fontFamily: 'monospace',
+  },
+  roomCodePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1e3a5f',
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    gap: 10,
+    alignSelf: 'center',
+  },
+  roomCodeLabel: {
+    fontSize: 12,
+    color: '#60a5fa',
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  roomCode: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#fff',
+    letterSpacing: 4,
+    fontFamily: 'monospace',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#374151',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#ef4444',
+    fontFamily: 'monospace',
+  },
+  statLabel: {
+    fontSize: 11,
+    color: '#6b7280',
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  statusLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#111827',
+    borderRadius: 8,
+    padding: 12,
+  },
+  pulseDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ef4444',
+  },
+  statusText: {
+    fontSize: 13,
+    color: '#9ca3af',
+  },
+  leaveButton: {
+    backgroundColor: '#1f2937',
+    borderWidth: 1,
+    borderColor: '#374151',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  leaveButtonText: {
+    color: '#9ca3af',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+});

@@ -11,6 +11,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ActivityScreen } from './src/screens/ActivityScreen';
 import { AgentManagerScreen } from './src/screens/AgentManagerScreen';
 import { AndroidMonitorScreen } from './src/screens/AndroidMonitorScreen';
+import { ConferenceScreen } from './src/screens/ConferenceScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LiveThreatsScreen } from './src/screens/LiveThreatsScreen';
@@ -89,6 +90,15 @@ function App(): React.JSX.Element {
             name="AndroidMonitor"
             component={AndroidMonitorScreen}
             options={{ title: 'App Scanner' }}
+          />
+          <Stack.Screen
+            name="Conference"
+            component={ConferenceScreen}
+            options={{
+              title: '🎤 Join Conference',
+              headerStyle: { backgroundColor: '#080c14' },
+              headerTintColor: '#3b82f6',
+            }}
           />
         </Stack.Navigator>
       </NavigationContainer>

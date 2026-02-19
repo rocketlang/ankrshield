@@ -130,6 +130,13 @@ export function HomeScreen({ navigation }: any) {
         >
           <Text style={styles.actionButtonText}>🔍 App Scanner</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.conferenceButton]}
+          onPress={() => navigation.navigate('Conference')}
+        >
+          <Text style={styles.actionButtonText}>🎤 Join Conference</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -207,6 +214,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a1a1a',
     borderWidth: 1,
     borderColor: '#0891b2',
+  },
+  conferenceButton: {
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#3b82f6',
   },
   actionButtonText: {
     color: '#fff',
