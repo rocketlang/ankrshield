@@ -1,12 +1,8 @@
 package com.ankr.shield;
 
 import android.app.Activity;
-import android.content.BroadcastReceiver;
-import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.net.VpnService;
-import android.os.Build;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -31,16 +27,18 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
  *
  * JS events (DeviceEventEmitter):
  *   'DnsQueryEvent'  { domain, blocked, category, vendor }
+ *
+ * Event delivery: direct static listener on DnsVpnService (same process).
+ * Avoids Android broadcast implicit-delivery restrictions (API 26+/33+).
  */
 public class DnsVpnModule extends ReactContextBaseJavaModule implements ActivityEventListener {
 
-    private static final String MODULE_NAME    = "DnsVpn";
-    private static final int    VPN_REQ_CODE   = 0x0DEF;
-    private static final String EVENT_DNS      = "DnsQueryEvent";
+    private static final String MODULE_NAME = "DnsVpn";
+    private static final int    VPN_REQ_CODE = 0x0DEF;
+    private static final String EVENT_DNS    = "DnsQueryEvent";
 
-    private @Nullable Promise   pendingStartPromise;
-    private BroadcastReceiver   dnsEventReceiver;
-    private boolean             receiverRegistered = false;
+    private @Nullable Promise pendingStartPromise;
+    private boolean listenerRegistered = false;
 
     public DnsVpnModule(@NonNull ReactApplicationContext reactContext) {
         super(reactContext);
@@ -50,11 +48,9 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
     @Override
     public void initialize() {
         super.initialize();
-        // If VPN was already running before the app (re)started, register the
-        // broadcast receiver immediately so DNS events flow to JS right away.
-        if (DnsVpnService.running) {
-            registerDnsReceiver();
-        }
+        // Register listener immediately — catches the case where VPN was already
+        // running before this app session started (service persisted).
+        registerDnsListener();
     }
 
     @NonNull
@@ -73,11 +69,9 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
 
         Intent vpnIntent = VpnService.prepare(activity);
         if (vpnIntent != null) {
-            // OS needs to show the VPN permission dialog
             pendingStartPromise = promise;
             activity.startActivityForResult(vpnIntent, VPN_REQ_CODE);
         } else {
-            // Permission already granted
             doStartVpn(promise);
         }
     }
@@ -87,7 +81,7 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
         Intent stopIntent = new Intent(getReactApplicationContext(), DnsVpnService.class);
         stopIntent.setAction("STOP");
         getReactApplicationContext().startService(stopIntent);
-        unregisterDnsReceiver();
+        unregisterDnsListener();
         promise.resolve(null);
     }
 
@@ -128,44 +122,28 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
     // ─── Internal helpers ────────────────────────────────────────────────────
 
     private void doStartVpn(@Nullable Promise promise) {
-        Context ctx = getReactApplicationContext();
-        Intent startIntent = new Intent(ctx, DnsVpnService.class);
-        ctx.startService(startIntent);
-        registerDnsReceiver();
+        Intent startIntent = new Intent(getReactApplicationContext(), DnsVpnService.class);
+        getReactApplicationContext().startService(startIntent);
+        registerDnsListener();
         if (promise != null) promise.resolve(null);
     }
 
-    private void registerDnsReceiver() {
-        if (receiverRegistered) return;
-        dnsEventReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                if (!DnsVpnService.ACTION_DNS_EVENT.equals(intent.getAction())) return;
-                WritableMap params = Arguments.createMap();
-                params.putString("domain",   intent.getStringExtra(DnsVpnService.EXTRA_DOMAIN));
-                params.putBoolean("blocked", intent.getBooleanExtra(DnsVpnService.EXTRA_BLOCKED, false));
-                params.putString("category", intent.getStringExtra(DnsVpnService.EXTRA_CATEGORY));
-                params.putString("vendor",   intent.getStringExtra(DnsVpnService.EXTRA_VENDOR));
-                sendEvent(EVENT_DNS, params);
-            }
+    private void registerDnsListener() {
+        if (listenerRegistered) return;
+        DnsVpnService.dnsEventListener = (domain, blocked, category, vendor) -> {
+            WritableMap params = Arguments.createMap();
+            params.putString("domain",   domain);
+            params.putBoolean("blocked", blocked);
+            params.putString("category", category != null ? category : "");
+            params.putString("vendor",   vendor != null ? vendor : "");
+            sendEvent(EVENT_DNS, params);
         };
-        IntentFilter filter = new IntentFilter(DnsVpnService.ACTION_DNS_EVENT);
-        // Android 13+ (API 33) requires explicit exported flag on registerReceiver
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            getReactApplicationContext().registerReceiver(
-                dnsEventReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            getReactApplicationContext().registerReceiver(dnsEventReceiver, filter);
-        }
-        receiverRegistered = true;
+        listenerRegistered = true;
     }
 
-    private void unregisterDnsReceiver() {
-        if (!receiverRegistered || dnsEventReceiver == null) return;
-        try {
-            getReactApplicationContext().unregisterReceiver(dnsEventReceiver);
-        } catch (Exception ignored) {}
-        receiverRegistered = false;
+    private void unregisterDnsListener() {
+        DnsVpnService.dnsEventListener = null;
+        listenerRegistered = false;
     }
 
     private void sendEvent(String eventName, @Nullable WritableMap params) {

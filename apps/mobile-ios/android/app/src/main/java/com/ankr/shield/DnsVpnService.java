@@ -50,12 +50,11 @@ public class DnsVpnService extends VpnService {
     private static final String UPSTREAM_DNS = "1.1.1.1";
     private static final int    DNS_PORT     = 53;
 
-    // Broadcast action for React Native event bridge
-    public static final String ACTION_DNS_EVENT  = "com.ankr.shield.DNS_EVENT";
-    public static final String EXTRA_DOMAIN      = "domain";
-    public static final String EXTRA_BLOCKED     = "blocked";
-    public static final String EXTRA_CATEGORY    = "category";
-    public static final String EXTRA_VENDOR      = "vendor";
+    // Direct listener for React Native event bridge (replaces broadcast)
+    public interface DnsEventListener {
+        void onDnsEvent(String domain, boolean blocked, String category, String vendor);
+    }
+    public static volatile DnsEventListener dnsEventListener;
 
     // Stats counters (read by DnsVpnModule.getStats())
     static final AtomicLong totalQueries  = new AtomicLong(0);
@@ -482,11 +481,9 @@ public class DnsVpnService extends VpnService {
     // ─── React Native event bridge ───────────────────────────────────────────
 
     private void broadcastDnsEvent(String domain, boolean blocked, String category, String vendor) {
-        Intent intent = new Intent(ACTION_DNS_EVENT);
-        intent.putExtra(EXTRA_DOMAIN,   domain);
-        intent.putExtra(EXTRA_BLOCKED,  blocked);
-        intent.putExtra(EXTRA_CATEGORY, category);
-        intent.putExtra(EXTRA_VENDOR,   vendor);
-        sendBroadcast(intent);
+        DnsEventListener listener = dnsEventListener;
+        if (listener != null) {
+            listener.onDnsEvent(domain, blocked, category, vendor);
+        }
     }
 }
