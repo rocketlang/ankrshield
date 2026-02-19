@@ -1,6 +1,6 @@
 {
   "name": "@ankrshield/risk-intelligence",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Digital risk intelligence engine — breach monitoring, IP reputation, attack surface, brand protection",
   "type": "module",
   "main": "dist/index.js",

@@ -30,13 +30,14 @@ export interface RiskFactor {
     | 'scanner_activity'
     | 'active_phishing_campaign'
     | 'geopolitical_risk'
-    | 'code_secret_exposure';
+    | 'code_secret_exposure'
+    | 'ransomware_c2';
   /** Human-readable summary of the finding */
   summary: string;
   /** Severity contribution 0–100 */
   score: number;
   /** Source that produced this finding */
-  source: 'greynoise' | 'shodan' | 'hibp' | 'urlscan' | 'internal';
+  source: 'greynoise' | 'shodan' | 'hibp' | 'urlscan' | 'internal' | 'abuse_ch' | 'threatfox';
   /** Optional raw detail (URL, IP, port, domain, etc.) */
   detail?: string;
 }
@@ -159,6 +160,9 @@ export interface RiskReport {
   /** GitHub code search hits revealing secrets referencing this domain */
   githubLeaks: import('./detectors/github-dork.js').GithubLeakHit[];
 
+  /** Ransomware C2 intelligence (Feodo Tracker + ThreatFox) */
+  ransomwareResult: import('./detectors/ransomware-detector.js').RansomwareResult | null;
+
   /**
    * Claude AI-generated threat narrative — plain-English analysis of all findings.
    * null when ANTHROPIC_API_KEY is not set.
@@ -200,6 +204,8 @@ export interface RiskEngineOptions {
   enableGithubDork?: boolean;
   /** GitHub personal access token — required for GitHub dork scanner */
   githubToken?: string;
+  /** Check against abuse.ch Feodo C2 blocklist + ThreatFox. Default: true */
+  enableRansomware?: boolean;
   /** Generate Claude AI threat narrative (requires ANTHROPIC_API_KEY). Default: true */
   enableThreatNarrative?: boolean;
   /** Anthropic API key override (defaults to ANTHROPIC_API_KEY env var) */

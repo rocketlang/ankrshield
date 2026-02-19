@@ -54,6 +54,12 @@ export { auditDnsSecurity, dnsAuditToFactors } from './detectors/dns-security-au
 export { checkPhishingFeeds, phishingHitsToFactors } from './detectors/phishing-feeds.js';
 export { lookupAsnReputation, asnToFactors } from './detectors/asn-reputation.js';
 export { scanGithubSecrets, githubLeaksToFactors } from './detectors/github-dork.js';
+export { checkRansomwareFeeds, ransomwareToFactors } from './detectors/ransomware-detector.js';
+export type {
+  RansomwareResult,
+  FeodoEntry,
+  ThreatFoxIoc,
+} from './detectors/ransomware-detector.js';
 export { generateThreatNarrative } from './threat-narrative.js';
 
 // ---------------------------------------------------------------------------

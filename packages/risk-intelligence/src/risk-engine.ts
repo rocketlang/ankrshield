@@ -41,6 +41,7 @@ import { scanIpWithGreyNoise, greyNoiseToFactors } from './detectors/greynoise-s
 import { scanIpWithOtx, scanDomainWithOtx, otxToFactors } from './detectors/otx-scanner.js';
 import { searchPastes, pasteHitsToFactors } from './detectors/paste-monitor.js';
 import { checkPhishingFeeds, phishingHitsToFactors } from './detectors/phishing-feeds.js';
+import { checkRansomwareFeeds, ransomwareToFactors } from './detectors/ransomware-detector.js';
 import { scanIpWithShodan, shodanToFactors } from './detectors/shodan-scanner.js';
 import { generateThreatNarrative } from './threat-narrative.js';
 import type { RiskEngineOptions, RiskFactor, RiskLevel, RiskReport } from './types.js';
@@ -118,6 +119,7 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
   const enablePhishFeeds = options.enablePhishFeeds ?? true;
   const enableAsnReputation = options.enableAsnReputation ?? true;
   const enableGithubDork = options.enableGithubDork ?? true;
+  const enableRansomware = options.enableRansomware ?? true;
 
   const enableThreatNarrative = options.enableThreatNarrative ?? true;
   const otxApiKey = options.otxApiKey ?? process.env['OTX_API_KEY'];
@@ -143,6 +145,7 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     phishingHits,
     asnRecord,
     githubLeaks,
+    ransomwareResult,
   ] = await Promise.all([
     enableGreyNoise && serverIp ? scanIpWithGreyNoise(serverIp) : Promise.resolve(null),
     enableShodan && serverIp
@@ -163,6 +166,7 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     enableGithubDork && !IP_RE.test(domain)
       ? scanGithubSecrets(domain, githubToken)
       : Promise.resolve([]),
+    enableRansomware ? checkRansomwareFeeds(serverIp, domain) : Promise.resolve(null),
   ]);
 
   // Collect all risk factors
@@ -181,6 +185,7 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
   factors.push(...phishingHitsToFactors(phishingHits, domain));
   if (asnRecord) factors.push(...asnToFactors(asnRecord));
   factors.push(...githubLeaksToFactors(githubLeaks, domain));
+  if (ransomwareResult) factors.push(...ransomwareToFactors(ransomwareResult));
 
   const riskScore = aggregateScore(factors);
   const riskLevel = scoreToLevel(riskScore);
@@ -206,6 +211,7 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     phishingHits,
     asnRecord,
     githubLeaks,
+    ransomwareResult,
     threatNarrative: null,
     durationMs: 0,
   };
@@ -235,6 +241,7 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     phishingHits,
     asnRecord,
     githubLeaks,
+    ransomwareResult,
     threatNarrative,
     durationMs: Date.now() - start,
   };
