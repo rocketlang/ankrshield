@@ -334,7 +334,7 @@ function PlatformShieldCard({
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 export default function Landing() {
-  const { score, chains, honeypots } = useLiveThreatScore();
+  const { score } = useLiveThreatScore();
 
   return (
     <div className="min-h-screen bg-[#0d1117] text-white font-sans antialiased">
@@ -379,18 +379,24 @@ export default function Landing() {
             </a>
           </div>
           <div className="flex items-center gap-3">
+            <a
+              href="#pricing"
+              className="text-sm text-gray-300 hover:text-white transition-colors hidden md:block"
+            >
+              Pricing
+            </a>
             <Link
               to="/login"
               className="text-sm text-gray-300 hover:text-white transition-colors px-3 py-1.5"
             >
               Sign in
             </Link>
-            <a
-              href="#download"
+            <Link
+              to="/register"
               className="text-sm font-semibold bg-cyan-500 hover:bg-cyan-400 text-black px-4 py-1.5 rounded-lg transition-colors"
             >
-              Download
-            </a>
+              Start Free
+            </Link>
           </div>
         </div>
       </nav>
@@ -409,38 +415,48 @@ export default function Landing() {
         <div className="absolute top-20 right-0 w-80 h-80 bg-blue-700/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 pt-28 pb-24 text-center">
-          <div className="flex justify-center mb-8">
+          <div className="flex justify-center mb-8 gap-3 flex-wrap">
             {score !== null ? (
               <ThreatPill score={score} />
             ) : (
               <Badge color="cyan">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                AI Warrior Active
+                DRP Platform · Live
               </Badge>
             )}
+            <Badge color="green">13 Intel Sources</Badge>
+            <Badge color="purple">AI Narrative · $0/report</Badge>
           </div>
 
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-[1.05] mb-6">
-            <span className="text-white">AI-Native</span>
+            <span className="text-white">Enterprise Threat</span>
             <br />
             <span className="bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-300 bg-clip-text text-transparent">
-              Cyber Defense
+              Intelligence at
+            </span>
+            <br />
+            <span className="bg-gradient-to-r from-cyan-300 to-emerald-400 bg-clip-text text-transparent">
+              $99 / month
             </span>
           </h1>
 
-          <p className="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto mb-10 leading-relaxed">
-            8 autonomous AI agents defending your Android device, Linux server, and network stack
-            against nation-state spyware, rootkits, zero-days, and AI-powered attack chains — in
-            real time.
+          <p className="text-lg sm:text-xl text-gray-300 max-w-2xl mx-auto mb-4 leading-relaxed">
+            Full Digital Risk Protection report in under 30 seconds. 13 parallel intelligence
+            sources. AI threat narrative. One-click remediation. No sales call, no contract.
+          </p>
+          <p className="text-sm text-gray-500 mb-10">
+            Constella charges <span className="text-red-400 font-semibold">$415,000/year</span> for
+            the same intelligence. We charge{' '}
+            <span className="text-cyan-400 font-semibold">$99/month</span>.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-            <a
-              href="#download"
+            <Link
+              to="/register"
               className="inline-flex items-center gap-2 bg-cyan-500 hover:bg-cyan-400 text-black font-bold px-8 py-4 rounded-xl transition-colors shadow-lg shadow-cyan-500/20 text-base"
             >
-              <span>📥</span> Download Free
-            </a>
+              <span>🚀</span> Start Free — No Credit Card
+            </Link>
             <a
               href={LIVE_URL}
               target="_blank"
@@ -448,20 +464,20 @@ export default function Landing() {
               className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/15 border border-white/20 hover:border-white/30 text-white font-semibold px-8 py-4 rounded-xl transition-all text-base"
             >
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              View Live Threats
+              View Live Dashboard
             </a>
           </div>
 
           <div className="inline-flex items-center gap-8 bg-white/[0.06] border border-white/10 rounded-2xl px-8 py-4">
-            <StatBox value={chains} label="Attack Chains" sub="detected" />
+            <StatBox value="13" label="Intel Sources" sub="running in parallel" />
             <div className="w-px h-10 bg-white/15" />
-            <StatBox value={honeypots} label="Intruders" sub="trapped" />
+            <StatBox value="350x" label="Cheaper" sub="vs Constella" />
             <div className="w-px h-10 bg-white/15" />
-            <StatBox value="8" label="AI Agents" sub="watching 24/7" />
+            <StatBox value="$0" label="AI Cost" sub="per report" />
             <div className="w-px h-10 bg-white/15" />
             <StatBox value="47" label="APT Groups" sub="tracked" />
             <div className="w-px h-10 bg-white/15" />
-            <StatBox value="200+" label="Malware Families" sub="in IOC DB" />
+            <StatBox value="&lt;30s" label="Full Report" sub="no wait, no call" />
           </div>
         </div>
       </section>
@@ -1480,19 +1496,410 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── Ransomware Defense ── */}
+      <section className="border-t border-white/10 bg-white/[0.02]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
+          <div className="text-center mb-14">
+            <Badge color="red">Ransomware Defense</Badge>
+            <h2 className="text-4xl font-black text-white mt-4 mb-4">
+              The #1 threat to your business
+              <br />
+              <span className="text-red-400">detected before encryption starts</span>
+            </h2>
+            <p className="text-gray-400 max-w-2xl mx-auto">
+              Ransomware attacks cost businesses an average of{' '}
+              <span className="text-white font-semibold">$1.54M per incident</span>. Attackers spend
+              200+ days inside your network before encrypting. xShield detects them at every stage.
+            </p>
+          </div>
+
+          {/* Stats strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-14">
+            {[
+              {
+                val: '$1.54M',
+                label: 'Avg ransom cost',
+                sub: 'IBM Cost of Breach 2023',
+                color: 'text-red-400',
+              },
+              {
+                val: '4,000+',
+                label: 'Attacks per day',
+                sub: 'across all sectors',
+                color: 'text-orange-400',
+              },
+              {
+                val: '200',
+                label: 'Days avg dwell time',
+                sub: 'before encryption',
+                color: 'text-amber-400',
+              },
+              {
+                val: '66%',
+                label: 'Businesses hit',
+                sub: 'in last 12 months',
+                color: 'text-red-400',
+              },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-5 text-center"
+              >
+                <div className={`text-3xl font-black font-mono ${s.color}`}>{s.val}</div>
+                <div className="text-gray-200 text-xs font-semibold mt-1">{s.label}</div>
+                <div className="text-gray-500 text-[10px] mt-0.5">{s.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            {/* Left — active groups */}
+            <div>
+              <h3 className="text-xl font-black text-white mb-6">
+                Active Ransomware Groups — Tracked Live
+              </h3>
+              <div className="rounded-2xl border border-white/10 bg-[#0a0f18] overflow-hidden">
+                <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-white/[0.03] text-[10px] uppercase tracking-widest text-gray-500 font-bold">
+                  <div className="w-28">Group</div>
+                  <div className="w-20">Avg Ransom</div>
+                  <div className="flex-1">Targets</div>
+                  <div className="shrink-0">Status</div>
+                </div>
+                <div className="divide-y divide-white/[0.05]">
+                  {[
+                    {
+                      name: 'LockBit 3.0',
+                      ransom: '$1.8M',
+                      targets: 'Finance, healthcare, govt',
+                      active: true,
+                    },
+                    {
+                      name: 'BlackCat / ALPHV',
+                      ransom: '$2.3M',
+                      targets: 'Critical infrastructure',
+                      active: true,
+                    },
+                    {
+                      name: 'Cl0p',
+                      ransom: '$3.1M',
+                      targets: 'MOVEit exploit victims',
+                      active: true,
+                    },
+                    {
+                      name: 'Play',
+                      ransom: '$1.2M',
+                      targets: 'Manufacturing, legal',
+                      active: true,
+                    },
+                    {
+                      name: 'Akira',
+                      ransom: '$1.5M',
+                      targets: 'SME · IT & construction',
+                      active: true,
+                    },
+                    {
+                      name: 'Royal',
+                      ransom: '$2.0M',
+                      targets: 'Healthcare, education',
+                      active: false,
+                    },
+                  ].map((g) => (
+                    <div
+                      key={g.name}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-white/[0.03] transition-colors"
+                    >
+                      <div className="w-28">
+                        <span className="font-mono font-bold text-red-300 text-sm">{g.name}</span>
+                      </div>
+                      <div className="w-20 text-xs font-semibold text-orange-300 font-mono">
+                        {g.ransom}
+                      </div>
+                      <div className="flex-1 text-xs text-gray-400">{g.targets}</div>
+                      <div className="shrink-0">
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${g.active ? 'bg-red-500/15 text-red-400 border border-red-500/30' : 'bg-gray-500/15 text-gray-500 border border-gray-500/20'}`}
+                        >
+                          {g.active ? '● ACTIVE' : '◦ Reduced'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <p className="text-gray-600 text-xs mt-3 text-center">
+                IOCs tracked via abuse.ch Feodo, ThreatFox, and CISA advisories · Updated
+                continuously
+              </p>
+            </div>
+
+            {/* Right — detection layers + terminal */}
+            <div className="flex flex-col gap-5">
+              <div className="grid grid-cols-1 gap-3">
+                {[
+                  {
+                    icon: '🍯',
+                    title: 'Canary File Honeypots',
+                    desc: 'Sentinel files planted in /tmp, /home, /var/www. Any modification = immediate alert. First sign of encryption caught before any real files are touched.',
+                  },
+                  {
+                    icon: '📊',
+                    title: 'Entropy Spike Detection',
+                    desc: 'Ransomware causes mass high-entropy writes as it encrypts. xShield monitors I/O patterns — flags abnormal encryption activity within seconds.',
+                  },
+                  {
+                    icon: '🌐',
+                    title: 'Ransomware C2 Feed',
+                    desc: 'Domain and IP IOCs from Feodo Tracker + ThreatFox + CISA advisories. Outbound connection to known C2 = immediate kill + alert.',
+                  },
+                  {
+                    icon: '🔒',
+                    title: 'Shadow Copy Protection',
+                    desc: 'Ransomware deletes backups before encrypting. xShield alerts on vssadmin / wbadmin calls — catching the pre-encryption prep phase.',
+                  },
+                ].map((d) => (
+                  <div
+                    key={d.title}
+                    className="flex gap-4 bg-white/[0.04] border border-white/10 rounded-xl p-4"
+                  >
+                    <span className="text-2xl shrink-0 mt-0.5">{d.icon}</span>
+                    <div>
+                      <div className="text-white font-bold text-sm mb-1">{d.title}</div>
+                      <div className="text-gray-400 text-xs leading-relaxed">{d.desc}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Terminal */}
+              <div className="bg-[#080d14] border border-white/15 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-1.5 px-4 py-3 border-b border-white/10">
+                  <span className="w-3 h-3 rounded-full bg-red-500/70" />
+                  <span className="w-3 h-3 rounded-full bg-yellow-500/70" />
+                  <span className="w-3 h-3 rounded-full bg-green-500/70" />
+                  <span className="ml-3 text-gray-400 text-xs font-mono">
+                    xshield-ransomware-shield
+                  </span>
+                </div>
+                <div className="p-5 font-mono text-xs space-y-1.5">
+                  <div className="text-cyan-400">
+                    🛡️ Ransomware shield active — canary files deployed
+                  </div>
+                  <div className="text-gray-500">─────────────────────────────</div>
+                  <div className="text-yellow-300">
+                    ⚠️ [03:14:22] Canary file modified: /tmp/.xshield-sentinel
+                  </div>
+                  <div className="text-gray-400"> Process: suspicious_update (PID 8821)</div>
+                  <div className="text-orange-300">
+                    📊 High-entropy writes detected: 847 files/min
+                  </div>
+                  <div className="text-red-400">
+                    🚨 RANSOMWARE PATTERN — LockBit 3.0 signature match
+                  </div>
+                  <div className="text-gray-500">─────────────────────────────</div>
+                  <div className="text-red-300">🔴 Process tree killed · PID 8821 + children</div>
+                  <div className="text-red-300">🔒 Network isolation: outbound DROP applied</div>
+                  <div className="text-purple-300">
+                    📡 C2 IP 185.220.101.45 → Feodo tracker match
+                  </div>
+                  <div className="text-emerald-400">
+                    ✅ 847 files protected · 0 encrypted · Alert sent
+                  </div>
+                  <div className="text-gray-400 animate-pulse mt-2">█</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Pricing ── */}
+      <section id="pricing" className="border-t border-white/10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
+          <div className="text-center mb-14">
+            <Badge color="green">Pricing</Badge>
+            <h2 className="text-4xl font-black text-white mt-4 mb-4">
+              Transparent pricing.
+              <br />
+              <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                No sales call. No contract.
+              </span>
+            </h2>
+            <p className="text-gray-400 max-w-xl mx-auto">
+              Every competitor says "contact sales." We put our prices on the internet. Start free.
+              Upgrade when you're ready.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-12">
+            {[
+              {
+                name: 'Free',
+                price: '$0',
+                sub: 'No credit card',
+                color: 'border-white/10',
+                badge: null,
+                features: [
+                  '10 risk reports / month',
+                  'Basic risk score (0–100)',
+                  'AI threat narrative',
+                  '13 intelligence sources',
+                  'No API key required',
+                ],
+                cta: 'Start Free',
+                ctaStyle: 'bg-white/10 hover:bg-white/15 border border-white/20 text-white',
+                to: '/register',
+              },
+              {
+                name: 'Starter',
+                price: '$99',
+                sub: '/month · vs $15K+ competitors',
+                color: 'border-cyan-500/30',
+                badge: 'Most Popular',
+                features: [
+                  '500 reports / month',
+                  'REST API key + webhooks',
+                  'Continuous domain watch',
+                  'Email + Slack alerts',
+                  'One-click remediation',
+                ],
+                cta: 'Start Starter',
+                ctaStyle: 'bg-cyan-500 hover:bg-cyan-400 text-black font-bold',
+                to: '/register?plan=starter',
+              },
+              {
+                name: 'Pro',
+                price: '$499',
+                sub: '/month · full platform',
+                color: 'border-violet-500/30',
+                badge: null,
+                features: [
+                  'Unlimited reports',
+                  'WhatsApp / Telegram alerts',
+                  'Supply chain monitor',
+                  'Attack story engine',
+                  'Jira / PagerDuty / GitHub Actions',
+                ],
+                cta: 'Start Pro',
+                ctaStyle: 'bg-violet-600 hover:bg-violet-500 text-white font-bold',
+                to: '/register?plan=pro',
+              },
+              {
+                name: 'Enterprise',
+                price: 'Custom',
+                sub: 'White-label · MSSP',
+                color: 'border-amber-500/30',
+                badge: null,
+                features: [
+                  'MSSP white-label API',
+                  'Automated takedown SLA',
+                  'Contractual outcome SLA',
+                  'ROI dashboard',
+                  'Dedicated support',
+                ],
+                cta: 'Contact Us',
+                ctaStyle:
+                  'bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300',
+                to: '/contact',
+              },
+            ].map((tier) => (
+              <div
+                key={tier.name}
+                className={`rounded-2xl border ${tier.color} bg-white/[0.04] p-7 flex flex-col relative`}
+              >
+                {tier.badge && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10px] font-black uppercase tracking-widest bg-cyan-500 text-black px-3 py-1 rounded-full">
+                    {tier.badge}
+                  </div>
+                )}
+                <div className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-3">
+                  {tier.name}
+                </div>
+                <div className="text-4xl font-black font-mono text-white mb-1">{tier.price}</div>
+                <div className="text-xs text-gray-500 mb-6">{tier.sub}</div>
+                <ul className="space-y-2.5 flex-1 mb-8">
+                  {tier.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-sm text-gray-300">
+                      <span className="text-emerald-400 mt-0.5 shrink-0">›</span>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to={tier.to}
+                  className={`text-center text-sm px-4 py-2.5 rounded-xl transition-colors ${tier.ctaStyle}`}
+                >
+                  {tier.cta}
+                </Link>
+              </div>
+            ))}
+          </div>
+
+          {/* Competitor comparison */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/10 text-center">
+              <p className="text-sm text-gray-400">
+                <span className="text-white font-semibold">vs the competition</span> — verified
+                pricing from Vendr 2025
+              </p>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-white/[0.06]">
+              {[
+                { name: 'xShield AI', price: '$1,188', sub: '/year (Starter)', highlight: true },
+                { name: 'Resecurity', price: '$15K–50K', sub: '/year est.', highlight: false },
+                {
+                  name: 'Digital Shadows',
+                  price: '$95K–105K',
+                  sub: '/year (Vendr)',
+                  highlight: false,
+                },
+                {
+                  name: 'Recorded Future',
+                  price: '$60K–100K+',
+                  sub: '/year + takedowns',
+                  highlight: false,
+                },
+                {
+                  name: 'Constella Intel',
+                  price: '$315K–415K',
+                  sub: '/year (Vendr)',
+                  highlight: false,
+                },
+              ].map((c) => (
+                <div
+                  key={c.name}
+                  className={`px-4 py-5 text-center ${c.highlight ? 'bg-cyan-500/5' : ''}`}
+                >
+                  <div
+                    className={`text-lg font-black font-mono ${c.highlight ? 'text-cyan-400' : 'text-red-400'}`}
+                  >
+                    {c.price}
+                  </div>
+                  <div
+                    className={`text-xs font-semibold mt-1 ${c.highlight ? 'text-white' : 'text-gray-300'}`}
+                  >
+                    {c.name}
+                  </div>
+                  <div className="text-[10px] text-gray-600 mt-0.5">{c.sub}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Download / CTA ── */}
       <section id="download" className="border-t border-white/10 relative overflow-hidden py-24">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-cyan-600/10 rounded-full blur-3xl" />
         </div>
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 text-center">
-          <Badge color="cyan">Free · Open Source · No Telemetry</Badge>
+          <Badge color="cyan">Free Tier · No Credit Card · Start in 30 Seconds</Badge>
           <h2 className="text-4xl sm:text-5xl font-black text-white mt-6 mb-4">
-            Start protecting yourself now
+            Know your risk score now
           </h2>
           <p className="text-gray-300 text-lg mb-14 max-w-xl mx-auto">
-            Nation-state spyware targets activists, journalists, and executives every day. xShield
-            AI is your open-source last line of defense.
+            Enter your domain. Get 13 intelligence sources + AI threat narrative in under 30
+            seconds. Free tier includes 10 reports/month — no credit card, no sales call.
           </p>
 
           <div className="flex flex-col lg:flex-row items-center justify-center gap-10">
@@ -1584,6 +1991,9 @@ export default function Landing() {
               <a href="#apt" className="hover:text-gray-200 transition-colors">
                 APT Groups
               </a>
+              <a href="#pricing" className="hover:text-gray-200 transition-colors">
+                Pricing
+              </a>
               <a
                 href={LIVE_URL}
                 target="_blank"
@@ -1597,7 +2007,7 @@ export default function Landing() {
               </Link>
             </div>
             <div className="text-xs text-gray-400">
-              &copy; {new Date().getFullYear()} xShield AI · ANKR Labs · Open Source
+              &copy; {new Date().getFullYear()} xShield AI · ANKR Labs
             </div>
           </div>
         </div>
