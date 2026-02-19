@@ -349,24 +349,24 @@ export default function Landing() {
               xShield<span className="text-cyan-400">AI</span>
             </span>
           </div>
-          <div className="hidden md:flex items-center gap-8 text-sm text-gray-300">
+          <div className="hidden md:flex items-center gap-6 text-sm text-gray-300">
             <a href="#features" className="hover:text-white transition-colors">
               Features
             </a>
             <a href="#threats" className="hover:text-white transition-colors">
               Threat DB
             </a>
-            <a href="#apt" className="hover:text-white transition-colors">
-              APT Groups
-            </a>
             <a href="#risk" className="hover:text-white transition-colors">
               Risk Intel
             </a>
-            <a href="#platforms" className="hover:text-white transition-colors">
-              Platforms
+            <a href="#social-threats" className="hover:text-white transition-colors">
+              Social Threats
             </a>
-            <a href="#how-it-works" className="hover:text-white transition-colors">
-              How it Works
+            <a href="#remediation" className="hover:text-white transition-colors">
+              Remediate
+            </a>
+            <a href="#pricing" className="hover:text-white transition-colors">
+              Pricing
             </a>
             <a
               href={LIVE_URL}
@@ -379,12 +379,6 @@ export default function Landing() {
             </a>
           </div>
           <div className="flex items-center gap-3">
-            <a
-              href="#pricing"
-              className="text-sm text-gray-300 hover:text-white transition-colors hidden md:block"
-            >
-              Pricing
-            </a>
             <Link
               to="/login"
               className="text-sm text-gray-300 hover:text-white transition-colors px-3 py-1.5"
@@ -1529,7 +1523,7 @@ export default function Landing() {
       </section>
 
       {/* ── Remediate & Retest ── */}
-      <section className="border-t border-white/10">
+      <section id="remediation" className="border-t border-white/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-24">
           {/* Header */}
           <div className="text-center mb-14">
