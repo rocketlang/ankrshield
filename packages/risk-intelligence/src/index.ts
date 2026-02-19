@@ -60,6 +60,21 @@ export type {
   FeodoEntry,
   ThreatFoxIoc,
 } from './detectors/ransomware-detector.js';
+export {
+  checkCanaryFiles,
+  canaryToFactors,
+  CanaryManager,
+  DEFAULT_CANARY_PATHS,
+} from './detectors/canary-detector.js';
+export type { CanaryFile, CanaryEvent, CanaryResult } from './detectors/canary-detector.js';
+export {
+  checkDirectoryEntropy,
+  analyzeDirectoryEntropy,
+  analyzeFileEntropy,
+  calculateEntropy,
+  entropyToFactors,
+} from './detectors/entropy-detector.js';
+export type { FileEntropyResult, EntropyReport } from './detectors/entropy-detector.js';
 export { generateThreatNarrative } from './threat-narrative.js';
 
 // ---------------------------------------------------------------------------

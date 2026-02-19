@@ -31,7 +31,9 @@ export interface RiskFactor {
     | 'active_phishing_campaign'
     | 'geopolitical_risk'
     | 'code_secret_exposure'
-    | 'ransomware_c2';
+    | 'ransomware_c2'
+    | 'canary_modified'
+    | 'entropy_spike';
   /** Human-readable summary of the finding */
   summary: string;
   /** Severity contribution 0–100 */
@@ -163,6 +165,12 @@ export interface RiskReport {
   /** Ransomware C2 intelligence (Feodo Tracker + ThreatFox) */
   ransomwareResult: import('./detectors/ransomware-detector.js').RansomwareResult | null;
 
+  /** Canary file check — modification = ransomware in progress */
+  canaryResult: import('./detectors/canary-detector.js').CanaryResult | null;
+
+  /** Entropy scan of local directories — spike = encryption in progress */
+  entropyReports: import('./detectors/entropy-detector.js').EntropyReport[] | null;
+
   /**
    * Claude AI-generated threat narrative — plain-English analysis of all findings.
    * null when ANTHROPIC_API_KEY is not set.
@@ -206,6 +214,14 @@ export interface RiskEngineOptions {
   githubToken?: string;
   /** Check against abuse.ch Feodo C2 blocklist + ThreatFox. Default: true */
   enableRansomware?: boolean;
+  /** Check canary sentinel files for modification (local endpoint only). Default: false */
+  enableCanary?: boolean;
+  /** Custom canary file paths (uses defaults if omitted) */
+  canaryPaths?: string[];
+  /** Scan local directories for entropy spikes (local endpoint only). Default: false */
+  enableEntropy?: boolean;
+  /** Directories to scan for entropy (uses defaults if omitted) */
+  entropyDirectories?: string[];
   /** Generate Claude AI threat narrative (requires ANTHROPIC_API_KEY). Default: true */
   enableThreatNarrative?: boolean;
   /** Anthropic API key override (defaults to ANTHROPIC_API_KEY env var) */

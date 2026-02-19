@@ -32,10 +32,12 @@ import { promises as dns } from 'dns';
 
 import { lookupAsnReputation, asnToFactors } from './detectors/asn-reputation.js';
 import { checkDomainBreaches, breachesToFactors } from './detectors/breach-monitor.js';
+import { checkCanaryFiles, canaryToFactors } from './detectors/canary-detector.js';
 import { monitorCertTransparency, certRecordsToFactors } from './detectors/cert-transparency.js';
 import { auditDnsSecurity, dnsAuditToFactors } from './detectors/dns-security-audit.js';
 import { validateTyposquats, typosquatsToFactors } from './detectors/dns-validator.js';
 import { scanDomainThreats, domainThreatsToFactors } from './detectors/domain-guard.js';
+import { checkDirectoryEntropy, entropyToFactors } from './detectors/entropy-detector.js';
 import { scanGithubSecrets, githubLeaksToFactors } from './detectors/github-dork.js';
 import { scanIpWithGreyNoise, greyNoiseToFactors } from './detectors/greynoise-scanner.js';
 import { scanIpWithOtx, scanDomainWithOtx, otxToFactors } from './detectors/otx-scanner.js';
@@ -120,6 +122,8 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
   const enableAsnReputation = options.enableAsnReputation ?? true;
   const enableGithubDork = options.enableGithubDork ?? true;
   const enableRansomware = options.enableRansomware ?? true;
+  const enableCanary = options.enableCanary ?? false; // opt-in: only on local endpoints
+  const enableEntropy = options.enableEntropy ?? false; // opt-in: only on local endpoints
 
   const enableThreatNarrative = options.enableThreatNarrative ?? true;
   const otxApiKey = options.otxApiKey ?? process.env['OTX_API_KEY'];
@@ -146,6 +150,8 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     asnRecord,
     githubLeaks,
     ransomwareResult,
+    canaryResult,
+    entropyReports,
   ] = await Promise.all([
     enableGreyNoise && serverIp ? scanIpWithGreyNoise(serverIp) : Promise.resolve(null),
     enableShodan && serverIp
@@ -167,6 +173,8 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
       ? scanGithubSecrets(domain, githubToken)
       : Promise.resolve([]),
     enableRansomware ? checkRansomwareFeeds(serverIp, domain) : Promise.resolve(null),
+    enableCanary ? checkCanaryFiles(options.canaryPaths) : Promise.resolve(null),
+    enableEntropy ? checkDirectoryEntropy(options.entropyDirectories) : Promise.resolve(null),
   ]);
 
   // Collect all risk factors
@@ -186,6 +194,8 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
   if (asnRecord) factors.push(...asnToFactors(asnRecord));
   factors.push(...githubLeaksToFactors(githubLeaks, domain));
   if (ransomwareResult) factors.push(...ransomwareToFactors(ransomwareResult));
+  if (canaryResult) factors.push(...canaryToFactors(canaryResult));
+  if (entropyReports) factors.push(...entropyToFactors(entropyReports));
 
   const riskScore = aggregateScore(factors);
   const riskLevel = scoreToLevel(riskScore);
@@ -212,6 +222,8 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     asnRecord,
     githubLeaks,
     ransomwareResult,
+    canaryResult,
+    entropyReports,
     threatNarrative: null,
     durationMs: 0,
   };
@@ -242,6 +254,8 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     asnRecord,
     githubLeaks,
     ransomwareResult,
+    canaryResult,
+    entropyReports,
     threatNarrative,
     durationMs: Date.now() - start,
   };
