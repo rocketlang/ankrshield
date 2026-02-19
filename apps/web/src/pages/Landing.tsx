@@ -1521,8 +1521,9 @@ export default function Landing() {
 
           <div className="mt-5 text-center text-xs text-gray-600">
             This briefing was auto-generated in ~19 seconds by the xShield AI threat narrative
-            engine — replacing hours of manual CTI analyst work.{' '}
-            <span className="text-violet-400">Try it free on your own domain →</span>
+            engine — 17 sources including ransomware C2, social platform threats, QR phishing,
+            webhook exfil, and brand impersonation.{' '}
+            <span className="text-violet-400">AI Enabled · BYO Anthropic / Groq / OpenAI key</span>
           </div>
         </div>
       </section>
