@@ -28,6 +28,7 @@ class MainApplication : Application(), ReactApplication {
             val packages = PackageList(this).packages
             // AnkrShield native modules
             packages.add(DnsVpnPackage())
+            packages.add(AppScannerPackage())
             return packages
           }
 

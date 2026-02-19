@@ -4,10 +4,9 @@
  * Uses @ankrshield/android-monitor IOC database + permission heuristics
  * to detect stalkerware, spyware, and data-harvesting apps.
  *
- * NOTE: React Native cannot call Android PackageManager directly from JS
- * without a native module. This screen uses a representative 15-app mock
- * dataset (clearly labelled) and passes it through the real AndroidMonitor
- * scanner logic so results reflect genuine IOC/heuristic scoring.
+ * Live mode: NativeModules.AppScanner.getInstalledApps() calls Android
+ * PackageManager to enumerate all installed apps and their declared
+ * permissions. Results are fed into the real AndroidMonitor scanner.
  */
 import { AndroidMonitor } from '@ankrshield/android-monitor';
 import type {
@@ -25,208 +24,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Share,
+  NativeModules,
+  Platform,
 } from 'react-native';
 
-// ---------------------------------------------------------------------------
-// Mock device app dataset (15 apps — clearly labelled as DEMO data)
-// Mirrors what Android PackageManager would return on a real device.
-// ---------------------------------------------------------------------------
-
-const MOCK_INSTALLED_APPS: AppPermissions[] = [
-  // ── 1. Stalkerware A — known IOC package ──────────────────────────────────
-  {
-    packageName: 'com.thetruthspy.android',
-    appName: 'System Health Monitor',
-    permissions: [
-      'READ_SMS',
-      'RECEIVE_SMS',
-      'READ_CALL_LOG',
-      'PROCESS_OUTGOING_CALLS',
-      'RECORD_AUDIO',
-      'CAMERA',
-      'ACCESS_FINE_LOCATION',
-      'ACCESS_BACKGROUND_LOCATION',
-      'READ_CONTACTS',
-      'GET_ACCOUNTS',
-      'RECEIVE_BOOT_COMPLETED',
-      'FOREGROUND_SERVICE',
-      'REQUEST_INSTALL_PACKAGES',
-      'BIND_ACCESSIBILITY_SERVICE',
-    ],
-    isSystemApp: false,
-    installSource: 'unknown',
-  },
-  // ── 2. Stalkerware B — known IOC package, ADB-sideloaded ─────────────────
-  {
-    packageName: 'com.spousespy.android',
-    appName: 'Device Optimizer Pro',
-    permissions: [
-      'READ_SMS',
-      'READ_CALL_LOG',
-      'ACCESS_FINE_LOCATION',
-      'ACCESS_BACKGROUND_LOCATION',
-      'RECORD_AUDIO',
-      'CAMERA',
-      'READ_CONTACTS',
-      'WRITE_CONTACTS',
-      'GET_ACCOUNTS',
-      'RECEIVE_BOOT_COMPLETED',
-      'FOREGROUND_SERVICE',
-      'BIND_DEVICE_ADMIN',
-      'SYSTEM_ALERT_WINDOW',
-      'BIND_ACCESSIBILITY_SERVICE',
-    ],
-    isSystemApp: false,
-    installSource: 'adb',
-  },
-  // ── 3. Suspicious A — location + SMS + mic combo (high risk) ─────────────
-  {
-    packageName: 'com.weather.tracker.plus',
-    appName: 'Weather Tracker Plus',
-    permissions: [
-      'READ_SMS',
-      'READ_CONTACTS',
-      'ACCESS_FINE_LOCATION',
-      'ACCESS_BACKGROUND_LOCATION',
-      'RECORD_AUDIO',
-      'RECEIVE_BOOT_COMPLETED',
-      'FOREGROUND_SERVICE',
-    ],
-    isSystemApp: false,
-    installSource: 'unknown',
-  },
-  // ── 4. Suspicious B — call recorder combo ────────────────────────────────
-  {
-    packageName: 'com.util.callrecorder.auto',
-    appName: 'Auto Call Recorder',
-    permissions: [
-      'READ_CALL_LOG',
-      'PROCESS_OUTGOING_CALLS',
-      'RECORD_AUDIO',
-      'WRITE_EXTERNAL_STORAGE',
-      'READ_EXTERNAL_STORAGE',
-      'ANSWER_PHONE_CALLS',
-    ],
-    isSystemApp: false,
-    installSource: 'file_manager',
-  },
-  // ── 5. Suspicious C — financial trojan combo ──────────────────────────────
-  {
-    packageName: 'com.banking.assistant.helper',
-    appName: 'Banking Assistant',
-    permissions: [
-      'SYSTEM_ALERT_WINDOW',
-      'BIND_ACCESSIBILITY_SERVICE',
-      'GET_ACCOUNTS',
-      'READ_SMS',
-      'RECEIVE_SMS',
-      'INTERNET',
-    ],
-    isSystemApp: false,
-    installSource: 'unknown',
-  },
-  // ── 6. Adware A — aggressive data harvester ───────────────────────────────
-  {
-    packageName: 'com.flashlight.pro.ultimate',
-    appName: 'Flashlight Pro Ultimate',
-    permissions: [
-      'READ_CONTACTS',
-      'READ_CALL_LOG',
-      'READ_SMS',
-      'GET_ACCOUNTS',
-      'ACCESS_FINE_LOCATION',
-      'ACCESS_COARSE_LOCATION',
-    ],
-    isSystemApp: false,
-    installSource: 'play_store',
-  },
-  // ── 7. Adware B — bulk permission grab ────────────────────────────────────
-  {
-    packageName: 'com.emoji.keyboard.fun.free',
-    appName: 'Fun Emoji Keyboard',
-    permissions: [
-      'READ_CONTACTS',
-      'READ_CALL_LOG',
-      'GET_ACCOUNTS',
-      'ACCESS_FINE_LOCATION',
-      'READ_EXTERNAL_STORAGE',
-      'MANAGE_EXTERNAL_STORAGE',
-    ],
-    isSystemApp: false,
-    installSource: 'play_store',
-  },
-  // ── 8. CLEAN — Chrome browser ─────────────────────────────────────────────
-  {
-    packageName: 'com.android.chrome',
-    appName: 'Chrome',
-    permissions: ['CAMERA', 'ACCESS_FINE_LOCATION', 'RECORD_AUDIO', 'INTERNET'],
-    isSystemApp: false,
-    installSource: 'play_store',
-  },
-  // ── 9. CLEAN — Calculator ────────────────────────────────────────────────
-  {
-    packageName: 'com.google.android.calculator',
-    appName: 'Calculator',
-    permissions: [],
-    isSystemApp: true,
-    installSource: 'play_store',
-  },
-  // ── 10. CLEAN — Google Maps ──────────────────────────────────────────────
-  {
-    packageName: 'com.google.android.apps.maps',
-    appName: 'Google Maps',
-    permissions: ['ACCESS_FINE_LOCATION', 'ACCESS_BACKGROUND_LOCATION', 'CAMERA', 'INTERNET'],
-    isSystemApp: false,
-    installSource: 'play_store',
-  },
-  // ── 11. CLEAN — Spotify ──────────────────────────────────────────────────
-  {
-    packageName: 'com.spotify.music',
-    appName: 'Spotify',
-    permissions: ['RECORD_AUDIO', 'READ_EXTERNAL_STORAGE', 'INTERNET'],
-    isSystemApp: false,
-    installSource: 'play_store',
-  },
-  // ── 12. CLEAN — WhatsApp ─────────────────────────────────────────────────
-  {
-    packageName: 'com.whatsapp',
-    appName: 'WhatsApp',
-    permissions: [
-      'CAMERA',
-      'RECORD_AUDIO',
-      'READ_CONTACTS',
-      'READ_EXTERNAL_STORAGE',
-      'ACCESS_FINE_LOCATION',
-      'INTERNET',
-    ],
-    isSystemApp: false,
-    installSource: 'play_store',
-  },
-  // ── 13. CLEAN — Gmail ────────────────────────────────────────────────────
-  {
-    packageName: 'com.google.android.gm',
-    appName: 'Gmail',
-    permissions: ['GET_ACCOUNTS', 'READ_CONTACTS', 'INTERNET'],
-    isSystemApp: false,
-    installSource: 'play_store',
-  },
-  // ── 14. CLEAN — Clock ────────────────────────────────────────────────────
-  {
-    packageName: 'com.google.android.deskclock',
-    appName: 'Clock',
-    permissions: [],
-    isSystemApp: true,
-    installSource: 'play_store',
-  },
-  // ── 15. CLEAN — Photos ───────────────────────────────────────────────────
-  {
-    packageName: 'com.google.android.apps.photos',
-    appName: 'Google Photos',
-    permissions: ['CAMERA', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE', 'INTERNET'],
-    isSystemApp: false,
-    installSource: 'play_store',
-  },
-];
+const { AppScanner } = NativeModules;
 
 // ---------------------------------------------------------------------------
 // Risk display helpers
@@ -421,19 +223,27 @@ export function AndroidMonitorScreen() {
     setProgress(0);
     setResult(null);
 
-    // Simulate a realistic scan with progress ticks
-    for (let p = 10; p <= 90; p += 10) {
-      await new Promise<void>((resolve) => setTimeout(resolve, 120));
-      setProgress(p);
+    try {
+      // Fetch real installed apps from Android PackageManager
+      setProgress(10);
+      const rawApps: AppPermissions[] =
+        Platform.OS === 'android' && AppScanner ? await AppScanner.getInstalledApps() : [];
+
+      setProgress(40);
+      // Small yield so progress bar paints
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+      setProgress(75);
+
+      const scanResult = monitor.scanApps(rawApps);
+      setProgress(100);
+      await new Promise<void>((resolve) => setTimeout(resolve, 200));
+      setResult(scanResult);
+    } catch (_e) {
+      // Native module unavailable — show empty result
+      setResult(monitor.scanApps([]));
+    } finally {
+      setScanning(false);
     }
-
-    const scanResult = monitor.scanApps(MOCK_INSTALLED_APPS);
-    setProgress(100);
-
-    // Short pause so the "100%" is visible before we replace UI
-    await new Promise<void>((resolve) => setTimeout(resolve, 300));
-    setResult(scanResult);
-    setScanning(false);
   }, []);
 
   const shareReport = useCallback(async () => {
@@ -495,12 +305,9 @@ export function AndroidMonitorScreen() {
         <Text style={styles.heroIcon}>🤖</Text>
         <Text style={styles.heroTitle}>Android App Scanner</Text>
         <Text style={styles.heroSub}>
-          Scans installed apps against the ANKR Shield stalkerware/spyware IOC database and
+          Scans all installed apps against the ANKR Shield stalkerware/spyware IOC database and
           permission-combo heuristics (Exodus Privacy methodology).
         </Text>
-        <View style={styles.demoBadge}>
-          <Text style={styles.demoBadgeText}>DEMO MODE — 15 representative apps</Text>
-        </View>
       </View>
 
       {/* Scan button */}
@@ -633,10 +440,10 @@ export function AndroidMonitorScreen() {
       <View style={styles.infoBox}>
         <Text style={styles.infoTitle}>How This Works</Text>
         <Text style={styles.infoText}>
-          The scanner checks each app against the ANKR Shield IOC database (Coalition Against
-          Stalkerware, Exodus Privacy, Citizen Lab, Lookout) and 20+ permission-combination rules
-          covering stalkerware, keyloggers, call recorders, financial trojans, and more. On a real
-          device a native module would supply live PackageManager data.
+          The scanner checks every installed app against the ANKR Shield IOC database (Coalition
+          Against Stalkerware, Exodus Privacy, Citizen Lab, Lookout) and 20+ permission-combination
+          rules covering stalkerware, keyloggers, call recorders, financial trojans, and more. App
+          data is read live from Android PackageManager — nothing leaves your device.
         </Text>
       </View>
     </ScrollView>
