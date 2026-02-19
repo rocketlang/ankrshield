@@ -30,39 +30,15 @@ import { API_BASE } from '../config';
 
 import { VpnStats } from './VpnService';
 
-// ─── Device ID (persistent across app restarts) ───────────────────────────────
+// ─── Device ID (session-scoped, resets on app restart) ───────────────────────
+// react-native-fs is not installed — use a stable in-memory session ID.
+// Good enough for fleet aggregation; add react-native-fs later for persistence.
 
-const SESSION_FALLBACK_ID =
-  'dev_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-let _resolvedDeviceId: string | null = null;
+const DEVICE_ID =
+  'dev_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36) + '_' + Platform.OS;
 
 async function getDeviceId(): Promise<string> {
-  if (_resolvedDeviceId) return _resolvedDeviceId;
-
-  // Try to read a previously written ID from cache
-  try {
-    const { readFile, writeFile } = await import('react-native-fs' as any);
-    const path = (await import('react-native-fs' as any)).CachesDirectoryPath + '/.ankrshield_did';
-    let id: string | null = null;
-    try {
-      id = (await readFile(path, 'utf8')).trim();
-    } catch {
-      // File doesn't exist yet — generate and write
-      id =
-        'dev_' +
-        Math.random().toString(36).slice(2, 10) +
-        Date.now().toString(36) +
-        '_' +
-        Platform.OS;
-      await writeFile(path, id, 'utf8');
-    }
-    _resolvedDeviceId = id;
-    return id;
-  } catch {
-    // react-native-fs not installed — use session ID
-    _resolvedDeviceId = SESSION_FALLBACK_ID;
-    return _resolvedDeviceId;
-  }
+  return DEVICE_ID;
 }
 
 // ─── Audit Log (in-memory, last 50 entries) ───────────────────────────────────

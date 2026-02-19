@@ -15,6 +15,7 @@ import { ConferenceScreen } from './src/screens/ConferenceScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LiveThreatsScreen } from './src/screens/LiveThreatsScreen';
+import { RiskLookupScreen } from './src/screens/RiskLookupScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { SpywareScanScreen } from './src/screens/SpywareScanScreen';
 import { ThreatAlertsScreen } from './src/screens/ThreatAlertsScreen';
@@ -98,6 +99,15 @@ function App(): React.JSX.Element {
               title: '🎤 Join Conference',
               headerStyle: { backgroundColor: '#080c14' },
               headerTintColor: '#3b82f6',
+            }}
+          />
+          <Stack.Screen
+            name="RiskLookup"
+            component={RiskLookupScreen}
+            options={{
+              title: '🔍 Risk Lookup',
+              headerStyle: { backgroundColor: '#080c14' },
+              headerTintColor: '#60a5fa',
             }}
           />
         </Stack.Navigator>
