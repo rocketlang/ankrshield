@@ -614,6 +614,57 @@ model WarriorQuarantine {
 }
 
 // ============================================================================
+// DOMAIN WATCH (Continuous monitoring + alerting)
+// ============================================================================
+
+// Domains under continuous 5-minute surveillance
+model DomainWatch {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  domain         String    @unique
+  webhookUrl     String?   // POST alert payloads here on change
+  isActive       Boolean   @default(true)
+
+  // Last scan snapshot (used for delta detection)
+  lastCheckedAt  DateTime?
+  lastRiskScore  Int?      @db.SmallInt
+  lastRiskLevel  String?
+
+  // Counts
+  alertCount     Int       @default(0)
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  alerts         AlertHistory[]
+
+  @@index([isActive])
+  @@index([domain])
+  @@map("domain_watches")
+}
+
+// Alert history — one row per change detected
+model AlertHistory {
+  id            String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  watchId       String      @db.Uuid
+  watch         DomainWatch @relation(fields: [watchId], references: [id], onDelete: Cascade)
+
+  triggeredAt   DateTime    @default(now())
+
+  // e.g. "score_change", "new_typosquat", "spf_removed", "dmarc_removed",
+  //      "phishing_found", "ip_threat", "new_breach"
+  alertType     String
+  previousValue String?
+  newValue      String?
+
+  // Webhook delivery status: "sent" | "failed" | "skipped"
+  webhookStatus String?
+
+  @@index([watchId])
+  @@index([triggeredAt(sort: Desc)])
+  @@map("alert_history")
+}
+
+// ============================================================================
 // ANALYTICS (Denormalized for performance)
 // ============================================================================
 

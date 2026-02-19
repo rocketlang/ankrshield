@@ -21,6 +21,7 @@ import { startMonitor, stopMonitor, getMonitor } from './monitor/traffic-monitor
 import authPlugin from './plugins/auth';
 import securityPlugin from './plugins/security';
 import { getWarrior, startWarrior, stopWarrior } from './warrior/warrior-service';
+import { startDomainWatcher, stopDomainWatcher } from './watch/domain-watcher.js';
 
 const fastify = Fastify({
   logger: {
@@ -1116,6 +1117,98 @@ Date: ${now.toLocaleDateString('en-IN')}`;
       }
     });
 
+    // ─── Domain Watch endpoints ───────────────────────────────────────────────
+
+    // POST /watch/domain — add a domain to continuous monitoring
+    fastify.post<{ Body: { domain?: string; webhookUrl?: string } }>(
+      '/watch/domain',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            properties: { domain: { type: 'string' }, webhookUrl: { type: 'string' } },
+          },
+        },
+      },
+      async (request, reply) => {
+        const { domain, webhookUrl } = request.body ?? {};
+        if (!domain?.trim()) return reply.status(400).send({ error: 'domain is required' });
+        const clean = domain
+          .trim()
+          .toLowerCase()
+          .replace(/^www\./, '');
+        try {
+          const watch = await prisma.domainWatch.upsert({
+            where: { domain: clean },
+            create: { domain: clean, webhookUrl: webhookUrl ?? null, isActive: true },
+            update: { isActive: true, webhookUrl: webhookUrl ?? undefined },
+          });
+          return { ok: true, watch };
+        } catch (err: unknown) {
+          return reply
+            .status(500)
+            .send({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    );
+
+    // DELETE /watch/domain/:domain — stop watching a domain
+    fastify.delete<{ Params: { domain: string } }>(
+      '/watch/domain/:domain',
+      async (request, reply) => {
+        const domain = request.params.domain?.toLowerCase();
+        if (!domain) return reply.status(400).send({ error: 'domain param required' });
+        try {
+          await prisma.domainWatch.updateMany({ where: { domain }, data: { isActive: false } });
+          return { ok: true, domain };
+        } catch (err: unknown) {
+          return reply
+            .status(500)
+            .send({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    );
+
+    // GET /watch/domains — list all active watches with latest status + recent alerts
+    fastify.get('/watch/domains', async (_request, reply) => {
+      try {
+        const watches = await prisma.domainWatch.findMany({
+          where: { isActive: true },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            alerts: {
+              orderBy: { triggeredAt: 'desc' },
+              take: 5,
+            },
+          },
+        });
+        return { watches };
+      } catch (err: unknown) {
+        return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) });
+      }
+    });
+
+    // GET /watch/domain/:domain/alerts — full alert history for one domain
+    fastify.get<{ Params: { domain: string }; Querystring: { limit?: string } }>(
+      '/watch/domain/:domain/alerts',
+      async (request, reply) => {
+        const domain = request.params.domain?.toLowerCase();
+        const limit = Math.min(parseInt(request.query.limit ?? '50', 10), 200);
+        try {
+          const watch = await prisma.domainWatch.findUnique({
+            where: { domain },
+            include: { alerts: { orderBy: { triggeredAt: 'desc' }, take: limit } },
+          });
+          if (!watch) return reply.status(404).send({ error: 'domain not being watched' });
+          return watch;
+        } catch (err: unknown) {
+          return reply
+            .status(500)
+            .send({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    );
+
     // GreyNoise classification for a single IP (useful for live threat feed)
     fastify.get<{ Params: { ip: string } }>('/risk/ip/:ip', async (request, reply) => {
       const { ip } = request.params;
@@ -1150,6 +1243,12 @@ Date: ${now.toLocaleDateString('en-IN')}`;
     // Start AI Warrior engine
     await startWarrior();
     fastify.log.info(`⚔️  AI Warrior engine started — honeypots deployed, scope enforcer active`);
+
+    // Start Domain Watcher (5-min polling, first scan after 30s)
+    startDomainWatcher(prisma);
+    fastify.log.info(
+      `👁️  Domain Watcher started — polling every ${process.env.DOMAIN_WATCH_INTERVAL_MS ?? '300000'}ms`
+    );
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -1162,6 +1261,7 @@ signals.forEach((signal) => {
   process.on(signal, async () => {
     fastify.log.info(`Received ${signal}, closing server...`);
     stopMonitor();
+    stopDomainWatcher();
     await stopWarrior();
     await fastify.close();
     await prisma.$disconnect();
