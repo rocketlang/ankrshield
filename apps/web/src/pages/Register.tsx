@@ -3,19 +3,67 @@
  *
  * Flow: email + password → POST /auth/register → OTP sent to email
  *       user enters OTP  → POST /auth/otp/verify → JWT issued → dashboard
+ *
+ * Password field: live strength meter via POST /auth/password-strength (debounced 400ms)
  */
 
 import { Shield } from 'lucide-react';
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import Alert from '../components/ui/Alert';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
-import { sso } from '../lib/ssoClient';
+import { sso, type PasswordStrength } from '../lib/ssoClient';
 import { useAuthStore } from '../stores/authStore';
 
 type Step = 'form' | 'verify';
+
+// Strength bar config indexed by score 0–4
+const STRENGTH_CONFIG = [
+  { label: 'Very Weak', color: 'bg-red-500', textColor: 'text-red-400', bars: 1 },
+  { label: 'Weak', color: 'bg-orange-500', textColor: 'text-orange-400', bars: 2 },
+  { label: 'Fair', color: 'bg-yellow-500', textColor: 'text-yellow-400', bars: 3 },
+  { label: 'Strong', color: 'bg-green-500', textColor: 'text-green-400', bars: 4 },
+  { label: 'Very Strong', color: 'bg-emerald-400', textColor: 'text-emerald-400', bars: 5 },
+] as const;
+
+function PasswordStrengthMeter({ strength }: { strength: PasswordStrength }) {
+  const cfg = STRENGTH_CONFIG[Math.min(strength.score, 4)];
+  return (
+    <div className="mt-2 space-y-1.5">
+      {/* 5-segment bar */}
+      <div className="flex gap-1">
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div
+            key={i}
+            className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${
+              i < cfg.bars ? cfg.color : 'bg-gray-600'
+            }`}
+          />
+        ))}
+      </div>
+
+      {/* Label + crack time */}
+      <div className="flex items-center justify-between text-xs">
+        <span className={`font-medium ${cfg.textColor}`}>{cfg.label}</span>
+        <span className="text-gray-500">crack time: {strength.crackTime}</span>
+      </div>
+
+      {/* Feedback */}
+      {strength.feedback.length > 0 && strength.feedback[0] !== 'Strong password!' && (
+        <ul className="space-y-0.5">
+          {strength.feedback.map((f, i) => (
+            <li key={i} className="text-xs text-gray-400 flex items-start gap-1">
+              <span className="text-yellow-500 mt-0.5 shrink-0">›</span>
+              {f}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export default function Register() {
   const [step, setStep] = useState<Step>('form');
@@ -28,8 +76,30 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [devPreview, setDevPreview] = useState<string | null>(null);
 
+  // Password strength state
+  const [strength, setStrength] = useState<PasswordStrength | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const navigate = useNavigate();
   const login = useAuthStore((state) => state.login);
+
+  // Live password strength — debounced 400ms
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!password) {
+      setStrength(null);
+      return;
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      const result = await sso.passwordStrength(password);
+      setStrength(result);
+    }, 400);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [password]);
 
   // Step 1 — create account → SSO sends OTP to email
   const handleRegister = async (e: FormEvent) => {
@@ -39,14 +109,16 @@ export default function Register() {
     if (!name || !email || !password || !confirmPassword) {
       return setError('Please fill in all fields');
     }
-    if (password.length < 8) {
-      return setError('Password must be at least 8 characters');
-    }
     if (password !== confirmPassword) {
       return setError('Passwords do not match');
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return setError('Please enter a valid email address');
+    }
+    if (strength && !strength.acceptable) {
+      return setError(
+        `Password too weak — ${strength.feedback[0] ?? 'choose a stronger password'}`
+      );
     }
 
     setLoading(true);
@@ -149,16 +221,21 @@ export default function Register() {
                 required
                 autoComplete="email"
               />
-              <Input
-                type="password"
-                label="Password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                helperText="At least 8 characters"
-              />
+
+              {/* Password field + live strength meter */}
+              <div>
+                <Input
+                  type="password"
+                  label="Password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                />
+                {strength && <PasswordStrengthMeter strength={strength} />}
+              </div>
+
               <Input
                 type="password"
                 label="Confirm Password"
@@ -168,7 +245,13 @@ export default function Register() {
                 required
                 autoComplete="new-password"
               />
-              <Button type="submit" fullWidth isLoading={loading}>
+
+              <Button
+                type="submit"
+                fullWidth
+                isLoading={loading}
+                disabled={loading || (strength !== null && !strength.acceptable)}
+              >
                 Create Account
               </Button>
 

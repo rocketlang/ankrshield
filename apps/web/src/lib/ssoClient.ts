@@ -24,6 +24,17 @@ export interface SsoTokens {
 export interface SsoError {
   error: string;
   issues?: Array<{ message: string }>;
+  score?: number;
+  feedback?: string[];
+}
+
+export interface PasswordStrength {
+  score: number; // 0–4
+  label: string; // very_weak | weak | fair | strong | very_strong
+  entropy: number;
+  acceptable: boolean;
+  feedback: string[];
+  crackTime: string;
 }
 
 async function post<T>(path: string, body: object): Promise<T> {
@@ -79,6 +90,20 @@ export const sso = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) return null;
+      return res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  async passwordStrength(password: string): Promise<PasswordStrength | null> {
+    try {
+      const res = await fetch(`${SSO_URL}/auth/password-strength`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
       });
       if (!res.ok) return null;
       return res.json();
