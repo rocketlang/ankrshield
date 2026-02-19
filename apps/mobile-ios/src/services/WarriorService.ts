@@ -1,7 +1,7 @@
 /**
  * Warrior Service — GraphQL client for AI Warrior data
  */
-import { GRAPHQL_URL } from '../config';
+import { GRAPHQL_URL, API_BASE } from '../config';
 
 async function gql(query: string, variables?: Record<string, unknown>) {
   const res = await fetch(GRAPHQL_URL, {
@@ -62,6 +62,45 @@ export interface HoneypotAsset {
   name: string;
   triggered: boolean;
   triggeredAt?: string;
+}
+
+export interface HoneypotHit {
+  ip: string;
+  path: string;
+  userAgent: string;
+  country: string;
+  abuseScore: number;
+  timestamp: string;
+}
+
+export interface PreBlockedIP {
+  ip: string;
+  abuseScore: number;
+  country: string;
+  isp: string;
+  usageType: string;
+  reports: number;
+}
+
+export interface EvidenceReport {
+  generatedAt: string;
+  incidentCount: number;
+  summary: string;
+  sha256: string;
+  certInTemplate: string;
+}
+
+export interface RiskScore {
+  domain: string;
+  score: number;
+  level: string;
+  categories: string[];
+  lastSeen: string;
+}
+
+export interface RiskPlaybook {
+  domain: string;
+  steps: Array<{ title: string; command?: string; description: string }>;
 }
 
 export class WarriorService {
@@ -144,6 +183,38 @@ export class WarriorService {
   async deployHoneypots(): Promise<boolean> {
     const data = await gql(`mutation { deployDefaultHoneypots }`);
     return (data as { deployDefaultHoneypots: boolean }).deployDefaultHoneypots;
+  }
+
+  async getHoneypotHits(): Promise<HoneypotHit[]> {
+    const res = await fetch(`${API_BASE}/warrior/honeypot-hits`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as any;
+    return Array.isArray(data.hits) ? data.hits : Array.isArray(data) ? data : [];
+  }
+
+  async getPreBlockedIPs(): Promise<PreBlockedIP[]> {
+    const res = await fetch(`${API_BASE}/warrior/preblocked-ips`);
+    if (!res.ok) return [];
+    const data = (await res.json()) as any;
+    return Array.isArray(data.ips) ? data.ips : Array.isArray(data) ? data : [];
+  }
+
+  async getEvidenceReport(): Promise<EvidenceReport | null> {
+    const res = await fetch(`${API_BASE}/warrior/evidence-report`);
+    if (!res.ok) return null;
+    return res.json() as Promise<EvidenceReport>;
+  }
+
+  async getRiskScore(domain: string): Promise<RiskScore | null> {
+    const res = await fetch(`${API_BASE}/risk/score?domain=${encodeURIComponent(domain)}`);
+    if (!res.ok) return null;
+    return res.json() as Promise<RiskScore>;
+  }
+
+  async getRiskPlaybook(domain: string): Promise<RiskPlaybook | null> {
+    const res = await fetch(`${API_BASE}/risk/playbook?domain=${encodeURIComponent(domain)}`);
+    if (!res.ok) return null;
+    return res.json() as Promise<RiskPlaybook>;
   }
 
   formatUptime(ms: number): string {

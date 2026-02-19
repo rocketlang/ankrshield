@@ -16,30 +16,55 @@ import {
 import { PrivacyScoreCircle } from '../components/PrivacyScoreCircle';
 import { StatsCard } from '../components/StatsCard';
 import { PrivacyService } from '../services/PrivacyService';
+import { startReporting } from '../services/StatsReporter';
+import { vpnService, VpnStats } from '../services/VpnService';
+
+const DEFAULT_VPN: VpnStats = {
+  totalQueries: 0,
+  blockedCount: 0,
+  allowedCount: 0,
+  lastBlocked: '',
+  running: false,
+};
 
 export function HomeScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [score, setScore] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
+  const [vpnStats, setVpnStats] = useState<VpnStats>(DEFAULT_VPN);
 
   useEffect(() => {
     loadData();
+    const serverInterval = setInterval(loadData, 30000);
 
-    // Refresh every 30 seconds
-    const interval = setInterval(loadData, 30000);
-    return () => clearInterval(interval);
+    // Poll on-device VPN stats every 5 seconds
+    const vpnInterval = setInterval(async () => {
+      const s = await vpnService.getStats().catch(() => DEFAULT_VPN);
+      setVpnStats(s);
+    }, 5000);
+
+    // Report stats to server every 30 s (counters only, no domain names)
+    const stopReporting = startReporting(() => vpnService.getStats().catch(() => DEFAULT_VPN));
+
+    return () => {
+      clearInterval(serverInterval);
+      clearInterval(vpnInterval);
+      stopReporting();
+    };
   }, []);
 
   async function loadData() {
     try {
       const privacyService = new PrivacyService();
-      const [scoreData, statsData] = await Promise.all([
+      const [scoreData, statsData, vpnData] = await Promise.all([
         privacyService.getPrivacyScore(),
         privacyService.getStats(),
+        vpnService.getStats().catch(() => DEFAULT_VPN),
       ]);
 
       setScore(scoreData);
       setStats(statsData);
+      setVpnStats(vpnData);
       setLoading(false);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -79,11 +104,52 @@ export function HomeScreen({ navigation }: any) {
         </View>
       )}
 
+      {/* On-device VPN stats — live from DnsVpnService */}
+      {vpnStats.running && (
+        <View style={styles.vpnBanner}>
+          <Text style={styles.vpnBannerTitle}>🛡 DNS Shield Active</Text>
+          <View style={styles.vpnRow}>
+            <View style={styles.vpnStat}>
+              <Text style={styles.vpnStatValue}>{vpnStats.blockedCount}</Text>
+              <Text style={styles.vpnStatLabel}>Blocked</Text>
+            </View>
+            <View style={styles.vpnDivider} />
+            <View style={styles.vpnStat}>
+              <Text style={styles.vpnStatValue}>{vpnStats.totalQueries}</Text>
+              <Text style={styles.vpnStatLabel}>Queries</Text>
+            </View>
+            <View style={styles.vpnDivider} />
+            <View style={styles.vpnStat}>
+              <Text style={styles.vpnStatValue}>
+                {vpnStats.totalQueries > 0
+                  ? Math.round((vpnStats.blockedCount / vpnStats.totalQueries) * 100)
+                  : 0}
+                %
+              </Text>
+              <Text style={styles.vpnStatLabel}>Block Rate</Text>
+            </View>
+          </View>
+          {vpnStats.lastBlocked !== '' && (
+            <Text style={styles.lastBlocked} numberOfLines={1}>
+              Last blocked: {vpnStats.lastBlocked}
+            </Text>
+          )}
+        </View>
+      )}
+
       {stats && (
         <View style={styles.statsGrid}>
-          <StatsCard label="Trackers Blocked" value={stats.trackersBlocked} color="#4CAF50" />
+          <StatsCard
+            label="Trackers Blocked"
+            value={vpnStats.running ? vpnStats.blockedCount : stats.trackersBlocked}
+            color="#4CAF50"
+          />
           <StatsCard label="Total Connections" value={stats.totalConnections} color="#2196F3" />
-          <StatsCard label="DNS Queries" value={stats.dnsQueries} color="#9C27B0" />
+          <StatsCard
+            label="DNS Queries"
+            value={vpnStats.running ? vpnStats.totalQueries : stats.dnsQueries}
+            color="#9C27B0"
+          />
           <StatsCard label="Active Connections" value={stats.activeConnections} color="#FF9800" />
         </View>
       )}
@@ -137,6 +203,13 @@ export function HomeScreen({ navigation }: any) {
         >
           <Text style={styles.actionButtonText}>🎤 Join Conference</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.riskButton]}
+          onPress={() => navigation.navigate('RiskLookup')}
+        >
+          <Text style={styles.actionButtonText}>🔍 Risk Lookup</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -181,6 +254,52 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#4CAF50',
   },
+  vpnBanner: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: '#0a1f0a',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#22c55e',
+    padding: 16,
+  },
+  vpnBannerTitle: {
+    color: '#4ade80',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 12,
+    letterSpacing: 0.5,
+  },
+  vpnRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  vpnStat: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  vpnStatValue: {
+    color: '#4ade80',
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  vpnStatLabel: {
+    color: '#86efac',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  vpnDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#166534',
+  },
+  lastBlocked: {
+    color: '#6b7280',
+    fontSize: 11,
+    marginTop: 4,
+  },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -219,6 +338,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f172a',
     borderWidth: 1,
     borderColor: '#3b82f6',
+  },
+  riskButton: {
+    backgroundColor: '#0a0f1e',
+    borderWidth: 1,
+    borderColor: '#60a5fa',
   },
   actionButtonText: {
     color: '#fff',

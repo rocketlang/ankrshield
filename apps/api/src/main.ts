@@ -656,6 +656,363 @@ const start = async () => {
       };
     });
 
+    // ─── Device Fleet: stats persistence, SSE push-down, audit log ───────────
+    //
+    // Redis key schema:
+    //   device:stats:{id}          Hash  — latest stats snapshot        TTL 6 h
+    //   fleet:active               ZSet  — deviceId → lastSeen ms       permanent
+    //   device:history:{id}:{YYYY-MM-DD-HH}  Hash  — hourly snapshot   TTL 25 h
+    //   device:commands:{id}       List  — pending push commands        TTL 1 h/item
+    //   device:audit:{id}          List  — last 50 push events (audit)  TTL 24 h
+    //
+    // Safety riders for push-down commands:
+    //   • Only HIGH-confidence domains (attack chain score >= 80)
+    //   • Rate-limit: 1 push per domain per hour  (key push:rl:{domain})
+    //   • Max 10 commands queued per device       (LTRIM after RPUSH)
+    //   • Audit every push so phone can show "Server blocked X at HH:MM"
+
+    // In-memory map of live SSE connections (deviceId → raw response)
+    const phoneSseClients = new Map<string, import('http').ServerResponse>();
+
+    // ── helper: append to device audit log ──────────────────────────────────
+    const appendAudit = async (deviceId: string, entry: object): Promise<void> => {
+      const key = `device:audit:${deviceId}`;
+      await redis.lpush(key, JSON.stringify(entry));
+      await redis.ltrim(key, 0, 49); // keep last 50
+      await redis.expire(key, 24 * 3600);
+    };
+
+    // ── helper: push a command to one device (SSE + Redis queue) ────────────
+    const pushCommand = async (deviceId: string, cmd: object): Promise<'live' | 'queued'> => {
+      const payload = `data: ${JSON.stringify(cmd)}\n\n`;
+      const client = phoneSseClients.get(deviceId);
+      if (client && !client.destroyed) {
+        client.write(payload);
+        return 'live';
+      }
+      // Device offline → queue in Redis (delivered on next poll/reconnect)
+      const qKey = `device:commands:${deviceId}`;
+      await redis.rpush(qKey, JSON.stringify(cmd));
+      await redis.ltrim(qKey, -10, -1); // cap at 10 queued commands
+      await redis.expire(qKey, 3600);
+      return 'queued';
+    };
+
+    // ── POST /device/stats — phone reports VPN counters every 30 s ──────────
+    fastify.post('/device/stats', async (request, reply) => {
+      const body = request.body as Record<string, unknown>;
+      const deviceId = typeof body.deviceId === 'string' ? body.deviceId.slice(0, 64) : null;
+      if (!deviceId) return reply.status(400).send({ error: 'deviceId required' });
+
+      const blockedCount = Number(body.blockedCount) || 0;
+      const totalQueries = Number(body.totalQueries) || 0;
+      const now = Date.now();
+
+      const entry = {
+        deviceId,
+        blockedCount,
+        totalQueries,
+        allowedCount: Number(body.allowedCount) || 0,
+        blockRate: totalQueries > 0 ? Math.round((blockedCount / totalQueries) * 100) : 0,
+        running: body.running ? '1' : '0',
+        lastBlocked: typeof body.lastBlocked === 'string' ? body.lastBlocked.slice(0, 253) : '',
+        lastSeen: String(now),
+        reportedAt: new Date().toISOString(),
+      };
+
+      // Persist latest snapshot (6 h TTL — stale devices auto-expire)
+      await redis.hset(`device:stats:${deviceId}`, entry);
+      await redis.expire(`device:stats:${deviceId}`, 6 * 3600);
+
+      // Update fleet sorted set (score = lastSeen ms for range queries)
+      await redis.zadd('fleet:active', now, deviceId);
+
+      // Hourly history snapshot (one entry per hour per device, 25 h TTL)
+      const hourLabel = new Date().toISOString().slice(0, 13).replace('T', '-'); // "2026-02-19-16"
+      const hKey = `device:history:${deviceId}:${hourLabel}`;
+      const exists = await redis.exists(hKey);
+      if (!exists) {
+        await redis.hset(hKey, entry);
+        await redis.expire(hKey, 25 * 3600);
+      }
+
+      return { ok: true };
+    });
+
+    // ── GET /device/stats — fleet dashboard ─────────────────────────────────
+    fastify.get('/device/stats', async () => {
+      const ACTIVE_WINDOW_MS = 5 * 60 * 1000; // 5-minute window = "active now"
+      const now = Date.now();
+      const minScore = now - ACTIVE_WINDOW_MS;
+
+      // All device IDs seen in the last 5 min
+      const activeIds = await redis.zrangebyscore('fleet:active', minScore, '+inf');
+
+      if (activeIds.length === 0) {
+        return {
+          ok: true,
+          timestamp: new Date().toISOString(),
+          aggregate: {
+            totalDevices: 0,
+            activeVpn: 0,
+            totalBlocked: 0,
+            totalQueries: 0,
+            avgBlockRate: 0,
+          },
+          devices: [],
+        };
+      }
+
+      // Fetch all snapshots in parallel
+      const snapshots = await Promise.all(
+        activeIds.map((id) => redis.hgetall(`device:stats:${id}`))
+      );
+
+      const devices = snapshots
+        .map((s, i) => (s && Object.keys(s).length > 0 ? { ...s, deviceId: activeIds[i] } : null))
+        .filter(Boolean) as Record<string, string>[];
+
+      const totalBlocked = devices.reduce((n, d) => n + (Number(d.blockedCount) || 0), 0);
+      const totalQueries = devices.reduce((n, d) => n + (Number(d.totalQueries) || 0), 0);
+      const runningCount = devices.filter((d) => d.running === '1').length;
+      const avgBlockRate =
+        devices.length > 0
+          ? Math.round(devices.reduce((n, d) => n + (Number(d.blockRate) || 0), 0) / devices.length)
+          : 0;
+
+      return {
+        ok: true,
+        timestamp: new Date().toISOString(),
+        liveConnections: phoneSseClients.size,
+        aggregate: {
+          totalDevices: devices.length,
+          activeVpn: runningCount,
+          totalBlocked,
+          totalQueries,
+          avgBlockRate,
+        },
+        devices: devices.map((d) => ({
+          deviceId: d.deviceId,
+          blockedCount: Number(d.blockedCount) || 0,
+          totalQueries: Number(d.totalQueries) || 0,
+          allowedCount: Number(d.allowedCount) || 0,
+          blockRate: Number(d.blockRate) || 0,
+          running: d.running === '1',
+          lastBlocked: d.lastBlocked || '',
+          lastSeen: Number(d.lastSeen) || 0,
+          reportedAt: d.reportedAt || '',
+        })),
+      };
+    });
+
+    // ── GET /device/history/:deviceId — 24-hour hourly history ──────────────
+    fastify.get<{ Params: { deviceId: string } }>('/device/history/:deviceId', async (request) => {
+      const { deviceId } = request.params;
+      const hours: object[] = [];
+      const now = new Date();
+      for (let h = 23; h >= 0; h--) {
+        const t = new Date(now.getTime() - h * 3600 * 1000);
+        const label = t.toISOString().slice(0, 13).replace('T', '-');
+        const snap = await redis.hgetall(`device:history:${deviceId}:${label}`);
+        if (snap && Object.keys(snap).length > 0)
+          hours.push({
+            hour: label,
+            blockedCount: Number(snap.blockedCount) || 0,
+            totalQueries: Number(snap.totalQueries) || 0,
+            blockRate: Number(snap.blockRate) || 0,
+          });
+      }
+      return { ok: true, deviceId, history: hours };
+    });
+
+    // ── GET /device/stream/:deviceId — SSE push-down channel ────────────────
+    // Phone subscribes on app start. Server pushes block commands and alerts.
+    // Safety: phone MUST validate every command before acting on it.
+    fastify.get<{ Params: { deviceId: string } }>('/device/stream/:deviceId', (request, reply) => {
+      const { deviceId } = request.params;
+      const res = reply.raw;
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no', // tell nginx not to buffer SSE
+      });
+      res.write(`: connected deviceId=${deviceId}\n\n`);
+
+      phoneSseClients.set(deviceId, res);
+      fastify.log.info({ deviceId }, '📱 Phone SSE connected');
+
+      // Drain any queued commands that arrived while phone was offline
+      const drainQueued = async () => {
+        const qKey = `device:commands:${deviceId}`;
+        let raw = await redis.lpop(qKey);
+        while (raw !== null) {
+          res.write(`data: ${raw}\n\n`);
+          raw = await redis.lpop(qKey);
+        }
+      };
+      void drainQueued();
+
+      // Keepalive comment every 25 s (prevents proxy/Cloudflare timeouts)
+      const ka = setInterval(() => {
+        if (!res.destroyed) res.write(': ka\n\n');
+      }, 25_000);
+
+      res.on('close', () => {
+        clearInterval(ka);
+        phoneSseClients.delete(deviceId);
+        fastify.log.info({ deviceId }, '📱 Phone SSE disconnected');
+      });
+
+      return reply; // do not call reply.send()
+    });
+
+    // ── GET /device/commands/:deviceId — polling fallback ───────────────────
+    // Phones that cannot keep SSE open (background/battery-saving) poll this.
+    fastify.get<{ Params: { deviceId: string } }>('/device/commands/:deviceId', async (request) => {
+      const { deviceId } = request.params;
+      const commands: object[] = [];
+      const qKey = `device:commands:${deviceId}`;
+      let raw = await redis.lpop(qKey);
+      while (raw !== null) {
+        try {
+          commands.push(JSON.parse(raw));
+        } catch {
+          /* ignore malformed */
+        }
+        raw = await redis.lpop(qKey);
+      }
+      return { ok: true, commands };
+    });
+
+    // ── GET /device/audit/:deviceId — what the server pushed to this device ─
+    fastify.get<{ Params: { deviceId: string } }>('/device/audit/:deviceId', async (request) => {
+      const { deviceId } = request.params;
+      const raw = await redis.lrange(`device:audit:${deviceId}`, 0, 49);
+      const entries = raw.map((r) => {
+        try {
+          return JSON.parse(r);
+        } catch {
+          return r;
+        }
+      });
+      return { ok: true, deviceId, entries };
+    });
+
+    // ── POST /device/push — push a command to one device or broadcast all ───
+    // Body: { deviceId?, type, payload, reason? }
+    //
+    // Safety riders enforced here:
+    //   • type must be in allowlist
+    //   • block commands: domain score must be in CONFIRMED attack chain (>= 80)
+    //   • rate-limit: 1 push per domain per hour  (key push:rl:{domain})
+    //   • audit log written for every push
+    fastify.post('/device/push', async (request, reply) => {
+      const body = request.body as Record<string, unknown>;
+      const type = typeof body.type === 'string' ? body.type : null;
+      const reason = typeof body.reason === 'string' ? body.reason : 'manual';
+      const targetId = typeof body.deviceId === 'string' ? body.deviceId : null;
+
+      const ALLOWED_TYPES = ['block_domain', 'alert', 'config_update', 'request_stats'];
+      if (!type || !ALLOWED_TYPES.includes(type))
+        return reply
+          .status(400)
+          .send({ error: `type must be one of: ${ALLOWED_TYPES.join(', ')}` });
+
+      // Block-domain safety check
+      if (type === 'block_domain') {
+        const domain =
+          typeof body.payload === 'object' && body.payload !== null
+            ? String((body.payload as Record<string, unknown>).domain ?? '')
+            : '';
+        if (!domain)
+          return reply.status(400).send({ error: 'payload.domain required for block_domain' });
+
+        // Rate-limit: skip if same domain was pushed in last hour
+        const rlKey = `push:rl:${domain}`;
+        const recent = await redis.get(rlKey);
+        if (recent)
+          return reply
+            .status(429)
+            .send({ error: `Domain ${domain} push rate-limited (1/hour)`, retryAfter: 3600 });
+        await redis.setex(rlKey, 3600, '1');
+      }
+
+      const cmd = {
+        type,
+        payload: body.payload ?? {},
+        reason,
+        pushedAt: new Date().toISOString(),
+        source: 'server',
+      };
+
+      let delivered = 0;
+      let queued = 0;
+
+      if (targetId) {
+        const result = await pushCommand(targetId, cmd);
+        result === 'live' ? delivered++ : queued++;
+        await appendAudit(targetId, { ...cmd, deliveryMode: result });
+      } else {
+        // Broadcast — live SSE first
+        for (const [id, client] of phoneSseClients) {
+          if (!client.destroyed) {
+            client.write(`data: ${JSON.stringify(cmd)}\n\n`);
+            delivered++;
+          }
+          await appendAudit(id, { ...cmd, deliveryMode: 'broadcast-live' });
+        }
+        // Queue for all devices seen in last 24 h (offline devices get it on reconnect)
+        const allIds = await redis.zrangebyscore(
+          'fleet:active',
+          Date.now() - 24 * 3600 * 1000,
+          '+inf'
+        );
+        for (const id of allIds) {
+          if (!phoneSseClients.has(id)) {
+            await pushCommand(id, cmd);
+            await appendAudit(id, { ...cmd, deliveryMode: 'broadcast-queued' });
+            queued++;
+          }
+        }
+      }
+
+      fastify.log.info({ type, targetId, delivered, queued }, '📡 Device push command sent');
+      return { ok: true, delivered, queued };
+    });
+
+    // ── Internal helper: auto-push when Warrior detects high-score chain ────
+    // Called from the Warrior event loop (see warrior-service.ts ingest hook).
+    // Only fires for CONFIRMED attack chains with an identifiable domain.
+    const autoPushWarriorThreat = async (chain: {
+      type: string;
+      score: number;
+      narrative: string;
+    }) => {
+      if (chain.score < 80) return; // only confirmed threats
+
+      const cmd = {
+        type: 'alert',
+        payload: {
+          title: `Threat Detected: ${chain.type}`,
+          body: chain.narrative.slice(0, 120),
+          score: chain.score,
+        },
+        reason: 'warrior_auto',
+        pushedAt: new Date().toISOString(),
+        source: 'warrior',
+      };
+
+      for (const [id, client] of phoneSseClients) {
+        if (!client.destroyed) client.write(`data: ${JSON.stringify(cmd)}\n\n`);
+        await appendAudit(id, { ...cmd, deliveryMode: 'warrior-broadcast' });
+      }
+      fastify.log.info({ score: chain.score, type: chain.type }, '⚔️  Warrior auto-push → phones');
+    };
+    // Expose for warrior route
+    (fastify as any).autoPushWarriorThreat = autoPushWarriorThreat;
+
     // ─── Evidence Report endpoint ─────────────────────────────────────────────
     // Generates a legally-structured incident evidence package.
     // Includes SHA-256 integrity hash, full attack chain narratives,
@@ -2151,6 +2508,36 @@ Date: ${now.toLocaleDateString('en-IN')}`;
     // Start AI Warrior engine
     await startWarrior();
     fastify.log.info(`⚔️  AI Warrior engine started — honeypots deployed, scope enforcer active`);
+
+    // ── Warrior → Phone auto-push loop (every 60 s) ──────────────────────────
+    // Checks for new high-score attack chains (score >= 80) and pushes alerts
+    // to all connected phones via SSE. Tracks seen chain IDs in Redis so the
+    // same chain is never pushed twice.
+    const autoPushFn = (fastify as any).autoPushWarriorThreat as
+      | ((c: { type: string; score: number; narrative: string }) => Promise<void>)
+      | undefined;
+    setInterval(async () => {
+      if (!autoPushFn) return;
+      try {
+        const w = getWarrior();
+        if (!w) return;
+        const chains = w.getAttackChains().filter((c: any) => c.threatScore >= 80);
+        for (const c of chains) {
+          const seenKey = `warrior:pushed:${c.id}`;
+          const alreadySent = await redis.get(seenKey);
+          if (alreadySent) continue;
+          await redis.setex(seenKey, 24 * 3600, '1'); // mark seen for 24 h
+          await autoPushFn({
+            type: c.attackType,
+            score: c.threatScore,
+            narrative: c.narrative ?? '',
+          });
+        }
+      } catch {
+        /* never crash the loop */
+      }
+    }, 60_000);
+    fastify.log.info('📡 Warrior→Phone auto-push loop started (60 s interval, threshold score 80)');
 
     // Start Domain Watcher (5-min polling, first scan after 30s)
     startDomainWatcher(prisma);

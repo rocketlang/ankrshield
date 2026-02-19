@@ -11,6 +11,8 @@
  */
 import { API_BASE } from '../config';
 
+import { vpnService } from './VpnService';
+
 // ─── Response types from the server ──────────────────────────────────────────
 
 interface LiveThreatsResponse {
@@ -84,22 +86,37 @@ async function fetchMonitorStats(): Promise<MonitorStatsResponse> {
 
 export class PrivacyService {
   async getPrivacyScore() {
-    const live = await fetchLive();
-    const threatScore = live.warrior.overallThreatScore;
-    const privacyScore = Math.max(0, 100 - threatScore);
+    const [live, vpnStats] = await Promise.all([
+      fetchLive(),
+      vpnService.getStats().catch(() => null),
+    ]);
 
-    // Derive sub-scores: network from load, DNS/App from threat score
-    const loadPenalty = Math.min(30, Math.round(live.server.loadAvg1m * 10));
-    const networkScore = Math.max(0, 100 - loadPenalty - Math.round(threatScore * 0.3));
-    const dnsScore = Math.max(0, 100 - Math.round(threatScore * 0.4));
-    const appScore = Math.max(0, 100 - live.warrior.attackChainsTotal * 5);
+    const serverPenalty = Math.min(20, Math.round(live.warrior.overallThreatScore * 0.2));
+    const _chainPenalty = Math.min(15, live.warrior.attackChainsTotal * 2);
+
+    // DNS score: dynamic — based on on-device block rate when VPN is running
+    const blockRate =
+      vpnStats && vpnStats.totalQueries > 0
+        ? Math.round((vpnStats.blockedCount / vpnStats.totalQueries) * 100)
+        : 0;
+    const dnsScore = vpnStats?.running ? Math.min(95, 55 + blockRate * 0.4) : 35;
+
+    // Network score: from server load
+    const loadPenalty = Math.min(15, Math.round(live.server.loadAvg1m * 5));
+    const networkScore = Math.max(0, 100 - loadPenalty - serverPenalty);
+
+    // App score: from attack chains
+    const appScore = Math.max(0, 90 - live.warrior.attackChainsTotal * 3);
+
+    // Overall: weighted average
+    const privacyScore = Math.round(networkScore * 0.35 + dnsScore * 0.35 + appScore * 0.3);
 
     return {
       userId: 'mobile-user',
       timestamp: new Date(live.timestamp),
-      totalScore: privacyScore,
+      totalScore: Math.min(100, privacyScore),
       networkScore: Math.min(100, networkScore),
-      dnsScore: Math.min(100, dnsScore),
+      dnsScore: Math.min(100, Math.round(dnsScore)),
       appScore: Math.min(100, appScore),
       level: scoreToLevel(privacyScore),
     };
@@ -166,14 +183,14 @@ export class PrivacyService {
         {
           name: 'Network Activity',
           score: score.networkScore,
-          weight: 0.4,
-          contributionToTotal: Math.round(score.networkScore * 0.4),
+          weight: 0.35,
+          contributionToTotal: Math.round(score.networkScore * 0.35),
         },
         {
           name: 'DNS Filtering',
           score: score.dnsScore,
-          weight: 0.3,
-          contributionToTotal: Math.round(score.dnsScore * 0.3),
+          weight: 0.35,
+          contributionToTotal: Math.round(score.dnsScore * 0.35),
         },
         {
           name: 'App Behaviour',

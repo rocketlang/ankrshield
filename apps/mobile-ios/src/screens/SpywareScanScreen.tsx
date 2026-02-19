@@ -198,6 +198,25 @@ export function SpywareScanScreen() {
             </View>
           )}
 
+          {/* False Positive Notice */}
+          {result.indicatorsFound.length > 0 && (
+            <View style={styles.fpNotice}>
+              <Text style={styles.fpIcon}>ℹ️</Text>
+              <View style={styles.fpBody}>
+                <Text style={styles.fpTitle}>Review Before Alarming</Text>
+                <Text style={styles.fpText}>
+                  Sideloaded apps — including{' '}
+                  <Text style={styles.fpHighlight}>
+                    Termux, F-Droid, and apps not from Google Play
+                  </Text>{' '}
+                  (including AnkrShield itself) — can trigger IOC pattern matches. A hit here does{' '}
+                  <Text style={styles.fpHighlight}>not</Text> confirm spyware. Cross-check
+                  confidence levels: &lt;70% are likely false positives.
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Indicators */}
           {result.indicatorsFound.length > 0 && (
             <View style={styles.section}>
@@ -228,8 +247,11 @@ export function SpywareScanScreen() {
         <Text style={styles.infoTitle}>About This Scan</Text>
         <Text style={styles.infoText}>
           IOCs sourced from Amnesty International MVT, Citizen Lab, Lookout Security, and Google TAG
-          research. This scan checks network connections, running processes, and known file
-          artifacts. It does NOT require a jailbroken device.
+          research. Checks network connections, running processes, and known file artifacts. Does
+          NOT require root.{'\n\n'}
+          <Text style={{ color: '#888' }}>Known false positive sources: </Text>Termux, F-Droid,
+          custom ROMs, apps sideloaded outside Google Play (including AnkrShield). If you use any of
+          these, treat low-confidence findings (&lt;70%) as informational only.
         </Text>
       </View>
     </ScrollView>
@@ -305,6 +327,22 @@ const styles = StyleSheet.create({
   },
   indicatorValue: { color: '#fff', fontSize: 13, fontWeight: '500', marginBottom: 4 },
   indicatorDesc: { color: '#666', fontSize: 12 },
+  fpNotice: {
+    flexDirection: 'row',
+    backgroundColor: '#1a1400',
+    borderWidth: 1,
+    borderColor: '#92400e',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  fpIcon: { fontSize: 18, marginTop: 1 },
+  fpBody: { flex: 1 },
+  fpTitle: { color: '#fbbf24', fontSize: 13, fontWeight: '700', marginBottom: 4 },
+  fpText: { color: '#d97706', fontSize: 12, lineHeight: 17 },
+  fpHighlight: { color: '#fcd34d', fontWeight: '600' },
   recRow: { flexDirection: 'row', marginBottom: 8, gap: 10 },
   recBullet: {
     color: '#4CAF50',

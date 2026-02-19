@@ -3,7 +3,7 @@
  * App configuration and preferences
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,47 @@ import {
   ScrollView,
   Switch,
   TouchableOpacity,
+  Alert,
+  Platform,
 } from 'react-native';
+
+import { vpnService } from '../services/VpnService';
 
 export function SettingsScreen() {
   const [protectionEnabled, setProtectionEnabled] = useState(true);
-  const [dnsFiltering, setDnsFiltering] = useState(true);
+  const [dnsFiltering, setDnsFiltering] = useState(false);
+  const [dnsLoading, setDnsLoading] = useState(false);
   const [notifications, setNotifications] = useState(true);
+
+  // Sync DNS toggle with actual VPN state on mount
+  useEffect(() => {
+    vpnService
+      .isRunning()
+      .then(setDnsFiltering)
+      .catch(() => {});
+  }, []);
+
+  async function handleDnsToggle(value: boolean) {
+    if (dnsLoading) return;
+    setDnsLoading(true);
+    try {
+      if (value) {
+        await vpnService.start();
+        setDnsFiltering(true);
+      } else {
+        await vpnService.stop();
+        setDnsFiltering(false);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'VPN error';
+      Alert.alert('DNS Filtering', msg);
+      // Revert to actual running state on error
+      const running = await vpnService.isRunning().catch(() => false);
+      setDnsFiltering(running);
+    } finally {
+      setDnsLoading(false);
+    }
+  }
 
   return (
     <ScrollView style={styles.container}>
@@ -26,9 +61,7 @@ export function SettingsScreen() {
         <View style={styles.settingRow}>
           <View style={styles.settingInfo}>
             <Text style={styles.settingLabel}>Network Protection</Text>
-            <Text style={styles.settingDescription}>
-              Block trackers and malicious connections
-            </Text>
+            <Text style={styles.settingDescription}>Block trackers and malicious connections</Text>
           </View>
           <Switch
             value={protectionEnabled}
@@ -42,14 +75,17 @@ export function SettingsScreen() {
           <View style={styles.settingInfo}>
             <Text style={styles.settingLabel}>DNS Filtering</Text>
             <Text style={styles.settingDescription}>
-              Filter DNS queries to block tracking domains
+              {Platform.OS === 'android'
+                ? 'Intercepts DNS on-device — no data leaves your phone'
+                : 'Available on Android (Sprint 4 for iOS)'}
             </Text>
           </View>
           <Switch
             value={dnsFiltering}
-            onValueChange={setDnsFiltering}
+            onValueChange={handleDnsToggle}
+            disabled={dnsLoading || Platform.OS !== 'android'}
             trackColor={{ false: '#333', true: '#4CAF50' }}
-            thumbColor="#fff"
+            thumbColor={dnsLoading ? '#888' : '#fff'}
           />
         </View>
       </View>
@@ -60,9 +96,7 @@ export function SettingsScreen() {
         <View style={styles.settingRow}>
           <View style={styles.settingInfo}>
             <Text style={styles.settingLabel}>Privacy Alerts</Text>
-            <Text style={styles.settingDescription}>
-              Get notified about privacy threats
-            </Text>
+            <Text style={styles.settingDescription}>Get notified about privacy threats</Text>
           </View>
           <Switch
             value={notifications}
@@ -78,7 +112,7 @@ export function SettingsScreen() {
 
         <TouchableOpacity style={styles.settingRow}>
           <Text style={styles.settingLabel}>Version</Text>
-          <Text style={styles.settingValue}>0.1.0</Text>
+          <Text style={styles.settingValue}>1.1.7</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.settingRow}>
