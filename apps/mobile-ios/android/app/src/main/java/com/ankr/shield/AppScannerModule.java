@@ -1,10 +1,13 @@
 package com.ankr.shield;
 
+import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.InstallSourceInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 
 import androidx.annotation.NonNull;
 
@@ -99,6 +102,40 @@ public class AppScannerModule extends ReactContextBaseJavaModule {
 
         // Can't determine — don't assume sideloaded
         return "unknown";
+    }
+
+    /**
+     * Open the Android system settings page for a specific app.
+     * User can manually revoke permissions from this screen.
+     */
+    @ReactMethod
+    public void openAppSettings(String packageName, Promise promise) {
+        try {
+            Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+            intent.setData(Uri.parse("package:" + packageName));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getReactApplicationContext().startActivity(intent);
+            promise.resolve(true);
+        } catch (Exception e) {
+            promise.reject("SETTINGS_ERROR", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Launch the Android uninstall dialog for a specific app.
+     * Android shows a system confirmation — we never force-uninstall.
+     */
+    @ReactMethod
+    public void uninstallApp(String packageName, Promise promise) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_DELETE);
+            intent.setData(Uri.parse("package:" + packageName));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getReactApplicationContext().startActivity(intent);
+            promise.resolve(true);
+        } catch (Exception e) {
+            promise.reject("UNINSTALL_ERROR", e.getMessage(), e);
+        }
     }
 
     @ReactMethod

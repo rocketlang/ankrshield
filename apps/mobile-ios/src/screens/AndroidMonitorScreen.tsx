@@ -24,6 +24,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Share,
+  Alert,
   NativeModules,
   Platform,
 } from 'react-native';
@@ -78,6 +79,37 @@ function RiskBadge({ level }: { level: SpyRiskLevel }) {
 function AppCard({ app, isTop3 }: { app: SuspiciousApp; isTop3: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const color = RISK_COLORS[app.riskLevel];
+
+  const handleOpenSettings = useCallback(async () => {
+    if (Platform.OS !== 'android' || !AppScanner) return;
+    try {
+      await AppScanner.openAppSettings(app.packageName);
+    } catch {
+      Alert.alert('Error', 'Could not open app settings.');
+    }
+  }, [app.packageName]);
+
+  const handleUninstall = useCallback(() => {
+    if (Platform.OS !== 'android' || !AppScanner) return;
+    Alert.alert(
+      'Uninstall App',
+      `Remove "${app.appName}" from your device?\n\nAndroid will ask you to confirm.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Uninstall',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AppScanner.uninstallApp(app.packageName);
+            } catch {
+              Alert.alert('Error', 'Could not launch uninstall dialog.');
+            }
+          },
+        },
+      ]
+    );
+  }, [app.appName, app.packageName]);
 
   return (
     <TouchableOpacity
@@ -136,6 +168,30 @@ function AppCard({ app, isTop3 }: { app: SuspiciousApp; isTop3: boolean }) {
       {/* Expanded details */}
       {expanded && (
         <View style={styles.expandedSection}>
+          {/* Remediation actions */}
+          <View style={styles.remediationBox}>
+            <Text style={styles.remediationTitle}>⚡ Fix This</Text>
+            <View style={styles.remediationBtns}>
+              <TouchableOpacity
+                style={styles.btnSettings}
+                onPress={handleOpenSettings}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.btnSettingsTxt}>⚙️ Revoke Permissions</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.btnUninstall}
+                onPress={handleUninstall}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.btnUninstallTxt}>🗑 Uninstall App</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.remediationHint}>
+              Revoke permissions to neutralise the threat, or uninstall to remove it entirely.
+            </Text>
+          </View>
+
           {/* Reasons */}
           {app.reasons.length > 0 && (
             <View style={styles.detailBlock}>
@@ -594,6 +650,47 @@ const styles = StyleSheet.create({
   // Expanded
   expandChevron: { color: '#475569', fontSize: 12 },
   expandedSection: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#1e293b' },
+
+  // Remediation
+  remediationBox: {
+    backgroundColor: '#0a0f1e',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1e3a5f',
+    padding: 12,
+    marginBottom: 14,
+  },
+  remediationTitle: {
+    color: '#93c5fd',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  remediationBtns: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  btnSettings: {
+    flex: 1,
+    backgroundColor: '#1e3a5f',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+  },
+  btnSettingsTxt: { color: '#93c5fd', fontSize: 12, fontWeight: '700' },
+  btnUninstall: {
+    flex: 1,
+    backgroundColor: '#450a0a',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  btnUninstallTxt: { color: '#fca5a5', fontSize: 12, fontWeight: '700' },
+  remediationHint: { color: '#475569', fontSize: 11, lineHeight: 15 },
+
   detailBlock: { marginBottom: 12 },
   detailTitle: {
     color: '#64748b',
