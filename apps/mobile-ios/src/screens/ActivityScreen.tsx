@@ -10,14 +10,141 @@
  * DNS filter tabs: ALL | BLOCKED | ALLOWED
  */
 
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  Platform,
+  ScrollView,
+} from 'react-native';
 
 import { getAuditLog, onServerCommand, AuditEntry, DeviceCommand } from '../services/StatsReporter';
 import { vpnService, FeedEvent } from '../services/VpnService';
 
 type Filter = 'all' | 'blocked' | 'allowed';
-type Tab = 'dns' | 'server';
+type Tab = 'dns' | 'trackers' | 'server';
+
+// ── Tracker bucketing ────────────────────────────────────────────────────────
+
+interface TrackerBucket {
+  key: string;
+  label: string;
+  emoji: string;
+  total: number;
+  blocked: number;
+  category: string;
+  children?: TrackerBucket[]; // sub-vendors (e.g. Meta → Facebook, Instagram, WhatsApp)
+}
+
+const VENDOR_META: Record<string, { label: string; emoji: string }> = {
+  Google: { label: 'Google', emoji: '🔴' },
+  Meta: { label: 'Meta', emoji: '🔵' },
+  Microsoft: { label: 'Microsoft', emoji: '🟦' },
+  Amazon: { label: 'Amazon', emoji: '🟡' },
+  ByteDance: { label: 'TikTok / ByteDance', emoji: '⬛' },
+  'Twitter/X': { label: 'Twitter / X', emoji: '⚫' },
+  Oracle: { label: 'Oracle', emoji: '🔶' },
+  Yahoo: { label: 'Yahoo', emoji: '🟣' },
+  Segment: { label: 'Segment', emoji: '⚙️' },
+  NewRelic: { label: 'New Relic', emoji: '⚙️' },
+  Criteo: { label: 'Criteo', emoji: '📊' },
+  Xandr: { label: 'Xandr', emoji: '📊' },
+  OpenX: { label: 'OpenX', emoji: '📊' },
+  Magnite: { label: 'Magnite', emoji: '📊' },
+  TradeDesk: { label: 'TradeDesk', emoji: '📊' },
+  LiveRamp: { label: 'LiveRamp', emoji: '🗂️' },
+  TransUnion: { label: 'TransUnion', emoji: '🗂️' },
+  'NSO Group': { label: 'NSO Group', emoji: '🕵️' },
+  mSpy: { label: 'mSpy', emoji: '🕵️' },
+  FlexiSpy: { label: 'FlexiSpy', emoji: '🕵️' },
+  Hoverwatch: { label: 'Hoverwatch', emoji: '🕵️' },
+  Cocospy: { label: 'Cocospy', emoji: '🕵️' },
+  TheTruthSpy: { label: 'TheTruthSpy', emoji: '🕵️' },
+  Unknown: { label: 'Unknown', emoji: '❓' },
+};
+
+/** Classify a domain into a sub-vendor label when vendor is Meta. */
+function metaSubLabel(domain: string): string {
+  const d = domain.toLowerCase();
+  if (d.includes('whatsapp') || d.includes('wa.me')) return 'WhatsApp';
+  if (d.includes('instagram')) return 'Instagram';
+  return 'Facebook';
+}
+
+function buildBuckets(events: FeedEvent[]): TrackerBucket[] {
+  const map = new Map<
+    string,
+    {
+      total: number;
+      blocked: number;
+      category: string;
+      domains: Map<string, { t: number; b: number }>;
+    }
+  >();
+
+  for (const e of events) {
+    const vendor = e.vendor || 'Unknown';
+    if (!map.has(vendor)) {
+      map.set(vendor, { total: 0, blocked: 0, category: e.category || '', domains: new Map() });
+    }
+    const bucket = map.get(vendor)!;
+    bucket.total++;
+    if (e.blocked) bucket.blocked++;
+
+    // Track per-domain for sub-classification
+    const key = e.domain;
+    const dm = bucket.domains.get(key) ?? { t: 0, b: 0 };
+    dm.t++;
+    if (e.blocked) dm.b++;
+    bucket.domains.set(key, dm);
+  }
+
+  const buckets: TrackerBucket[] = [];
+
+  for (const [vendor, data] of map) {
+    const meta = VENDOR_META[vendor] ?? { label: vendor, emoji: '📡' };
+
+    let children: TrackerBucket[] | undefined;
+
+    // Sub-classify Meta into Facebook / Instagram / WhatsApp
+    if (vendor === 'Meta') {
+      const subMap = new Map<string, { total: number; blocked: number }>();
+      for (const [domain, dm] of data.domains) {
+        const sub = metaSubLabel(domain);
+        const existing = subMap.get(sub) ?? { total: 0, blocked: 0 };
+        existing.total += dm.t;
+        existing.blocked += dm.b;
+        subMap.set(sub, existing);
+      }
+      const subEmojis: Record<string, string> = { Facebook: '🔵', Instagram: '🟣', WhatsApp: '🟢' };
+      children = [...subMap.entries()]
+        .map(([sub, sd]) => ({
+          key: sub,
+          label: sub,
+          emoji: subEmojis[sub] ?? '🔵',
+          total: sd.total,
+          blocked: sd.blocked,
+          category: 'social',
+        }))
+        .sort((a, b) => b.total - a.total);
+    }
+
+    buckets.push({
+      key: vendor,
+      label: meta.label,
+      emoji: meta.emoji,
+      total: data.total,
+      blocked: data.blocked,
+      category: data.category,
+      children,
+    });
+  }
+
+  return buckets.sort((a, b) => b.total - a.total);
+}
 
 const AUDIT_TYPE_COLORS: Record<string, string> = {
   push_received: '#3b82f6',
@@ -62,6 +189,7 @@ export function ActivityScreen() {
 
   const blockedCount = events.filter((e) => e.blocked).length;
   const allowedCount = events.filter((e) => !e.blocked).length;
+  const buckets = useMemo(() => buildBuckets(events), [events]);
 
   const renderItem = ({ item }: { item: FeedEvent }) => (
     <View style={[styles.row, item.blocked ? styles.rowBlocked : styles.rowAllowed]}>
@@ -128,14 +256,20 @@ export function ActivityScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top-level tab bar: DNS | Server */}
+      {/* Top-level tab bar: DNS | Trackers | Server */}
       <View style={styles.topTabs}>
         <TouchableOpacity
           style={[styles.topTab, tab === 'dns' && styles.topTabActive]}
           onPress={() => setTab('dns')}
         >
-          <Text style={[styles.topTabText, tab === 'dns' && styles.topTabTextActive]}>
-            📡 DNS Feed
+          <Text style={[styles.topTabText, tab === 'dns' && styles.topTabTextActive]}>📡 DNS</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.topTab, tab === 'trackers' && styles.topTabActiveTrackers]}
+          onPress={() => setTab('trackers')}
+        >
+          <Text style={[styles.topTabText, tab === 'trackers' && styles.topTabTextActive]}>
+            🏢 Trackers {buckets.length > 0 ? `(${buckets.length})` : ''}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -143,12 +277,71 @@ export function ActivityScreen() {
           onPress={() => setTab('server')}
         >
           <Text style={[styles.topTabText, tab === 'server' && styles.topTabTextActive]}>
-            🖥 Server Log {audit.length > 0 ? `(${audit.length})` : ''}
+            🖥 Server
           </Text>
         </TouchableOpacity>
       </View>
 
-      {tab === 'server' ? (
+      {tab === 'trackers' ? (
+        /* ── Tracker Buckets ──────────────────────────────────────── */
+        buckets.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyIcon}>🏢</Text>
+            <Text style={styles.emptyTitle}>No tracker data yet</Text>
+            <Text style={styles.emptySub}>
+              Enable DNS filtering and use your phone — companies will appear here as they try to
+              track you.
+            </Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.bucketList}>
+            <Text style={styles.bucketHdr}>
+              Companies detected · {events.length} DNS queries · {blockedCount} blocked
+            </Text>
+            {buckets.map((b) => {
+              const pct = b.total > 0 ? b.blocked / b.total : 0;
+              const isSpy = b.category === 'stalkerware' || b.category === 'apt';
+              return (
+                <View key={b.key} style={[styles.bucketCard, isSpy && styles.bucketCardSpy]}>
+                  <View style={styles.bucketTop}>
+                    <Text style={styles.bucketEmoji}>{b.emoji}</Text>
+                    <View style={styles.bucketInfo}>
+                      <Text style={styles.bucketLabel}>{b.label}</Text>
+                      <Text style={styles.bucketCat}>{b.category}</Text>
+                    </View>
+                    <View style={styles.bucketCounts}>
+                      <Text style={styles.bucketTotal}>{b.total}</Text>
+                      <Text style={styles.bucketCountLbl}>queries</Text>
+                    </View>
+                    <View style={styles.bucketCounts}>
+                      <Text style={[styles.bucketTotal, b.blocked > 0 && styles.bucketRed]}>
+                        {b.blocked}
+                      </Text>
+                      <Text style={styles.bucketCountLbl}>blocked</Text>
+                    </View>
+                  </View>
+                  {/* Block rate bar */}
+                  <View style={styles.barTrack}>
+                    <View style={[styles.barFill, { width: `${Math.round(pct * 100)}%` as any }]} />
+                  </View>
+                  {/* Sub-vendor chips (Meta → Facebook / Instagram / WhatsApp) */}
+                  {b.children && b.children.length > 1 && (
+                    <View style={styles.subChips}>
+                      {b.children.map((c) => (
+                        <View key={c.key} style={styles.subChip}>
+                          <Text style={styles.subChipTxt}>
+                            {c.emoji} {c.label} {c.total}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </ScrollView>
+        )
+      ) : tab === 'server' ? (
         /* ── Server Audit Log ─────────────────────────────────────── */
         <>
           <View style={styles.auditHeader}>
@@ -259,6 +452,7 @@ const styles = StyleSheet.create({
   },
   topTabActive: { borderBottomColor: '#4ade80' },
   topTabActiveServer: { borderBottomColor: '#3b82f6' },
+  topTabActiveTrackers: { borderBottomColor: '#f59e0b' },
   topTabText: { color: '#6b7280', fontSize: 13, fontWeight: '600' },
   topTabTextActive: { color: '#f1f5f9' },
 
@@ -374,4 +568,60 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { color: '#9ca3af', fontSize: 16, fontWeight: '600', marginBottom: 8 },
   emptySub: { color: '#6b7280', fontSize: 13, textAlign: 'center', lineHeight: 20 },
+
+  // ── Tracker bucket styles ─────────────────────────────────────────────────
+  bucketList: { padding: 12, paddingBottom: 40 },
+  bucketHdr: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 12,
+  },
+  bucketCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    padding: 14,
+    marginBottom: 10,
+  },
+  bucketCardSpy: {
+    borderColor: '#7f1d1d',
+    backgroundColor: '#160808',
+  },
+  bucketTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  bucketEmoji: { fontSize: 22, marginRight: 10 },
+  bucketInfo: { flex: 1 },
+  bucketLabel: { color: '#f1f5f9', fontSize: 14, fontWeight: '700' },
+  bucketCat: { color: '#475569', fontSize: 11, marginTop: 1 },
+  bucketCounts: { alignItems: 'center', marginLeft: 14 },
+  bucketTotal: { color: '#f1f5f9', fontSize: 18, fontWeight: '800' },
+  bucketRed: { color: '#f87171' },
+  bucketCountLbl: { color: '#6b7280', fontSize: 10 },
+  barTrack: {
+    height: 4,
+    backgroundColor: '#1e293b',
+    borderRadius: 2,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  barFill: {
+    height: 4,
+    backgroundColor: '#ef4444',
+    borderRadius: 2,
+  },
+  subChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  subChip: {
+    backgroundColor: '#1e293b',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  subChipTxt: { color: '#94a3b8', fontSize: 12, fontWeight: '600' },
 });

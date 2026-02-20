@@ -25,6 +25,8 @@ export interface VpnStats {
   allowedCount: number;
   lastBlocked: string;
   running: boolean;
+  paused: boolean;
+  pauseUntilMs: number;
 }
 
 export interface DnsQueryEvent {
@@ -48,6 +50,8 @@ const stubStats: VpnStats = {
   allowedCount: 0,
   lastBlocked: '',
   running: false,
+  paused: false,
+  pauseUntilMs: 0,
 };
 
 class AnkrShieldVpn {
@@ -121,6 +125,24 @@ class AnkrShieldVpn {
   async isRunning(): Promise<boolean> {
     if (Platform.OS !== 'android' || !DnsVpn) return false;
     return DnsVpn.isRunning() as Promise<boolean>;
+  }
+
+  /**
+   * Pause DNS filtering for N minutes (intentional browsing bypass).
+   * DNS queries will be forwarded to upstream unfiltered during this window.
+   * Auto-resumes when the timer expires. Also triggered automatically during phone calls.
+   */
+  async pause(minutes: number): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn) return;
+    await DnsVpn.pause(minutes);
+  }
+
+  /**
+   * Cancel any active pause and resume DNS filtering immediately.
+   */
+  async resume(): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn) return;
+    await DnsVpn.resume();
   }
 
   /**

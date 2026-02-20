@@ -93,12 +93,39 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
         stats.putDouble("allowedCount",   (double) DnsVpnService.allowedCount.get());
         stats.putString("lastBlocked",    DnsVpnService.lastBlockedDomain);
         stats.putBoolean("running",       DnsVpnService.running);
+        stats.putBoolean("paused",        DnsVpnService.paused);
+        stats.putDouble("pauseUntilMs",   (double) DnsVpnService.pauseUntilMs);
         promise.resolve(stats);
     }
 
     @ReactMethod
     public void isRunning(Promise promise) {
         promise.resolve(DnsVpnService.running);
+    }
+
+    /** Pause DNS filtering for N minutes (intentional browsing bypass). */
+    @ReactMethod
+    public void pause(double minutes, Promise promise) {
+        Intent intent = new Intent(getReactApplicationContext(), DnsVpnService.class);
+        intent.setAction("PAUSE");
+        intent.putExtra("minutes", (long) minutes);
+        getReactApplicationContext().startService(intent);
+        promise.resolve(null);
+    }
+
+    /** Resume DNS filtering immediately (cancel any active pause). */
+    @ReactMethod
+    public void resume(Promise promise) {
+        Intent intent = new Intent(getReactApplicationContext(), DnsVpnService.class);
+        intent.setAction("RESUME");
+        getReactApplicationContext().startService(intent);
+        promise.resolve(null);
+    }
+
+    /** Returns true if DNS filtering is currently paused (call active or manual bypass). */
+    @ReactMethod
+    public void isPaused(Promise promise) {
+        promise.resolve(DnsVpnService.paused);
     }
 
     // ─── VPN permission result ───────────────────────────────────────────────

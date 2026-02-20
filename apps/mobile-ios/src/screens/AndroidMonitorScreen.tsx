@@ -28,6 +28,8 @@ import {
   Platform,
 } from 'react-native';
 
+import { saveScanResult } from '../services/ScanStore';
+
 const { AppScanner } = NativeModules;
 
 // ---------------------------------------------------------------------------
@@ -235,6 +237,7 @@ export function AndroidMonitorScreen() {
       setProgress(75);
 
       const scanResult = monitor.scanApps(rawApps);
+      saveScanResult(scanResult); // persist for Home screen privacy score
       setProgress(100);
       await new Promise<void>((resolve) => setTimeout(resolve, 200));
       setResult(scanResult);

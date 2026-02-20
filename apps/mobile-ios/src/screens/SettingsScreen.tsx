@@ -18,19 +18,55 @@ import {
 
 import { vpnService } from '../services/VpnService';
 
-export function SettingsScreen() {
+export function SettingsScreen({ navigation }: any) {
   const [protectionEnabled, setProtectionEnabled] = useState(true);
   const [dnsFiltering, setDnsFiltering] = useState(false);
   const [dnsLoading, setDnsLoading] = useState(false);
+  const [dnsPaused, setDnsPaused] = useState(false);
+  const [pauseUntilMs, setPauseUntilMs] = useState(0);
   const [notifications, setNotifications] = useState(true);
 
-  // Sync DNS toggle with actual VPN state on mount
+  // Sync DNS + pause state every 5 s
   useEffect(() => {
-    vpnService
-      .isRunning()
-      .then(setDnsFiltering)
-      .catch(() => {});
+    async function syncState() {
+      const stats = await vpnService.getStats().catch(() => null);
+      if (stats) {
+        setDnsFiltering(stats.running);
+        setDnsPaused(stats.paused);
+        setPauseUntilMs(stats.pauseUntilMs);
+      }
+    }
+    syncState();
+    const interval = setInterval(syncState, 5000);
+    return () => clearInterval(interval);
   }, []);
+
+  function pauseLabel(): string {
+    if (!dnsPaused) return '';
+    if (pauseUntilMs === 0) return 'Paused — phone call active';
+    const mins = Math.max(0, Math.round((pauseUntilMs - Date.now()) / 60000));
+    return `Paused — resumes in ${mins} min`;
+  }
+
+  async function handlePause(minutes: number) {
+    try {
+      await vpnService.pause(minutes);
+      setDnsPaused(true);
+      setPauseUntilMs(Date.now() + minutes * 60000);
+    } catch (e) {
+      Alert.alert('Bypass', 'Could not pause DNS filtering');
+    }
+  }
+
+  async function handleResume() {
+    try {
+      await vpnService.resume();
+      setDnsPaused(false);
+      setPauseUntilMs(0);
+    } catch (e) {
+      Alert.alert('Bypass', 'Could not resume DNS filtering');
+    }
+  }
 
   async function handleDnsToggle(value: boolean) {
     if (dnsLoading) return;
@@ -89,6 +125,37 @@ export function SettingsScreen() {
             thumbColor={dnsLoading ? '#888' : '#fff'}
           />
         </View>
+
+        {/* Bypass / pause controls — shown only when DNS filtering is active */}
+        {dnsFiltering && Platform.OS === 'android' && (
+          <View style={styles.bypassBox}>
+            {dnsPaused ? (
+              <>
+                <Text style={styles.bypassStatus}>{pauseLabel()}</Text>
+                {pauseUntilMs > 0 && (
+                  <TouchableOpacity style={styles.bypassResumeBtn} onPress={handleResume}>
+                    <Text style={styles.bypassResumeTxt}>Resume protection now</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : (
+              <>
+                <Text style={styles.bypassHint}>
+                  Need to browse freely? Pause filtering temporarily. DNS resumes automatically on a
+                  call too.
+                </Text>
+                <View style={styles.bypassRow}>
+                  <TouchableOpacity style={styles.bypassBtn} onPress={() => handlePause(5)}>
+                    <Text style={styles.bypassBtnTxt}>Pause 5 min</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.bypassBtn} onPress={() => handlePause(30)}>
+                    <Text style={styles.bypassBtnTxt}>Pause 30 min</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        )}
       </View>
 
       <View style={styles.section}>
@@ -109,11 +176,36 @@ export function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Help</Text>
+
+        <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('Help')}>
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>❓ Help & Guide</Text>
+            <Text style={styles.settingDescription}>
+              What AnkrShield does, how to enable DNS filtering, scanner guide and more
+            </Text>
+          </View>
+          <Text style={styles.settingValue}>&gt;</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => navigation.navigate('FeatureRequest')}
+        >
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>💡 Feature Request</Text>
+            <Text style={styles.settingDescription}>Suggest a new feature or improvement</Text>
+          </View>
+          <Text style={styles.settingValue}>&gt;</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.section}>
         <Text style={styles.sectionTitle}>About</Text>
 
         <TouchableOpacity style={styles.settingRow}>
           <Text style={styles.settingLabel}>Version</Text>
-          <Text style={styles.settingValue}>1.2.4</Text>
+          <Text style={styles.settingValue}>1.2.6</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -177,5 +269,56 @@ const styles = StyleSheet.create({
   settingValue: {
     fontSize: 16,
     color: '#aaa',
+  },
+  bypassBox: {
+    backgroundColor: '#0f1f0f',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1a3a1a',
+    padding: 14,
+    marginTop: 4,
+  },
+  bypassHint: {
+    color: '#6b7280',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  bypassRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  bypassBtn: {
+    flex: 1,
+    backgroundColor: '#1a2a1a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#22c55e',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  bypassBtnTxt: {
+    color: '#4ade80',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  bypassStatus: {
+    color: '#f59e0b',
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  bypassResumeBtn: {
+    backgroundColor: '#1a1a0a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  bypassResumeTxt: {
+    color: '#fbbf24',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

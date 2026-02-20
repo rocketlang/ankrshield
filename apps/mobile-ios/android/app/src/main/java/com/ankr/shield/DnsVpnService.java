@@ -5,6 +5,8 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.VpnService;
 import android.os.ParcelFileDescriptor;
+import android.telephony.PhoneStateListener;
+import android.telephony.TelephonyManager;
 import android.util.Log;
 
 import java.io.File;
@@ -63,18 +65,39 @@ public class DnsVpnService extends VpnService {
     static volatile String  lastBlockedDomain = "";
     static volatile boolean running = false;
 
+    // Pause state — set by manual bypass or auto-detected phone call
+    static volatile boolean paused       = false;
+    static volatile long    pauseUntilMs = 0;  // 0 = indefinite (call-driven)
+
     private ParcelFileDescriptor vpnInterface;
     private Thread               packetThread;
     private SQLiteDatabase       trackerDb;
     private final AtomicBoolean  shouldStop = new AtomicBoolean(false);
 
+    private TelephonyManager  telephonyManager;
+    private PhoneStateListener phoneStateListener;
+
     // ─── Lifecycle ───────────────────────────────────────────────────────────
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if ("STOP".equals(intent != null ? intent.getAction() : null)) {
+        String action = intent != null ? intent.getAction() : null;
+        if ("STOP".equals(action)) {
             stopVpn();
             return START_NOT_STICKY;
+        }
+        if ("PAUSE".equals(action)) {
+            long minutes = intent.getLongExtra("minutes", 5);
+            paused = true;
+            pauseUntilMs = System.currentTimeMillis() + minutes * 60_000L;
+            Log.i(TAG, "AnkrShield DNS paused for " + minutes + " min (intentional browsing)");
+            return START_STICKY;
+        }
+        if ("RESUME".equals(action)) {
+            paused = false;
+            pauseUntilMs = 0;
+            Log.i(TAG, "AnkrShield DNS resumed manually");
+            return START_STICKY;
         }
         startVpn();
         return START_STICKY;
@@ -83,6 +106,7 @@ public class DnsVpnService extends VpnService {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        unregisterCallListener();
         stopVpn();
     }
 
@@ -290,7 +314,15 @@ public class DnsVpnService extends VpnService {
                 }
 
                 totalQueries.incrementAndGet();
-                TrackerMatch match = lookupTracker(domain);
+
+                // Auto-expire timed pauses (manual bypass window)
+                if (paused && pauseUntilMs > 0 && System.currentTimeMillis() >= pauseUntilMs) {
+                    paused = false;
+                    pauseUntilMs = 0;
+                    Log.i(TAG, "AnkrShield DNS bypass expired — protection resumed");
+                }
+
+                TrackerMatch match = paused ? null : lookupTracker(domain);
 
                 if (match != null) {
                     // BLOCKED — synthesise NXDOMAIN response
@@ -424,6 +456,44 @@ public class DnsVpnService extends VpnService {
     public void onCreate() {
         super.onCreate();
         instance = this;
+        registerCallListener();
+    }
+
+    @SuppressWarnings("deprecation")
+    private void registerCallListener() {
+        try {
+            telephonyManager = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+            if (telephonyManager == null) return;
+            phoneStateListener = new PhoneStateListener() {
+                @Override
+                public void onCallStateChanged(int state, String phoneNumber) {
+                    boolean callActive = (state == TelephonyManager.CALL_STATE_OFFHOOK
+                                      || state == TelephonyManager.CALL_STATE_RINGING);
+                    if (callActive && !paused) {
+                        paused = true;
+                        pauseUntilMs = 0; // 0 = call-driven (no expiry timer)
+                        Log.i(TAG, "AnkrShield DNS paused — phone call active");
+                    } else if (!callActive && paused && pauseUntilMs == 0) {
+                        // Only auto-resume if the pause was triggered by a call,
+                        // not by a manual timed bypass (those have pauseUntilMs > 0).
+                        paused = false;
+                        Log.i(TAG, "AnkrShield DNS resumed — phone call ended");
+                    }
+                }
+            };
+            telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE);
+        } catch (Exception e) {
+            Log.w(TAG, "Could not register call listener: " + e.getMessage());
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void unregisterCallListener() {
+        try {
+            if (telephonyManager != null && phoneStateListener != null) {
+                telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE);
+            }
+        } catch (Exception ignored) {}
     }
 
     /**

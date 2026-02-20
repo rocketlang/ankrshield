@@ -11,6 +11,7 @@
  */
 import { API_BASE } from '../config';
 
+import { getLastScan, scanAppScore } from './ScanStore';
 import { vpnService } from './VpnService';
 
 // ─── Response types from the server ──────────────────────────────────────────
@@ -105,8 +106,14 @@ export class PrivacyService {
     const loadPenalty = Math.min(15, Math.round(live.server.loadAvg1m * 5));
     const networkScore = Math.max(0, 100 - loadPenalty - serverPenalty);
 
-    // App score: from attack chains
-    const appScore = Math.max(0, 90 - live.warrior.attackChainsTotal * 3);
+    // App score: on-device scan result if available, else fall back to server attack chains.
+    // scanAppScore() returns null when no scan has been run this session.
+    const deviceScanScore = scanAppScore();
+    const serverChainScore = Math.max(0, 90 - live.warrior.attackChainsTotal * 3);
+    const appScore =
+      deviceScanScore !== null
+        ? Math.round(deviceScanScore * 0.7 + serverChainScore * 0.3)
+        : serverChainScore;
 
     // Overall: weighted average
     const privacyScore = Math.round(networkScore * 0.35 + dnsScore * 0.35 + appScore * 0.3);
@@ -174,7 +181,9 @@ export class PrivacyService {
       if (score.appScore < 60)
         recommendations.push('Attack chains detected — check Threat Alerts screen.');
     }
-    if (recommendations.length === 0)
+    if (!getLastScan())
+      recommendations.push('Run the App Scanner to include installed-app risk in your score.');
+    if (recommendations.length === 0 || (recommendations.length === 1 && !getLastScan()))
       recommendations.push('Good protection. Review Threat Alerts for details.');
 
     return {

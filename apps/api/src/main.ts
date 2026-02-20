@@ -2488,6 +2488,54 @@ Date: ${now.toLocaleDateString('en-IN')}`;
 
     // ─── End Session System ────────────────────────────────────────────────────
 
+    // ─── Feature Requests ─────────────────────────────────────────────────────
+    // Stored in Redis as a JSON list under key "feature_requests".
+    // Max 2000 entries — oldest are trimmed automatically.
+
+    fastify.post('/api/feature-request', async (request: any, reply: any) => {
+      const { category, title, description, appVersion, platform } = request.body as any;
+
+      if (!category || !title || !description) {
+        return reply.status(400).send({ error: 'category, title and description are required' });
+      }
+
+      const entry = JSON.stringify({
+        id: randomBytes(8).toString('hex'),
+        category,
+        title: String(title).slice(0, 120),
+        description: String(description).slice(0, 1000),
+        appVersion: String(appVersion || 'unknown'),
+        platform: String(platform || 'unknown'),
+        createdAt: new Date().toISOString(),
+      });
+
+      try {
+        await redis.lpush('feature_requests', entry);
+        await redis.ltrim('feature_requests', 0, 1999); // keep latest 2000
+      } catch (e) {
+        fastify.log.error('Redis feature-request write failed: ' + e);
+        return reply.status(500).send({ error: 'Could not save request' });
+      }
+
+      return reply.send({ ok: true });
+    });
+
+    fastify.get('/api/feature-requests', async (request: any, reply: any) => {
+      const token = (request.headers['x-admin-token'] as string) || '';
+      if (token !== (process.env.ADMIN_TOKEN || 'ankr-admin')) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+      try {
+        const raw = await redis.lrange('feature_requests', 0, 499); // latest 500
+        const entries = raw.map((r: string) => JSON.parse(r));
+        return reply.send({ total: raw.length, entries });
+      } catch (e) {
+        return reply.status(500).send({ error: 'Could not read requests' });
+      }
+    });
+
+    // ─── End Feature Requests ─────────────────────────────────────────────────
+
     // Start server
     const port = parseInt(process.env.PORT || '4250', 10);
     const host = process.env.HOST || '0.0.0.0';

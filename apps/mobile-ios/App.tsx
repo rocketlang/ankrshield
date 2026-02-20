@@ -13,6 +13,8 @@ import { AgentManagerScreen } from './src/screens/AgentManagerScreen';
 import { AndroidMonitorScreen } from './src/screens/AndroidMonitorScreen';
 import { ConferenceScreen } from './src/screens/ConferenceScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
+import { FeatureRequestScreen } from './src/screens/FeatureRequestScreen';
+import { HelpScreen } from './src/screens/HelpScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LiveThreatsScreen } from './src/screens/LiveThreatsScreen';
 import { RiskLookupScreen } from './src/screens/RiskLookupScreen';
@@ -108,6 +110,24 @@ function App(): React.JSX.Element {
               title: '🔍 Risk Lookup',
               headerStyle: { backgroundColor: '#080c14' },
               headerTintColor: '#60a5fa',
+            }}
+          />
+          <Stack.Screen
+            name="Help"
+            component={HelpScreen}
+            options={{
+              title: '❓ Help & Guide',
+              headerStyle: { backgroundColor: '#0c1118' },
+              headerTintColor: '#22d3ee',
+            }}
+          />
+          <Stack.Screen
+            name="FeatureRequest"
+            component={FeatureRequestScreen}
+            options={{
+              title: '💡 Feature Request',
+              headerStyle: { backgroundColor: '#0c1118' },
+              headerTintColor: '#3b82f6',
             }}
           />
         </Stack.Navigator>

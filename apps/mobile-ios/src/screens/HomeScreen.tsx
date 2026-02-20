@@ -83,6 +83,52 @@ export function HomeScreen({ navigation }: any) {
 
   return (
     <ScrollView style={styles.container}>
+      {/* ── Fear-based purpose banner ───────────────────────────────────── */}
+      {vpnStats.running && vpnStats.blockedCount > 0 ? (
+        <View style={[styles.purposeBanner, styles.purposeBannerActive]}>
+          <View style={styles.purposeBody}>
+            <Text style={styles.purposeThreat}>
+              🔴 {vpnStats.blockedCount} tracker{vpnStats.blockedCount !== 1 ? 's' : ''} tried to
+              follow you
+            </Text>
+            <Text style={styles.purposeDefend}>AnkrShield intercepted every one.</Text>
+          </View>
+        </View>
+      ) : vpnStats.running ? (
+        <View style={[styles.purposeBanner, styles.purposeBannerActive]}>
+          <View style={styles.purposeBody}>
+            <Text style={styles.purposeThreat}>🛡 Shield active — watching for trackers</Text>
+            <Text style={styles.purposeDefend}>
+              Every DNS query is being inspected in real time.
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <View style={[styles.purposeBanner, styles.purposeBannerWarn]}>
+          <View style={styles.purposeBody}>
+            <Text style={styles.purposeWarnTitle}>⚠️ Your phone is being watched.</Text>
+            <Text style={styles.purposeWarnSub}>
+              Ad networks, data brokers and trackers profile you with every tap.{'\n'}
+              Enable DNS Shield in Settings to fight back.
+            </Text>
+          </View>
+        </View>
+      )}
+      <View style={styles.purposePills}>
+        <View style={styles.pill}>
+          <Text style={styles.pillTxt}>🌐 Stops trackers</Text>
+        </View>
+        <View style={styles.pill}>
+          <Text style={styles.pillTxt}>🔬 Finds spyware</Text>
+        </View>
+        <View style={styles.pill}>
+          <Text style={styles.pillTxt}>⚔️ AI defence</Text>
+        </View>
+        <View style={styles.pill}>
+          <Text style={styles.pillTxt}>📵 Blocks ads</Text>
+        </View>
+      </View>
+
       {score && (
         <View style={styles.scoreContainer}>
           <PrivacyScoreCircle score={score.totalScore} level={score.level} />
@@ -218,13 +264,70 @@ export function HomeScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: '#080c14',
   },
+
+  purposeBanner: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 4,
+    borderRadius: 14,
+    padding: 18,
+  },
+  purposeBannerActive: {
+    backgroundColor: '#0a1f0a',
+    borderWidth: 1,
+    borderColor: '#166534',
+  },
+  purposeBannerWarn: {
+    backgroundColor: '#160a0a',
+    borderWidth: 1,
+    borderColor: '#7f1d1d',
+  },
+  purposeBody: { flex: 1 },
+  purposeThreat: {
+    color: '#4ade80',
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  purposeDefend: {
+    color: '#86efac',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  purposeWarnTitle: {
+    color: '#fca5a5',
+    fontSize: 17,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  purposeWarnSub: {
+    color: '#9ca3af',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  purposePills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 20,
+    gap: 7,
+    marginBottom: 6,
+  },
+  pill: {
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  pillTxt: { color: '#94a3b8', fontSize: 11, fontWeight: '600' },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#121212',
+    backgroundColor: '#080c14',
   },
   loadingText: {
     marginTop: 16,

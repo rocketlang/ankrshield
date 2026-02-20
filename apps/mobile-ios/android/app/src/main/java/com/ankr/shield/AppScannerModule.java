@@ -65,12 +65,18 @@ public class AppScannerModule extends ReactContextBaseJavaModule {
                         || "com.android.shell".equals(installing)) {
                     return "adb";
                 }
-                // Explicit file-manager/browser sideload
+                // If a designated installer (app store) claimed responsibility, it is NOT
+                // a manual sideload — give it the benefit of the doubt (Samsung Galaxy Store,
+                // F-Droid, Amazon Appstore, etc. all set installingPackageName to themselves).
+                if (installing != null && !installing.isEmpty()) {
+                    return "unknown";
+                }
+                // installingPackageName is null but initiating is set → Package Installer
+                // was used directly (user tapped an APK in Files/browser) = real sideload.
                 if (!isSystem && initiating != null && !initiating.isEmpty()) {
                     return "file_manager";
                 }
-                // System package or no initiating info
-                return isSystem ? "unknown" : "unknown";
+                return "unknown";
             } catch (PackageManager.NameNotFoundException | SecurityException ignored) {}
         }
 
@@ -80,8 +86,14 @@ public class AppScannerModule extends ReactContextBaseJavaModule {
             if ("com.android.vending".equals(installer)) return "play_store";
             if ("com.android.shell".equals(installer))   return "adb";
             if (installer != null && !installer.isEmpty()) {
-                // Another app installed this (e.g. a file manager, app store)
-                return isSystem ? "unknown" : "file_manager";
+                // Legacy API can't distinguish app stores from Package Installer —
+                // only flag as sideloaded if the installer is the system Package Installer.
+                // Any other non-null installer is likely an app store → unknown.
+                if ("com.android.packageinstaller".equals(installer)
+                        || "com.google.android.packageinstaller".equals(installer)) {
+                    return isSystem ? "unknown" : "file_manager";
+                }
+                return "unknown";
             }
         } catch (Exception ignored) {}
 
@@ -117,7 +129,15 @@ public class AppScannerModule extends ReactContextBaseJavaModule {
                     PackageInfo pkgInfo =
                         pm.getPackageInfo(app.packageName, PackageManager.GET_PERMISSIONS);
                     if (pkgInfo.requestedPermissions != null) {
-                        for (String p : pkgInfo.requestedPermissions) {
+                        for (int pi = 0; pi < pkgInfo.requestedPermissions.length; pi++) {
+                            // Only include permissions the user actually granted at runtime.
+                            // A declared-but-denied permission gives the app zero real access —
+                            // flagging it would produce false positives for ordinary apps.
+                            boolean granted = (pkgInfo.requestedPermissionsFlags != null)
+                                && (pkgInfo.requestedPermissionsFlags[pi]
+                                    & PackageInfo.REQUESTED_PERMISSION_GRANTED) != 0;
+                            if (!granted) continue;
+                            String p = pkgInfo.requestedPermissions[pi];
                             String short_ = p.startsWith("android.permission.")
                                 ? p.substring("android.permission.".length())
                                 : p;
