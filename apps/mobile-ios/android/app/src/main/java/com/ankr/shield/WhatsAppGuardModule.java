@@ -32,6 +32,7 @@ public class WhatsAppGuardModule extends ReactContextBaseJavaModule {
 
     private static final String PREFS = "ankr_guard";
     private static final String KEY_ENABLED = "guard_enabled";
+    private static final String KEY_NOTIFS  = "notifications_enabled";
 
     private static volatile boolean running = false;
 
@@ -190,6 +191,23 @@ public class WhatsAppGuardModule extends ReactContextBaseJavaModule {
         } catch (Exception e) {
             promise.reject("DELETE_ERROR", e.getMessage(), e);
         }
+    }
+
+    /** Returns the user's notifications preference (default: true). */
+    @ReactMethod
+    public void getNotificationsEnabled(Promise promise) {
+        SharedPreferences prefs = getReactApplicationContext()
+            .getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE);
+        promise.resolve(prefs.getBoolean(KEY_NOTIFS, true));
+    }
+
+    /** Persists the user's notification preference — read by WhatsAppGuardService before firing alerts. */
+    @ReactMethod
+    public void setNotificationsEnabled(boolean enabled, Promise promise) {
+        getReactApplicationContext()
+            .getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_NOTIFS, enabled).apply();
+        promise.resolve(true);
     }
 
     /** Returns impersonation alert history from the accessibility service. */

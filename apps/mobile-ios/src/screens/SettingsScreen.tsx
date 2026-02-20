@@ -14,19 +14,24 @@ import {
   Alert,
   Platform,
   Linking,
+  NativeModules,
+  PermissionsAndroid,
 } from 'react-native';
 
 import { vpnService } from '../services/VpnService';
 
+const { WhatsAppGuard } = NativeModules;
+
 export function SettingsScreen({ navigation }: any) {
-  const [protectionEnabled, setProtectionEnabled] = useState(true);
+  // Network protection mirrors DNS filtering — same VPN, kept in sync
   const [dnsFiltering, setDnsFiltering] = useState(false);
   const [dnsLoading, setDnsLoading] = useState(false);
   const [dnsPaused, setDnsPaused] = useState(false);
   const [pauseUntilMs, setPauseUntilMs] = useState(0);
   const [notifications, setNotifications] = useState(true);
+  const [notifsLoading, setNotifsLoading] = useState(false);
 
-  // Sync DNS + pause state every 5 s
+  // Sync DNS + pause state every 5 s; load saved notification preference
   useEffect(() => {
     async function syncState() {
       const stats = await vpnService.getStats().catch(() => null);
@@ -38,6 +43,14 @@ export function SettingsScreen({ navigation }: any) {
     }
     syncState();
     const interval = setInterval(syncState, 5000);
+
+    // Load persisted notification preference
+    if (Platform.OS === 'android' && WhatsAppGuard) {
+      WhatsAppGuard.getNotificationsEnabled()
+        .then((v: boolean) => setNotifications(v))
+        .catch(() => {});
+    }
+
     return () => clearInterval(interval);
   }, []);
 
@@ -65,6 +78,39 @@ export function SettingsScreen({ navigation }: any) {
       setPauseUntilMs(0);
     } catch (e) {
       Alert.alert('Bypass', 'Could not resume DNS filtering');
+    }
+  }
+
+  async function handleNotificationsToggle(value: boolean) {
+    if (notifsLoading || Platform.OS !== 'android' || !WhatsAppGuard) return;
+    setNotifsLoading(true);
+    try {
+      if (value) {
+        // Android 13+ requires POST_NOTIFICATIONS runtime permission
+        const apiLevel = Platform.Version as number;
+        if (apiLevel >= 33) {
+          const grant = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+            {
+              title: 'Allow notifications',
+              message:
+                'AnkrShield needs permission to alert you when a dangerous file is detected in WhatsApp.',
+              buttonPositive: 'Allow',
+              buttonNegative: 'Deny',
+            }
+          );
+          if (grant !== PermissionsAndroid.RESULTS.GRANTED) {
+            setNotifsLoading(false);
+            return;
+          }
+        }
+      }
+      await WhatsAppGuard.setNotificationsEnabled(value);
+      setNotifications(value);
+    } catch (_e) {
+      Alert.alert('Notifications', 'Could not update notification preference.');
+    } finally {
+      setNotifsLoading(false);
     }
   }
 
@@ -101,10 +147,11 @@ export function SettingsScreen({ navigation }: any) {
             <Text style={styles.settingDescription}>Block trackers and malicious connections</Text>
           </View>
           <Switch
-            value={protectionEnabled}
-            onValueChange={setProtectionEnabled}
+            value={dnsFiltering}
+            onValueChange={handleDnsToggle}
+            disabled={dnsLoading || Platform.OS !== 'android'}
             trackColor={{ false: '#333', true: '#4CAF50' }}
-            thumbColor="#fff"
+            thumbColor={dnsLoading ? '#888' : '#fff'}
           />
         </View>
 
@@ -181,9 +228,10 @@ export function SettingsScreen({ navigation }: any) {
           </View>
           <Switch
             value={notifications}
-            onValueChange={setNotifications}
+            onValueChange={handleNotificationsToggle}
+            disabled={notifsLoading || Platform.OS !== 'android'}
             trackColor={{ false: '#333', true: '#4CAF50' }}
-            thumbColor="#fff"
+            thumbColor={notifsLoading ? '#888' : '#fff'}
           />
         </View>
       </View>

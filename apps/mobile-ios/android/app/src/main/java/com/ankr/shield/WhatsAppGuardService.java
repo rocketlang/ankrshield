@@ -292,6 +292,11 @@ public class WhatsAppGuardService extends Service {
     // ── Notifications ─────────────────────────────────────────────────────────
 
     private void sendThreatNotification(ScanEntry entry) {
+        // Respect user's notification preference
+        android.content.SharedPreferences prefs =
+            getSharedPreferences("ankr_guard", android.content.Context.MODE_PRIVATE);
+        if (!prefs.getBoolean("notifications_enabled", true)) return;
+
         NotificationManager nm =
             (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm == null) return;
