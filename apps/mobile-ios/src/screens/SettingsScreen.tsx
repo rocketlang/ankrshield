@@ -126,6 +126,19 @@ export function SettingsScreen({ navigation }: any) {
           />
         </View>
 
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => navigation.navigate('WhatsAppGuard')}
+        >
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>💬 WhatsApp Guard</Text>
+            <Text style={styles.settingDescription}>
+              Scan attachments, detect impersonation & AI voice calls
+            </Text>
+          </View>
+          <Text style={styles.settingValue}>&gt;</Text>
+        </TouchableOpacity>
+
         {/* Bypass / pause controls — shown only when DNS filtering is active */}
         {dnsFiltering && Platform.OS === 'android' && (
           <View style={styles.bypassBox}>
@@ -205,7 +218,7 @@ export function SettingsScreen({ navigation }: any) {
 
         <TouchableOpacity style={styles.settingRow}>
           <Text style={styles.settingLabel}>Version</Text>
-          <Text style={styles.settingValue}>1.2.6</Text>
+          <Text style={styles.settingValue}>1.2.7</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

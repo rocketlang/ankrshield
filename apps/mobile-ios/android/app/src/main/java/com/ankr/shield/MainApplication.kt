@@ -29,6 +29,7 @@ class MainApplication : Application(), ReactApplication {
             // AnkrShield native modules
             packages.add(DnsVpnPackage())
             packages.add(AppScannerPackage())
+            packages.add(WhatsAppGuardPackage())
             return packages
           }
 

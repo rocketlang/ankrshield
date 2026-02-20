@@ -22,6 +22,7 @@ import { SettingsScreen } from './src/screens/SettingsScreen';
 import { SpywareScanScreen } from './src/screens/SpywareScanScreen';
 import { ThreatAlertsScreen } from './src/screens/ThreatAlertsScreen';
 import { WarriorScreen } from './src/screens/WarriorScreen';
+import { WhatsAppGuardScreen } from './src/screens/WhatsAppGuardScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -128,6 +129,15 @@ function App(): React.JSX.Element {
               title: '💡 Feature Request',
               headerStyle: { backgroundColor: '#0c1118' },
               headerTintColor: '#3b82f6',
+            }}
+          />
+          <Stack.Screen
+            name="WhatsAppGuard"
+            component={WhatsAppGuardScreen}
+            options={{
+              title: '💬 WhatsApp Guard',
+              headerStyle: { backgroundColor: '#0c1118' },
+              headerTintColor: '#25d366',
             }}
           />
         </Stack.Navigator>
