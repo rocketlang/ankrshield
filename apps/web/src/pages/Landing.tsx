@@ -2831,7 +2831,7 @@ jobs:
                   download="ankrshield.apk"
                   className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-black px-5 py-3 rounded-xl transition-colors text-sm w-full justify-center"
                 >
-                  📥 Download v1.2.6 (32 MB)
+                  📥 Download v1.2.8 (32 MB)
                 </a>
                 <p className="text-gray-600 text-[10px] text-center">
                   No account · No telemetry · Open source
