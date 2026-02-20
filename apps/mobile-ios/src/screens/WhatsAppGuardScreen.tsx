@@ -19,6 +19,8 @@ import {
   Platform,
   Linking,
   Alert,
+  PermissionsAndroid,
+  ActivityIndicator,
 } from 'react-native';
 
 const { WhatsAppGuard } = NativeModules;
@@ -90,75 +92,128 @@ function timeAgo(ts: number): string {
 export function WhatsAppGuardScreen() {
   const [tab, setTab] = useState<Tab>('attachments');
   const [guardRunning, setGuardRunning] = useState(false);
+  const [guardEnabled, setGuardEnabled] = useState<boolean | null>(null); // null = loading
+  const [enabling, setEnabling] = useState(false);
   const [scanHistory, setScanHistory] = useState<ScanEntry[]>([]);
   const [impersonationAlerts, setImpersonationAlerts] = useState<ImpersonationAlert[]>([]);
   const [callActive, setCallActive] = useState(false);
   const [phishingAlerts, setPhishingAlerts] = useState<PhishingAlert[]>([]);
 
-  // Load history + state on mount
+  // Check if guard was previously enabled by user
   useEffect(() => {
+    if (Platform.OS !== 'android' || !WhatsAppGuard) {
+      setGuardEnabled(false);
+      return;
+    }
+    WhatsAppGuard.isGuardEnabled()
+      .then((enabled: boolean) => setGuardEnabled(enabled))
+      .catch(() => setGuardEnabled(false));
+  }, []);
+
+  // Subscribe to live events only once enabled
+  useEffect(() => {
+    if (!guardEnabled || Platform.OS !== 'android' || !WhatsAppGuard) return;
     loadState();
-
-    if (Platform.OS !== 'android' || !WhatsAppGuard) return;
-
     const emitter = new NativeEventEmitter(WhatsAppGuard);
-
     const subFile = emitter.addListener('WhatsAppFileEvent', (entry: ScanEntry) => {
-      if (entry.verdict !== 'clean') {
-        setScanHistory((prev) => [entry, ...prev].slice(0, 200));
-      }
+      if (entry.verdict !== 'clean') setScanHistory((prev) => [entry, ...prev].slice(0, 200));
     });
-
     const subImp = emitter.addListener('ImpersonationAlert', (alert: ImpersonationAlert) => {
       setImpersonationAlerts((prev) => [alert, ...prev].slice(0, 100));
     });
-
     const subCall = emitter.addListener('WhatsAppCallEvent', (ev: CallEvent) => {
       setCallActive(ev.active);
     });
-
     const subPhish = emitter.addListener('PhishingAlert', (a: PhishingAlert) => {
       setPhishingAlerts((prev) => [a, ...prev].slice(0, 50));
     });
-
     return () => {
       subFile.remove();
       subImp.remove();
       subCall.remove();
       subPhish.remove();
     };
-  }, []);
+  }, [guardEnabled]);
 
   const loadState = useCallback(async () => {
     if (Platform.OS !== 'android' || !WhatsAppGuard) return;
     try {
-      const [running, history, phishing] = await Promise.all([
+      const [running, history] = await Promise.all([
         WhatsAppGuard.isRunning(),
         WhatsAppGuard.getScanHistory(),
-        WhatsAppGuard.getPhishingAlerts(),
       ]);
       setGuardRunning(running);
       setScanHistory((history as ScanEntry[]).filter((e) => e.verdict !== 'clean'));
-      setPhishingAlerts(phishing as PhishingAlert[]);
     } catch (_e) {
       /* ignore — guard not yet started */
     }
   }, []);
 
-  const toggleGuard = useCallback(async () => {
-    if (Platform.OS !== 'android' || !WhatsAppGuard) return;
+  /** Walks through permissions with clear rationale, then starts guard. */
+  const handleEnable = useCallback(async () => {
+    if (enabling) return;
+    setEnabling(true);
     try {
-      if (guardRunning) {
-        await WhatsAppGuard.stopGuard();
-        setGuardRunning(false);
-      } else {
-        await WhatsAppGuard.startGuard();
-        setGuardRunning(true);
+      const storageGrants = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+        PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+        PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO,
+      ]);
+      const storageOk = Object.values(storageGrants).some(
+        (r) => r === PermissionsAndroid.RESULTS.GRANTED
+      );
+      if (!storageOk) {
+        Alert.alert(
+          'Storage permission needed',
+          'AnkrShield scans files in your WhatsApp media folder for malware. Scanning is 100% on-device — no files are ever uploaded.',
+          [{ text: 'OK' }]
+        );
+        setEnabling(false);
+        return;
+      }
+      const contactsGrant = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
+        {
+          title: 'Contacts (optional)',
+          message:
+            'To detect impersonation, AnkrShield compares WhatsApp names to your address book. Contact names never leave your device.',
+          buttonPositive: 'Allow',
+          buttonNegative: 'Skip',
+        }
+      );
+      await WhatsAppGuard.startGuard();
+      await WhatsAppGuard.setGuardEnabled(true);
+      setGuardRunning(true);
+      setGuardEnabled(true);
+      if (contactsGrant !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert(
+          'Guard active',
+          'File scanning and AI voice detection are on. Grant Contacts in Settings to also enable impersonation detection.',
+          [{ text: 'OK' }]
+        );
       }
     } catch (_e) {
-      Alert.alert('Error', 'Could not toggle WhatsApp Guard.');
+      Alert.alert('Error', 'Could not start WhatsApp Guard. Please try again.');
+    } finally {
+      setEnabling(false);
     }
-  }, [guardRunning]);
+  }, [enabling]);
+
+  const handleDisable = useCallback(() => {
+    Alert.alert('Turn off WhatsApp Guard?', 'File scanning and threat detection will stop.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Turn Off',
+        style: 'destructive',
+        onPress: async () => {
+          await WhatsAppGuard.stopGuard().catch(() => {});
+          await WhatsAppGuard.setGuardEnabled(false).catch(() => {});
+          setGuardRunning(false);
+          setGuardEnabled(false);
+        },
+      },
+    ]);
+  }, []);
 
   const openA11ySettings = useCallback(() => {
     Linking.openSettings();
@@ -167,9 +222,87 @@ export function WhatsAppGuardScreen() {
   const dangerCount = scanHistory.filter((e) => e.verdict === 'dangerous').length;
   const suspiciousCount = scanHistory.filter((e) => e.verdict === 'suspicious').length;
 
+  // Loading state
+  if (guardEnabled === null) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#25d366" />
+      </View>
+    );
+  }
+
+  // ── Onboarding screen — shown once, before any permissions are requested ──
+  if (!guardEnabled) {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.onboardPad}>
+        <Text style={styles.onboardIcon}>🛡️</Text>
+        <Text style={styles.onboardTitle}>WhatsApp Guard</Text>
+        <Text style={styles.onboardSub}>
+          Runs silently in the background. Alerts you only when something dangerous arrives.
+        </Text>
+
+        <View style={styles.permCard}>
+          <Text style={styles.permCardTitle}>What this feature accesses</Text>
+
+          <View style={styles.permRow}>
+            <Text style={styles.permIcon}>📁</Text>
+            <View style={styles.permBody}>
+              <Text style={styles.permName}>WhatsApp Media Folder</Text>
+              <Text style={styles.permDesc}>
+                Scans files you receive for malware (APKs disguised as photos, shell scripts, etc).
+                Files are never uploaded — analysis is 100% on-device.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.permRow}>
+            <Text style={styles.permIcon}>👤</Text>
+            <View style={styles.permBody}>
+              <Text style={styles.permName}>Contacts (optional)</Text>
+              <Text style={styles.permDesc}>
+                Compares WhatsApp display names to your address book to catch impersonation. Your
+                contacts are never stored or sent anywhere.
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.permRow}>
+            <Text style={styles.permIcon}>🎙</Text>
+            <View style={styles.permBody}>
+              <Text style={styles.permName}>Accessibility Service</Text>
+              <Text style={styles.permDesc}>
+                Detects when a WhatsApp call is active to enable AI voice analysis. Message content
+                is never read — only call screen state.
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.privacyBox}>
+          <Text style={styles.privacyTxt}>
+            🔒 All processing is on your device. AnkrShield only reports anonymised threat metadata
+            (file type + verdict) to help protect other users.
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.enableBtn, enabling && styles.enableBtnDisabled]}
+          onPress={handleEnable}
+          disabled={enabling}
+        >
+          {enabling ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.enableBtnTxt}>Enable WhatsApp Guard</Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header with disable option */}
       <View style={styles.header}>
         <Text style={styles.headerIcon}>💬</Text>
         <View style={styles.headerBody}>
@@ -178,7 +311,7 @@ export function WhatsAppGuardScreen() {
         </View>
         <TouchableOpacity
           style={[styles.toggleBtn, guardRunning && styles.toggleBtnOn]}
-          onPress={toggleGuard}
+          onPress={guardRunning ? handleDisable : handleEnable}
         >
           <Text style={styles.toggleBtnTxt}>{guardRunning ? '🟢 ON' : '⚫ OFF'}</Text>
         </TouchableOpacity>
@@ -187,9 +320,7 @@ export function WhatsAppGuardScreen() {
       {/* Status bar */}
       {!guardRunning && (
         <View style={styles.warningBar}>
-          <Text style={styles.warningTxt}>
-            ⚠️ Guard is off — tap ON to start scanning WhatsApp attachments
-          </Text>
+          <Text style={styles.warningTxt}>⚠️ Guard is paused — tap OFF to restart</Text>
         </View>
       )}
 
@@ -727,4 +858,65 @@ const styles = StyleSheet.create({
   phishDomainReal: { color: '#4ade80', fontSize: 13, fontWeight: '700', fontFamily: 'monospace' },
   phishArrow: { color: '#475569', fontSize: 16 },
   phishAdvice: { color: '#94a3b8', fontSize: 12, lineHeight: 17 },
+
+  // Onboarding styles
+  center: { flex: 1, backgroundColor: '#121212', justifyContent: 'center', alignItems: 'center' },
+  onboardPad: { padding: 24, alignItems: 'center' },
+  onboardIcon: { fontSize: 64, marginBottom: 12, marginTop: 8 },
+  onboardTitle: {
+    color: '#f1f5f9',
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  onboardSub: {
+    color: '#9ca3af',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  permCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    padding: 16,
+    width: '100%',
+    marginBottom: 16,
+  },
+  permCardTitle: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 14,
+  },
+  permRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+  permIcon: { fontSize: 22, marginTop: 1 },
+  permBody: { flex: 1 },
+  permName: { color: '#f1f5f9', fontSize: 14, fontWeight: '700', marginBottom: 3 },
+  permDesc: { color: '#6b7280', fontSize: 12, lineHeight: 18 },
+  privacyBox: {
+    backgroundColor: '#0a1a0a',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#166534',
+    padding: 14,
+    width: '100%',
+    marginBottom: 24,
+  },
+  privacyTxt: { color: '#4ade80', fontSize: 12, lineHeight: 18 },
+  enableBtn: {
+    backgroundColor: '#25d366',
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    width: '100%',
+    alignItems: 'center',
+  },
+  enableBtnDisabled: { opacity: 0.5 },
+  enableBtnTxt: { color: '#000', fontSize: 16, fontWeight: '800' },
 });

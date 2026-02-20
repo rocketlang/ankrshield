@@ -1,6 +1,7 @@
 package com.ankr.shield;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 
 import androidx.annotation.NonNull;
@@ -28,6 +29,9 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
  *   'WhatsAppFileEvent' → { fileName, filePath, verdict, reason, ts, fileSizeBytes }
  */
 public class WhatsAppGuardModule extends ReactContextBaseJavaModule {
+
+    private static final String PREFS = "ankr_guard";
+    private static final String KEY_ENABLED = "guard_enabled";
 
     private static volatile boolean running = false;
 
@@ -112,12 +116,35 @@ public class WhatsAppGuardModule extends ReactContextBaseJavaModule {
         promise.resolve(true);
     }
 
+    /** Returns true if the user previously enabled WhatsApp Guard. */
+    @ReactMethod
+    public void isGuardEnabled(Promise promise) {
+        SharedPreferences prefs = getReactApplicationContext()
+            .getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE);
+        promise.resolve(prefs.getBoolean(KEY_ENABLED, false));
+    }
+
+    /** Persist the user's choice — called after successful permission grant + guard start. */
+    @ReactMethod
+    public void setGuardEnabled(boolean enabled, Promise promise) {
+        getReactApplicationContext()
+            .getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_ENABLED, enabled).apply();
+        promise.resolve(true);
+    }
+
     /**
-     * Silently start the guard without user interaction.
-     * Called from JS on app launch once permissions are confirmed.
+     * Silently restart the guard on app launch — ONLY if the user already opted in.
+     * Never called on a fresh install, so no surprise permission dialogs.
      */
     @ReactMethod
     public void autoStart(Promise promise) {
+        SharedPreferences prefs = getReactApplicationContext()
+            .getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE);
+        if (!prefs.getBoolean(KEY_ENABLED, false)) {
+            promise.resolve(false); // not opted in yet — do nothing
+            return;
+        }
         if (running) { promise.resolve(true); return; }
         startGuard(promise);
     }
