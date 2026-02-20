@@ -96,7 +96,7 @@ export function WhatsAppGuardScreen() {
   const [enabling, setEnabling] = useState(false);
   const [scanHistory, setScanHistory] = useState<ScanEntry[]>([]);
   const [impersonationAlerts, setImpersonationAlerts] = useState<ImpersonationAlert[]>([]);
-  const [callActive, setCallActive] = useState(false);
+  const [_callActive, setCallActive] = useState(false);
   const [phishingAlerts, setPhishingAlerts] = useState<PhishingAlert[]>([]);
 
   // Check if guard was previously enabled by user
@@ -269,10 +269,10 @@ export function WhatsAppGuardScreen() {
           <View style={styles.permRow}>
             <Text style={styles.permIcon}>🎙</Text>
             <View style={styles.permBody}>
-              <Text style={styles.permName}>Accessibility Service</Text>
+              <Text style={styles.permName}>AI Voice Detection (optional)</Text>
               <Text style={styles.permDesc}>
-                Detects when a WhatsApp call is active to enable AI voice analysis. Message content
-                is never read — only call screen state.
+                Enable separately via Settings → Accessibility → AnkrShield. Detects deepfake voice
+                during calls. Your messages are never read.
               </Text>
             </View>
           </View>
@@ -485,39 +485,17 @@ export function WhatsAppGuardScreen() {
         {/* ── Voice tab ─────────────────────────────────────────────────── */}
         {tab === 'voice' && (
           <>
-            <View style={styles.infoBox}>
-              <Text style={styles.infoTxt}>
-                During WhatsApp calls, AnkrShield analyses audio output for signs of AI-generated
-                voice. Deepfake voices used in scams ("it's your son, I need money") are flagged in
-                real time.
-              </Text>
-            </View>
-
-            {/* Call status */}
-            <View
-              style={[
-                styles.callStatus,
-                callActive ? styles.callStatusActive : styles.callStatusIdle,
-              ]}
-            >
-              <Text style={styles.callStatusIcon}>{callActive ? '📞' : '📵'}</Text>
-              <View>
-                <Text style={[styles.callStatusTitle, callActive && styles.callStatusTitleActive]}>
-                  {callActive ? 'WhatsApp Call Active' : 'No Active Call'}
-                </Text>
-                <Text style={styles.callStatusSub}>
-                  {callActive
-                    ? 'Monitoring audio for AI-generated voice patterns'
-                    : 'Voice analysis starts automatically when a WhatsApp call begins'}
-                </Text>
-              </View>
-            </View>
-
             <View style={styles.a11yCard}>
-              <Text style={styles.a11yTitle}>Requires Accessibility Permission</Text>
+              <Text style={styles.a11yTitle}>🎙 AI Voice Detection</Text>
               <Text style={styles.a11yDesc}>
-                Call detection needs Accessibility access to know when a WhatsApp call screen is
-                open. Audio is captured on-device — nothing is sent anywhere.
+                Detects deepfake AI voices during WhatsApp calls — the kind used in "it's your son,
+                I need money urgently" scams.{'\n\n'}
+                To enable, go to{' '}
+                <Text style={{ color: '#4ade80', fontWeight: '700' }}>
+                  Settings → Accessibility → Installed services → AnkrShield
+                </Text>{' '}
+                and turn it on. This is the standard Android method for all accessibility features —
+                your messages are never read.
               </Text>
               <TouchableOpacity style={styles.a11yBtn} onPress={openA11ySettings}>
                 <Text style={styles.a11yBtnTxt}>⚙️ Open Accessibility Settings</Text>
