@@ -154,14 +154,30 @@ export function WhatsAppGuardScreen() {
     if (enabling) return;
     setEnabling(true);
     try {
-      const storageGrants = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
-        PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
-        PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO,
-      ]);
-      const storageOk = Object.values(storageGrants).some(
-        (r) => r === PermissionsAndroid.RESULTS.GRANTED
-      );
+      // READ_MEDIA_* permissions only exist on Android 13+ (API 33).
+      // On Android 12 and below they are undefined — passing them to requestMultiple crashes.
+      const apiLevel = Platform.Version as number;
+      let storageOk = false;
+      if (apiLevel >= 33) {
+        const grants = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO,
+        ]);
+        storageOk = Object.values(grants).some((r) => r === PermissionsAndroid.RESULTS.GRANTED);
+      } else {
+        const grant = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+          {
+            title: 'Storage Access',
+            message:
+              'AnkrShield scans your WhatsApp media folder for malware. Files are never uploaded — all analysis is on-device.',
+            buttonPositive: 'Allow',
+            buttonNegative: 'Deny',
+          }
+        );
+        storageOk = grant === PermissionsAndroid.RESULTS.GRANTED;
+      }
       if (!storageOk) {
         Alert.alert(
           'Storage permission needed',
