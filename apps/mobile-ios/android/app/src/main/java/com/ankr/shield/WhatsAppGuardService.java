@@ -11,6 +11,8 @@ import android.os.FileObserver;
 import android.os.IBinder;
 import android.util.Log;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
@@ -66,6 +68,9 @@ public class WhatsAppGuardService extends Service {
     private static final byte[] MAGIC_ELF  = { 0x7F, 0x45, 0x4C, 0x46 }; // ELF (.so)
     private static final byte[] MAGIC_PE   = { 0x4D, 0x5A };              // Windows PE .exe
     private static final byte[] MAGIC_SH   = { 0x23, 0x21 };              // Shell script #!
+
+    // Incrementing notification IDs so each threat gets its own dismissible notification
+    private static final AtomicInteger notifIdCounter = new AtomicInteger(4000);
 
     // Scan history — capped at 200 entries, newest first
     public static final List<ScanEntry> scanHistory =
@@ -291,23 +296,51 @@ public class WhatsAppGuardService extends Service {
             (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm == null) return;
 
+        int notifId = notifIdCounter.incrementAndGet();
+
         String title = entry.verdict.equals("dangerous")
             ? "🚨 Dangerous file in WhatsApp"
             : "⚠️ Suspicious file in WhatsApp";
 
-        Notification n = new NotificationCompat.Builder(this, CHANNEL_ID)
+        // "Delete Now" action — fires ThreatActionReceiver directly, no app open needed
+        Intent deleteIntent = new Intent(this, ThreatActionReceiver.class);
+        deleteIntent.setAction(ThreatActionReceiver.ACTION_DELETE);
+        deleteIntent.putExtra(ThreatActionReceiver.EXTRA_FILE_PATH, entry.filePath);
+        deleteIntent.putExtra(ThreatActionReceiver.EXTRA_NOTIF_ID, notifId);
+        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+            ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            : PendingIntent.FLAG_UPDATE_CURRENT;
+        PendingIntent deletePi = PendingIntent.getBroadcast(this, notifId, deleteIntent, flags);
+
+        // Tap notification → open AnkrShield (best-effort)
+        Intent openApp = getPackageManager()
+            .getLaunchIntentForPackage(getPackageName());
+        PendingIntent openPi = openApp != null
+            ? PendingIntent.getActivity(this, 0, openApp, flags)
+            : null;
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle(title)
-            .setContentText(entry.fileName + ": " + entry.reason)
+            .setContentText(entry.fileName + " — tap to review")
             .setStyle(new NotificationCompat.BigTextStyle()
                 .bigText(entry.fileName + "\n\n" + entry.reason))
             .setPriority(entry.verdict.equals("dangerous")
-                ? NotificationCompat.PRIORITY_HIGH
-                : NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .build();
+                ? NotificationCompat.PRIORITY_MAX
+                : NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(false)
+            .addAction(android.R.drawable.ic_menu_delete, "Delete Now", deletePi);
 
-        nm.notify((int) System.currentTimeMillis(), n);
+        if (openPi != null) builder.setContentIntent(openPi);
+
+        nm.notify(notifId, builder.build());
+    }
+
+    /** Called from WhatsAppGuardModule / ThreatActionReceiver — removes a threat file from storage. */
+    public static boolean deleteThreatFile(String path) {
+        if (path == null) return false;
+        File f = new File(path);
+        return f.exists() && f.delete();
     }
 
     private void createNotificationChannel() {

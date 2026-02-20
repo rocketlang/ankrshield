@@ -112,6 +112,59 @@ public class WhatsAppGuardModule extends ReactContextBaseJavaModule {
         promise.resolve(true);
     }
 
+    /**
+     * Silently start the guard without user interaction.
+     * Called from JS on app launch once permissions are confirmed.
+     */
+    @ReactMethod
+    public void autoStart(Promise promise) {
+        if (running) { promise.resolve(true); return; }
+        startGuard(promise);
+    }
+
+    /**
+     * Delete a threat file from storage.
+     * Mirrors what ThreatActionReceiver does when user taps "Delete Now" on the notification.
+     */
+    @ReactMethod
+    public void deleteFile(String filePath, Promise promise) {
+        try {
+            // Find entry before deleting (need it for reporting)
+            WhatsAppGuardService.ScanEntry entry = null;
+            for (WhatsAppGuardService.ScanEntry e : WhatsAppGuardService.scanHistory) {
+                if (filePath.equals(e.filePath)) { entry = e; break; }
+            }
+
+            boolean deleted = WhatsAppGuardService.deleteThreatFile(filePath);
+
+            // Record locally + report to global threat intel server
+            if (entry != null) {
+                ThreatReporter.record(getReactApplicationContext(), entry,
+                    deleted ? ThreatReporter.ACTION_DELETED : ThreatReporter.ACTION_KEPT);
+            }
+
+            // Remove from scan history too
+            WhatsAppGuardService.scanHistory.removeIf(e -> e.filePath.equals(filePath));
+
+            // Notify JS so UI can remove the card
+            try {
+                ReactApplicationContext ctx = getReactApplicationContext();
+                if (ctx.hasActiveCatalystInstance()) {
+                    com.facebook.react.bridge.WritableMap m =
+                        com.facebook.react.bridge.Arguments.createMap();
+                    m.putString("filePath", filePath);
+                    m.putBoolean("deleted", deleted);
+                    ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                       .emit("WhatsAppThreatCleaned", m);
+                }
+            } catch (Exception ignored) {}
+
+            promise.resolve(deleted);
+        } catch (Exception e) {
+            promise.reject("DELETE_ERROR", e.getMessage(), e);
+        }
+    }
+
     /** Returns impersonation alert history from the accessibility service. */
     @ReactMethod
     public void getImpersonationAlerts(Promise promise) {
@@ -129,6 +182,17 @@ public class WhatsAppGuardModule extends ReactContextBaseJavaModule {
             promise.resolve(arr);
         } catch (Exception e) {
             promise.reject("ALERTS_ERROR", e.getMessage(), e);
+        }
+    }
+
+    /** Returns locally persisted threat action log (survives app kill/reboot). */
+    @ReactMethod
+    public void getThreatLog(Promise promise) {
+        try {
+            String json = ThreatReporter.getLocalLog(getReactApplicationContext());
+            promise.resolve(json);
+        } catch (Exception e) {
+            promise.reject("LOG_ERROR", e.getMessage(), e);
         }
     }
 

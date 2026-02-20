@@ -56,6 +56,24 @@
       android:exported="false"
       android:foregroundServiceType="dataSync"/>
 
+    <!-- Boot receiver — restarts WhatsApp Guard after device reboot -->
+    <receiver
+      android:name=".BootReceiver"
+      android:exported="true">
+      <intent-filter android:priority="1000">
+        <action android:name="android.intent.action.BOOT_COMPLETED"/>
+      </intent-filter>
+    </receiver>
+
+    <!-- Threat action receiver — handles "Delete Now" from notifications -->
+    <receiver
+      android:name=".ThreatActionReceiver"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="com.ankr.shield.ACTION_DELETE_THREAT"/>
+      </intent-filter>
+    </receiver>
+
     <!-- Accessibility Service — impersonation + call detection -->
     <service
       android:name=".AnkrShieldAccessibilityService"

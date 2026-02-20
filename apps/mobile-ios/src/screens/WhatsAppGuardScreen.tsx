@@ -1,10 +1,11 @@
 /**
  * WhatsAppGuardScreen
  *
- * Three-tab protection dashboard for WhatsApp threats:
- *   Tab 1 — Attachments: scan history of received files
+ * Four-tab protection dashboard:
+ *   Tab 1 — Attachments: scan history of received WhatsApp files
  *   Tab 2 — Impersonation: alerts when a contact name looks like a known contact
  *   Tab 3 — Voice: AI voice detection status during calls
+ *   Tab 4 — Web: browser phishing alerts (fake bank sites)
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import {
@@ -23,7 +24,15 @@ import {
 const { WhatsAppGuard } = NativeModules;
 
 type AttachmentVerdict = 'clean' | 'suspicious' | 'dangerous';
-type Tab = 'attachments' | 'impersonation' | 'voice';
+type Tab = 'attachments' | 'impersonation' | 'voice' | 'phishing';
+
+interface PhishingAlert {
+  suspectUrl: string;
+  suspectDomain: string;
+  spoofingTarget: string;
+  similarityPct: number;
+  ts: number;
+}
 
 interface ScanEntry {
   fileName: string;
@@ -84,7 +93,7 @@ export function WhatsAppGuardScreen() {
   const [scanHistory, setScanHistory] = useState<ScanEntry[]>([]);
   const [impersonationAlerts, setImpersonationAlerts] = useState<ImpersonationAlert[]>([]);
   const [callActive, setCallActive] = useState(false);
-  const [_a11yEnabled, _setA11yEnabled] = useState(false);
+  const [phishingAlerts, setPhishingAlerts] = useState<PhishingAlert[]>([]);
 
   // Load history + state on mount
   useEffect(() => {
@@ -108,22 +117,29 @@ export function WhatsAppGuardScreen() {
       setCallActive(ev.active);
     });
 
+    const subPhish = emitter.addListener('PhishingAlert', (a: PhishingAlert) => {
+      setPhishingAlerts((prev) => [a, ...prev].slice(0, 50));
+    });
+
     return () => {
       subFile.remove();
       subImp.remove();
       subCall.remove();
+      subPhish.remove();
     };
   }, []);
 
   const loadState = useCallback(async () => {
     if (Platform.OS !== 'android' || !WhatsAppGuard) return;
     try {
-      const [running, history] = await Promise.all([
+      const [running, history, phishing] = await Promise.all([
         WhatsAppGuard.isRunning(),
         WhatsAppGuard.getScanHistory(),
+        WhatsAppGuard.getPhishingAlerts(),
       ]);
       setGuardRunning(running);
       setScanHistory((history as ScanEntry[]).filter((e) => e.verdict !== 'clean'));
+      setPhishingAlerts(phishing as PhishingAlert[]);
     } catch (_e) {
       /* ignore — guard not yet started */
     }
@@ -158,7 +174,7 @@ export function WhatsAppGuardScreen() {
         <Text style={styles.headerIcon}>💬</Text>
         <View style={styles.headerBody}>
           <Text style={styles.headerTitle}>WhatsApp Guard</Text>
-          <Text style={styles.headerSub}>Attachments · Impersonation · AI Voice</Text>
+          <Text style={styles.headerSub}>Attachments · Impersonation · AI Voice · Phishing</Text>
         </View>
         <TouchableOpacity
           style={[styles.toggleBtn, guardRunning && styles.toggleBtnOn]}
@@ -182,8 +198,9 @@ export function WhatsAppGuardScreen() {
         {(
           [
             { key: 'attachments', label: '📎 Files', count: dangerCount + suspiciousCount },
-            { key: 'impersonation', label: '👤 Impersonation', count: impersonationAlerts.length },
+            { key: 'impersonation', label: '👤 Fake ID', count: impersonationAlerts.length },
             { key: 'voice', label: '🎙 Voice', count: 0 },
+            { key: 'phishing', label: '🌐 Web', count: phishingAlerts.length },
           ] as const
         ).map((t) => (
           <TouchableOpacity
@@ -420,6 +437,78 @@ export function WhatsAppGuardScreen() {
             </View>
           </>
         )}
+
+        {/* ── Phishing tab ───────────────────────────────────────────────── */}
+        {tab === 'phishing' && (
+          <>
+            <View style={styles.infoBox}>
+              <Text style={styles.infoTxt}>
+                While you browse, AnkrShield compares every site you visit against a list of
+                protected banks, government portals, and payment services. If a domain looks like a
+                legitimate site but isn't (e.g. <Text style={styles.infoMono}>axlsbank.com</Text> vs{' '}
+                <Text style={styles.infoMono}>axisbank.com</Text>), a full-screen WMD warning fires
+                instantly. No browsing history is stored.
+              </Text>
+            </View>
+
+            <View style={styles.a11yCard}>
+              <Text style={styles.a11yTitle}>Requires Accessibility Permission</Text>
+              <Text style={styles.a11yDesc}>
+                Browser URL monitoring needs Android Accessibility access. The address bar text is
+                checked on-device — AnkrShield never sees the pages you visit.
+              </Text>
+              <TouchableOpacity style={styles.a11yBtn} onPress={openA11ySettings}>
+                <Text style={styles.a11yBtnTxt}>⚙️ Open Accessibility Settings</Text>
+              </TouchableOpacity>
+            </View>
+
+            {phishingAlerts.length === 0 ? (
+              <View style={styles.empty}>
+                <Text style={styles.emptyIcon}>🌐</Text>
+                <Text style={styles.emptyTitle}>No phishing sites detected</Text>
+                <Text style={styles.emptySub}>
+                  AnkrShield monitors your browser in real time. If you visit a fake bank site, a
+                  full-screen warning appears immediately.
+                </Text>
+              </View>
+            ) : (
+              phishingAlerts.map((a, i) => (
+                <View key={i} style={styles.phishCard}>
+                  <View style={styles.phishHeader}>
+                    <Text style={styles.phishIcon}>🚨</Text>
+                    <View style={styles.phishBody}>
+                      <Text style={styles.phishTitle}>Fake site blocked</Text>
+                      <Text style={styles.phishTime}>{timeAgo(a.ts)}</Text>
+                    </View>
+                    <View style={styles.phishScore}>
+                      <Text style={styles.phishScoreVal}>{a.similarityPct}%</Text>
+                      <Text style={styles.phishScoreLbl}>match</Text>
+                    </View>
+                  </View>
+                  <View style={styles.phishDomains}>
+                    <View style={styles.phishDomainCol}>
+                      <Text style={styles.phishDomainLbl}>Fake site</Text>
+                      <Text style={styles.phishDomainFake} numberOfLines={1}>
+                        {a.suspectDomain}
+                      </Text>
+                    </View>
+                    <Text style={styles.phishArrow}>→</Text>
+                    <View style={styles.phishDomainCol}>
+                      <Text style={styles.phishDomainLbl}>Impersonating</Text>
+                      <Text style={styles.phishDomainReal} numberOfLines={1}>
+                        {a.spoofingTarget}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.phishAdvice}>
+                    Never enter passwords or OTPs on this domain. Scammers create near-identical
+                    copies to steal credentials and money.
+                  </Text>
+                </View>
+              ))
+            )}
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -613,4 +702,29 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   scamNote: { color: '#ef4444', fontSize: 12, marginTop: 10, fontWeight: '600' },
+
+  // Phishing tab
+  phishCard: {
+    backgroundColor: '#160505',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#7f1d1d',
+    padding: 14,
+    marginBottom: 10,
+  },
+  phishHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
+  phishIcon: { fontSize: 20 },
+  phishBody: { flex: 1 },
+  phishTitle: { color: '#fca5a5', fontSize: 13, fontWeight: '700' },
+  phishTime: { color: '#6b7280', fontSize: 11, marginTop: 2 },
+  phishScore: { alignItems: 'center' },
+  phishScoreVal: { color: '#f87171', fontSize: 20, fontWeight: '800' },
+  phishScoreLbl: { color: '#6b7280', fontSize: 10 },
+  phishDomains: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  phishDomainCol: { flex: 1 },
+  phishDomainLbl: { color: '#475569', fontSize: 10, marginBottom: 3 },
+  phishDomainFake: { color: '#f87171', fontSize: 13, fontWeight: '700', fontFamily: 'monospace' },
+  phishDomainReal: { color: '#4ade80', fontSize: 13, fontWeight: '700', fontFamily: 'monospace' },
+  phishArrow: { color: '#475569', fontSize: 16 },
+  phishAdvice: { color: '#94a3b8', fontSize: 12, lineHeight: 17 },
 });
