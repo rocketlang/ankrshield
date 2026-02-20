@@ -32,6 +32,35 @@ export function HomeScreen({ navigation }: any) {
   const [score, setScore] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
   const [vpnStats, setVpnStats] = useState<VpnStats>(DEFAULT_VPN);
+  const [dnsPaused, setDnsPaused] = useState(false);
+  const [pauseUntilMs, setPauseUntilMs] = useState(0);
+
+  async function syncPauseState() {
+    try {
+      const s = await vpnService.getStats();
+      setDnsPaused(s.paused ?? false);
+      setPauseUntilMs(s.pauseUntilMs ?? 0);
+    } catch (_e) {
+      // VPN not running — leave paused state as-is
+    }
+  }
+
+  async function handlePause(minutes: number) {
+    await vpnService.pause(minutes).catch((_e) => {});
+    await syncPauseState();
+  }
+
+  async function handleResume() {
+    await vpnService.resume().catch((_e) => {});
+    await syncPauseState();
+  }
+
+  function pauseLabel(): string {
+    if (!dnsPaused || pauseUntilMs === 0) return '';
+    const remaining = Math.max(0, pauseUntilMs - Date.now());
+    const mins = Math.ceil(remaining / 60000);
+    return `Resumes in ${mins}m`;
+  }
 
   useEffect(() => {
     loadData();
@@ -41,6 +70,8 @@ export function HomeScreen({ navigation }: any) {
     const vpnInterval = setInterval(async () => {
       const s = await vpnService.getStats().catch(() => DEFAULT_VPN);
       setVpnStats(s);
+      setDnsPaused(s.paused ?? false);
+      setPauseUntilMs(s.pauseUntilMs ?? 0);
     }, 5000);
 
     // Report stats to server every 30 s (counters only, no domain names)
@@ -150,36 +181,65 @@ export function HomeScreen({ navigation }: any) {
         </View>
       )}
 
-      {/* On-device VPN stats — live from DnsVpnService */}
+      {/* On-device VPN stats + quick pause controls */}
       {vpnStats.running && (
-        <View style={styles.vpnBanner}>
-          <Text style={styles.vpnBannerTitle}>🛡 DNS Shield Active</Text>
-          <View style={styles.vpnRow}>
-            <View style={styles.vpnStat}>
-              <Text style={styles.vpnStatValue}>{vpnStats.blockedCount}</Text>
-              <Text style={styles.vpnStatLabel}>Blocked</Text>
-            </View>
-            <View style={styles.vpnDivider} />
-            <View style={styles.vpnStat}>
-              <Text style={styles.vpnStatValue}>{vpnStats.totalQueries}</Text>
-              <Text style={styles.vpnStatLabel}>Queries</Text>
-            </View>
-            <View style={styles.vpnDivider} />
-            <View style={styles.vpnStat}>
-              <Text style={styles.vpnStatValue}>
-                {vpnStats.totalQueries > 0
-                  ? Math.round((vpnStats.blockedCount / vpnStats.totalQueries) * 100)
-                  : 0}
-                %
-              </Text>
-              <Text style={styles.vpnStatLabel}>Block Rate</Text>
-            </View>
+        <View style={[styles.vpnBanner, dnsPaused && styles.vpnBannerPaused]}>
+          <View style={styles.vpnBannerRow}>
+            <Text style={[styles.vpnBannerTitle, dnsPaused && styles.vpnBannerTitlePaused]}>
+              {dnsPaused ? '⏸ DNS Shield Paused' : '🛡 DNS Shield Active'}
+            </Text>
+            {dnsPaused && pauseUntilMs > 0 && (
+              <Text style={styles.pauseCountdown}>{pauseLabel()}</Text>
+            )}
           </View>
-          {vpnStats.lastBlocked !== '' && (
+
+          {!dnsPaused && (
+            <View style={styles.vpnRow}>
+              <View style={styles.vpnStat}>
+                <Text style={styles.vpnStatValue}>{vpnStats.blockedCount}</Text>
+                <Text style={styles.vpnStatLabel}>Blocked</Text>
+              </View>
+              <View style={styles.vpnDivider} />
+              <View style={styles.vpnStat}>
+                <Text style={styles.vpnStatValue}>{vpnStats.totalQueries}</Text>
+                <Text style={styles.vpnStatLabel}>Queries</Text>
+              </View>
+              <View style={styles.vpnDivider} />
+              <View style={styles.vpnStat}>
+                <Text style={styles.vpnStatValue}>
+                  {vpnStats.totalQueries > 0
+                    ? Math.round((vpnStats.blockedCount / vpnStats.totalQueries) * 100)
+                    : 0}
+                  %
+                </Text>
+                <Text style={styles.vpnStatLabel}>Block Rate</Text>
+              </View>
+            </View>
+          )}
+
+          {vpnStats.lastBlocked !== '' && !dnsPaused && (
             <Text style={styles.lastBlocked} numberOfLines={1}>
               Last blocked: {vpnStats.lastBlocked}
             </Text>
           )}
+
+          {/* Quick pause / resume row */}
+          <View style={styles.pauseRow}>
+            {dnsPaused ? (
+              <TouchableOpacity style={styles.pauseBtnResume} onPress={handleResume}>
+                <Text style={styles.pauseBtnTxt}>▶ Resume Now</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.pauseBtn} onPress={() => handlePause(5)}>
+                  <Text style={styles.pauseBtnTxt}>⏸ 5 min</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.pauseBtn} onPress={() => handlePause(30)}>
+                  <Text style={styles.pauseBtnTxt}>⏸ 30 min</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
         </View>
       )}
 
@@ -366,12 +426,57 @@ const styles = StyleSheet.create({
     borderColor: '#22c55e',
     padding: 16,
   },
+  vpnBannerPaused: {
+    backgroundColor: '#1a120a',
+    borderColor: '#d97706',
+  },
+  vpnBannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
   vpnBannerTitle: {
     color: '#4ade80',
     fontSize: 13,
     fontWeight: '700',
-    marginBottom: 12,
     letterSpacing: 0.5,
+  },
+  vpnBannerTitlePaused: {
+    color: '#fbbf24',
+  },
+  pauseCountdown: {
+    color: '#d97706',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  pauseRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  pauseBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(100,116,139,0.15)',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  pauseBtnResume: {
+    flex: 1,
+    backgroundColor: 'rgba(34,197,94,0.1)',
+    borderWidth: 1,
+    borderColor: '#22c55e',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  pauseBtnTxt: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '700',
   },
   vpnRow: {
     flexDirection: 'row',
