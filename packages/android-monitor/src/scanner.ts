@@ -9,8 +9,6 @@
  * run safely inside a React Native JS thread or a Web Worker.
  */
 
-import { randomUUID } from 'crypto';
-
 import { analyzePermissions } from './analyzers/permission-analyzer.js';
 import { KNOWN_STALKERWARE_PACKAGES, KNOWN_SPYWARE_DOMAINS } from './iocs/stalkerware-packages.js';
 import type {
@@ -20,6 +18,13 @@ import type {
   SpyRiskLevel,
   SuspiciousApp,
 } from './types.js';
+
+// React Native has no Node crypto — simple UUID shim
+const randomUUID = (): string =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
 
 // ---------------------------------------------------------------------------
 // Risk level ordering helpers
