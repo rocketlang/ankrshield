@@ -2745,6 +2745,50 @@ jobs:
             ))}
           </div>
 
+          {/* NEW in v1.2.8 — WhatsApp Guard highlight */}
+          <div className="mb-10 bg-gradient-to-r from-emerald-950/60 to-green-950/40 border border-emerald-500/30 rounded-2xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-3xl">💬</span>
+              <div>
+                <div className="text-emerald-400 text-xs font-black uppercase tracking-widest mb-0.5">
+                  New in v1.2.8
+                </div>
+                <div className="text-white font-black text-xl">WhatsApp Guard</div>
+              </div>
+              <div className="ml-auto bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-xs font-bold px-3 py-1 rounded-full">
+                Silent · Always-on
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[
+                {
+                  icon: '📎',
+                  title: 'Attachment Shield',
+                  desc: 'Magic-byte scanner catches APKs and malware disguised as photos or documents — before you open them.',
+                },
+                {
+                  icon: '🕵️',
+                  title: 'Impersonation Detector',
+                  desc: 'Flags contact names that look almost identical to someone you know. "Mum" vs "Murn" — caught.',
+                },
+                {
+                  icon: '🤖',
+                  title: 'AI Voice Detection',
+                  desc: 'Monitors WhatsApp calls for deepfake voice patterns. One tap to delete. No app switch needed.',
+                },
+              ].map((f) => (
+                <div
+                  key={f.title}
+                  className="bg-white/[0.04] border border-emerald-500/20 rounded-xl p-4"
+                >
+                  <div className="text-xl mb-2">{f.icon}</div>
+                  <div className="text-white font-bold text-sm mb-1">{f.title}</div>
+                  <div className="text-gray-400 text-xs leading-relaxed">{f.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Features + QR */}
           <div className="flex flex-col lg:flex-row gap-10 items-start">
             {/* Feature list */}
@@ -2763,17 +2807,17 @@ jobs:
                 {
                   icon: '🔬',
                   title: 'Spyware Scanner',
-                  desc: 'Detects Pegasus, Candiru and Predator IOCs. Only flags permissions actually granted.',
+                  desc: 'Detects Pegasus, Candiru and Predator IOCs. Flags only permissions actually granted.',
+                },
+                {
+                  icon: '⚡',
+                  title: 'Remediation Buttons',
+                  desc: 'Risky app found? Revoke permissions or uninstall in one tap — straight from scan results.',
                 },
                 {
                   icon: '📵',
                   title: 'Smart Bypass',
                   desc: 'Pause for 5 or 30 min. Auto-pauses during phone calls, resumes on hang-up.',
-                },
-                {
-                  icon: '⚔️',
-                  title: 'AI Warrior',
-                  desc: 'Server-side threat intelligence feeds live attack scores and IOC alerts to your device.',
                 },
                 {
                   icon: '🔒',
@@ -2799,10 +2843,11 @@ jobs:
                 <p className="text-red-400 font-bold text-sm mb-1">⚠️ Right now on your phone:</p>
                 <ul className="space-y-1">
                   {[
-                    'Facebook tracking your location',
-                    'Google logging every search',
+                    'WhatsApp attachments carrying malware',
+                    'Scammers impersonating your contacts',
+                    'AI voice calls faking family members',
+                    'Facebook tracking every tap',
                     'Data brokers selling your profile',
-                    "Spyware you didn't install",
                   ].map((item) => (
                     <li key={item} className="text-gray-400 text-xs flex items-start gap-1.5">
                       <span className="text-red-500 mt-0.5">•</span>
