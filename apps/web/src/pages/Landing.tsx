@@ -2703,6 +2703,145 @@ jobs:
         </div>
       </section>
 
+      {/* ── AnkrShield Mobile App ── */}
+      <section id="mobile-app" className="border-t border-white/10 relative overflow-hidden py-24">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-0 right-0 w-[500px] h-[400px] bg-red-900/10 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-[400px] h-[300px] bg-emerald-900/10 rounded-full blur-3xl" />
+        </div>
+        <div className="relative max-w-5xl mx-auto px-4 sm:px-6">
+          {/* Fear hook */}
+          <div className="mb-14 max-w-2xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-black uppercase tracking-widest px-4 py-2 rounded-full mb-6">
+              ⚠️ Your phone is being watched right now
+            </div>
+            <h2 className="text-4xl sm:text-5xl font-black text-white mb-5 leading-tight">
+              Every app you open
+              <br />
+              <span className="text-emerald-400">phones home.</span>
+            </h2>
+            <p className="text-gray-300 text-lg leading-relaxed">
+              Meta, Google, ByteDance, Oracle and hundreds of data brokers silently profile your
+              behaviour with every tap — across every app on your phone. AnkrShield intercepts them
+              at the DNS layer before they ever connect.
+            </p>
+          </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-14">
+            {[
+              { stat: '4,000+', label: 'Tracker domains blocked', color: 'text-red-400' },
+              { stat: '87%', label: 'Of apps phone home daily', color: 'text-orange-400' },
+              { stat: '0', label: 'Bytes sent to our servers', color: 'text-emerald-400' },
+              { stat: '100%', label: 'On-device, no cloud', color: 'text-cyan-400' },
+            ].map((s) => (
+              <div
+                key={s.label}
+                className="bg-white/[0.03] border border-white/10 rounded-2xl p-5 text-center"
+              >
+                <div className={`text-3xl font-black ${s.color} mb-1`}>{s.stat}</div>
+                <div className="text-gray-500 text-xs leading-tight">{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Features + QR */}
+          <div className="flex flex-col lg:flex-row gap-10 items-start">
+            {/* Feature list */}
+            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                {
+                  icon: '🌐',
+                  title: 'DNS Filtering',
+                  desc: 'Local VPN blocks trackers, ads and malware at the network layer before they load.',
+                },
+                {
+                  icon: '🏢',
+                  title: 'Tracker Company View',
+                  desc: 'Meta split into Facebook, Instagram & WhatsApp. See exactly who is most aggressive.',
+                },
+                {
+                  icon: '🔬',
+                  title: 'Spyware Scanner',
+                  desc: 'Detects Pegasus, Candiru and Predator IOCs. Only flags permissions actually granted.',
+                },
+                {
+                  icon: '📵',
+                  title: 'Smart Bypass',
+                  desc: 'Pause for 5 or 30 min. Auto-pauses during phone calls, resumes on hang-up.',
+                },
+                {
+                  icon: '⚔️',
+                  title: 'AI Warrior',
+                  desc: 'Server-side threat intelligence feeds live attack scores and IOC alerts to your device.',
+                },
+                {
+                  icon: '🔒',
+                  title: 'Privacy Score',
+                  desc: 'Live score driven by DNS block rate, network threats and actual app scan results.',
+                },
+              ].map((f) => (
+                <div
+                  key={f.title}
+                  className="bg-white/[0.03] border border-white/10 rounded-xl p-5 hover:border-emerald-500/30 transition-colors"
+                >
+                  <div className="text-2xl mb-2">{f.icon}</div>
+                  <div className="text-white font-bold text-sm mb-1">{f.title}</div>
+                  <div className="text-gray-500 text-xs leading-relaxed">{f.desc}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* QR + download */}
+            <div className="lg:w-72 flex-shrink-0 flex flex-col items-center gap-5">
+              {/* Fear callout */}
+              <div className="w-full bg-red-950/40 border border-red-500/20 rounded-xl p-4 text-left">
+                <p className="text-red-400 font-bold text-sm mb-1">⚠️ Right now on your phone:</p>
+                <ul className="space-y-1">
+                  {[
+                    'Facebook tracking your location',
+                    'Google logging every search',
+                    'Data brokers selling your profile',
+                    "Spyware you didn't install",
+                  ].map((item) => (
+                    <li key={item} className="text-gray-400 text-xs flex items-start gap-1.5">
+                      <span className="text-red-500 mt-0.5">•</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {/* QR */}
+              <div className="bg-white/[0.06] border border-white/15 rounded-2xl p-6 flex flex-col items-center gap-4 w-full">
+                <div className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
+                  🛡️ AnkrShield · Free Android App
+                </div>
+                <div className="bg-white p-3 rounded-xl">
+                  <QRCodeSVG
+                    value={APK_URL}
+                    size={160}
+                    bgColor="#ffffff"
+                    fgColor="#0d1117"
+                    level="M"
+                  />
+                </div>
+                <p className="text-gray-400 text-xs text-center">Scan to download · Android 8.0+</p>
+                <a
+                  href={APK_URL}
+                  download="ankrshield.apk"
+                  className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-black font-black px-5 py-3 rounded-xl transition-colors text-sm w-full justify-center"
+                >
+                  📥 Download v1.2.6 (32 MB)
+                </a>
+                <p className="text-gray-600 text-[10px] text-center">
+                  No account · No telemetry · Open source
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Download / CTA ── */}
       <section id="download" className="border-t border-white/10 relative overflow-hidden py-24">
         <div className="absolute inset-0 pointer-events-none">
@@ -2747,6 +2886,22 @@ jobs:
 
             {/* Info column */}
             <div className="flex flex-col gap-4 max-w-sm w-full text-left">
+              <div className="border border-red-500/20 bg-red-950/20 rounded-xl p-5">
+                <p className="text-red-400 font-bold mb-2">⚠️ Your phone without AnkrShield</p>
+                <ul className="space-y-1.5">
+                  {[
+                    'Meta tracks you across every app',
+                    'Google logs every DNS query your phone makes',
+                    'ByteDance profiles you via TikTok SDKs embedded in other apps',
+                    'Data brokers sell your behaviour without your knowledge',
+                  ].map((t) => (
+                    <li key={t} className="text-gray-400 text-xs flex gap-2">
+                      <span className="text-red-500 mt-0.5 flex-shrink-0">•</span>
+                      {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
               <div className="border border-white/10 bg-white/[0.05] rounded-xl p-5">
                 <p className="text-white font-bold mb-1.5">Android App</p>
                 <p className="text-gray-300 text-sm leading-relaxed">
