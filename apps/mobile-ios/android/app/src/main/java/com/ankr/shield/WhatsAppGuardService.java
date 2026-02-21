@@ -125,15 +125,27 @@ public class WhatsAppGuardService extends Service {
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
-        // Android 14+ (API 34) requires the foreground service type to be passed
-        // explicitly to startForeground() — omitting it throws MissingForegroundServiceTypeException
-        if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(FOREGROUND_ID, buildForegroundNotification(),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
-        } else {
-            startForeground(FOREGROUND_ID, buildForegroundNotification());
+        // Android 14+ (API 34) requires the foreground service type to be passed explicitly.
+        // Wrap in try-catch — on Android 15 + OxygenOS the call can throw even with the type
+        // set correctly (stricter enforcement), and an uncaught exception here kills the process.
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(FOREGROUND_ID, buildForegroundNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            } else {
+                startForeground(FOREGROUND_ID, buildForegroundNotification());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "startForeground failed (" + e.getClass().getSimpleName() + "): " + e.getMessage());
+            stopSelf();
+            return;
         }
-        startWatching();
+        try {
+            startWatching();
+        } catch (Exception e) {
+            Log.e(TAG, "startWatching failed: " + e.getMessage());
+            // Service still runs — just won't watch files
+        }
         Log.i(TAG, "WhatsAppGuardService started");
     }
 
@@ -165,16 +177,30 @@ public class WhatsAppGuardService extends Service {
     private void watchRecursive(File dir) {
         if (!dir.exists() || !dir.isDirectory()) return;
 
-        FileObserver obs = new FileObserver(dir.getAbsolutePath(),
-                FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO) {
-            @Override
-            public void onEvent(int event, @Nullable String path) {
-                if (path == null) return;
-                File f = new File(dir, path);
-                if (!f.exists() || !f.isFile()) return;
-                scanFile(f);
-            }
-        };
+        final int mask = FileObserver.CLOSE_WRITE | FileObserver.MOVED_TO;
+        FileObserver obs;
+        // File-based constructor is non-deprecated and more reliable on Android 10+ / OxygenOS
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            obs = new FileObserver(dir, mask) {
+                @Override
+                public void onEvent(int event, @Nullable String path) {
+                    if (path == null) return;
+                    File f = new File(dir, path);
+                    if (!f.exists() || !f.isFile()) return;
+                    scanFile(f);
+                }
+            };
+        } else {
+            obs = new FileObserver(dir.getAbsolutePath(), mask) {
+                @Override
+                public void onEvent(int event, @Nullable String path) {
+                    if (path == null) return;
+                    File f = new File(dir, path);
+                    if (!f.exists() || !f.isFile()) return;
+                    scanFile(f);
+                }
+            };
+        }
         obs.startWatching();
         observers.add(obs);
 

@@ -69,11 +69,10 @@ public class WhatsAppGuardModule extends ReactContextBaseJavaModule {
             }
             running = true;
             promise.resolve(true);
-        } catch (SecurityException e) {
-            // ForegroundServiceStartNotAllowedException (Android 12+) extends SecurityException
-            promise.reject("START_NOT_ALLOWED", "Cannot start foreground service from background: " + e.getMessage(), e);
-        } catch (Exception e) {
-            promise.reject("START_ERROR", e.getMessage(), e);
+        } catch (Throwable t) {
+            // Catches SecurityException, IllegalStateException (ForegroundServiceStartNotAllowedException,
+            // ForegroundServiceDidNotStartInTimeException), and any Error subclasses on Android 15+
+            promise.reject("START_ERROR", t.getClass().getSimpleName() + ": " + t.getMessage());
         }
     }
 
