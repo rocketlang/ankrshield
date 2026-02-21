@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.FileObserver;
 import android.os.IBinder;
@@ -124,7 +125,14 @@ public class WhatsAppGuardService extends Service {
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
-        startForeground(FOREGROUND_ID, buildForegroundNotification());
+        // Android 14+ (API 34) requires the foreground service type to be passed
+        // explicitly to startForeground() — omitting it throws MissingForegroundServiceTypeException
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(FOREGROUND_ID, buildForegroundNotification(),
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+        } else {
+            startForeground(FOREGROUND_ID, buildForegroundNotification());
+        }
         startWatching();
         Log.i(TAG, "WhatsAppGuardService started");
     }
