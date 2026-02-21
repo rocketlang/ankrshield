@@ -119,6 +119,12 @@ public class WhatsAppGuardModule extends ReactContextBaseJavaModule {
         promise.resolve(true);
     }
 
+    // Required by React Native's NativeEventEmitter (RN 0.65+).
+    // Without these stubs, new NativeEventEmitter(WhatsAppGuard) throws
+    // "nativeModule.addListener is not a function" and crashes the app.
+    @ReactMethod public void addListener(String eventName) {}
+    @ReactMethod public void removeListeners(int count) {}
+
     /** Returns true if the user previously enabled WhatsApp Guard. */
     @ReactMethod
     public void isGuardEnabled(Promise promise) {
