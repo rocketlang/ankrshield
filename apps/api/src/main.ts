@@ -32,6 +32,7 @@ import authPlugin from './plugins/auth';
 import securityPlugin from './plugins/security';
 import { getWarrior, startWarrior, stopWarrior } from './warrior/warrior-service';
 import { startDomainWatcher, stopDomainWatcher } from './watch/domain-watcher.js';
+import { startWatchPoller, stopWatchPoller } from './xshield/watch-poller';
 
 // ─── API Key helpers ──────────────────────────────────────────────────────────
 
@@ -392,6 +393,7 @@ const start = async () => {
           prisma,
           userId,
           user,
+          request, // needed by xShield resolvers to read X-API-Key header
         };
       },
       errorFormatter: (error) => {
@@ -401,6 +403,211 @@ const start = async () => {
           response: error,
         };
       },
+    });
+
+    // Landing page
+    fastify.get('/', async (_request, reply) => {
+      reply.type('text/html');
+      return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ANKR Shield - Digital Security Platform</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 900px;
+      width: 100%;
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+      color: white;
+      padding: 40px;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+    }
+    .header p {
+      font-size: 1.1rem;
+      opacity: 0.95;
+    }
+    .content {
+      padding: 40px;
+    }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .feature {
+      background: #faf5ff;
+      padding: 20px;
+      border-radius: 12px;
+      border: 2px solid #e9d5ff;
+    }
+    .feature-icon {
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+    .feature h3 {
+      color: #7c3aed;
+      font-size: 1.1rem;
+      margin-bottom: 8px;
+    }
+    .feature p {
+      color: #6b7280;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .endpoints {
+      background: #f9fafb;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 30px;
+    }
+    .endpoints h2 {
+      color: #7c3aed;
+      margin-bottom: 15px;
+      font-size: 1.3rem;
+    }
+    .endpoint {
+      background: white;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      border-left: 4px solid #8b5cf6;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .endpoint code {
+      color: #7c3aed;
+      font-weight: 600;
+    }
+    .endpoint a {
+      color: #8b5cf6;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .endpoint a:hover {
+      text-decoration: underline;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #e9d5ff;
+      color: #7c3aed;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      margin-top: 20px;
+    }
+    .status::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      background: #8b5cf6;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    @media (max-width: 640px) {
+      .header h1 {
+        font-size: 1.8rem;
+      }
+      .content {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🛡️ ANKR Shield</h1>
+      <p>Digital Security & Traffic Intelligence Platform</p>
+    </div>
+    <div class="content">
+      <div class="features">
+        <div class="feature">
+          <div class="feature-icon">🔍</div>
+          <h3>Traffic Monitor</h3>
+          <p>Real-time tracking attempt detection and analysis</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🛡️</div>
+          <h3>Security Shield</h3>
+          <p>Advanced threat protection with ML-powered blocking</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">📊</div>
+          <h3>Analytics</h3>
+          <p>24-hour stats, patterns, and security insights</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🔐</div>
+          <h3>Auth & JWT</h3>
+          <p>Secure authentication with JWT token management</p>
+        </div>
+      </div>
+
+      <div class="endpoints">
+        <h2>API Endpoints</h2>
+        <div class="endpoint">
+          <code>POST /graphql</code>
+          <a href="/graphql" target="_blank">GraphQL API →</a>
+        </div>
+        <div class="endpoint">
+          <code>GET /graphiql</code>
+          <a href="/graphiql" target="_blank">GraphiQL Playground →</a>
+        </div>
+        <div class="endpoint">
+          <code>GET /health</code>
+          <a href="/health" target="_blank">Health Check →</a>
+        </div>
+        <div class="endpoint">
+          <code>GET /monitor/stats</code>
+          <a href="/monitor/stats" target="_blank">Live Traffic Stats →</a>
+        </div>
+      </div>
+
+      <div style="text-align: center;">
+        <span class="status">System Online</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
     });
 
     // Health check endpoint
@@ -2592,6 +2799,10 @@ Date: ${now.toLocaleDateString('en-IN')}`;
     fastify.log.info(
       `👁️  Domain Watcher started — polling every ${process.env.DOMAIN_WATCH_INTERVAL_MS ?? '300000'}ms`
     );
+
+    // Start xShield watch poller (persisted domain watch + alert engine)
+    startWatchPoller(prisma);
+    fastify.log.info(`🛡️  xShield watch poller started — scanning watched domains every 5 minutes`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -2605,6 +2816,7 @@ signals.forEach((signal) => {
     fastify.log.info(`Received ${signal}, closing server...`);
     stopMonitor();
     stopDomainWatcher();
+    stopWatchPoller();
     await stopWarrior();
     await fastify.close();
     await prisma.$disconnect();

@@ -769,3 +769,127 @@ model DailyStats {
   @@index([userId, date(sort: Desc)])
   @@map("daily_stats")
 }
+
+// ============================================================================
+// XSHIELD — B2B Digital Risk Protection
+// ============================================================================
+
+enum XShieldTier {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+
+  @@map("xshield_tier")
+}
+
+enum RiskLevel {
+  MINIMAL
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@map("risk_level")
+}
+
+enum WatchStatus {
+  ACTIVE
+  PAUSED
+  DELETED
+
+  @@map("watch_status")
+}
+
+model XShieldApiKey {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  keyHash     String   @unique // sha256 of the actual key
+  keyPrefix   String   // first 8 chars for display (e.g. "xsk_live")
+  name        String   // user-assigned label
+  orgName     String?
+  email       String
+
+  tier        XShieldTier @default(FREE)
+  monthlyQuota Int @default(10) // reports/month
+  usedThisMonth Int @default(0)
+  quotaResetAt  DateTime
+
+  isActive    Boolean @default(true)
+  lastUsedAt  DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  watches     DomainWatch[]
+  riskReports XShieldRiskReport[]
+
+  @@index([keyHash])
+  @@index([email])
+  @@index([tier])
+  @@map("xshield_api_keys")
+}
+
+model DomainWatch {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  apiKeyId    String   @db.Uuid
+  domain      String
+
+  // Latest scan result
+  lastRiskScore  Int?    @db.SmallInt
+  lastRiskLevel  RiskLevel?
+  lastScannedAt  DateTime?
+
+  // Watch config
+  status      WatchStatus @default(ACTIVE)
+  alertThreshold Int @default(40) @db.SmallInt // alert when score >= this
+  webhookUrl  String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  apiKey      XShieldApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  alerts      WatchAlert[]
+
+  @@unique([apiKeyId, domain])
+  @@index([apiKeyId])
+  @@index([domain])
+  @@index([status])
+  @@index([lastScannedAt])
+  @@map("domain_watches")
+}
+
+model WatchAlert {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  watchId     String   @db.Uuid
+  domain      String
+  riskScore   Int      @db.SmallInt
+  riskLevel   RiskLevel
+  triggeredAt DateTime @default(now())
+  details     Json?    // snapshot of risk report at alert time
+  notified    Boolean  @default(false)
+  notifiedAt  DateTime?
+
+  watch       DomainWatch @relation(fields: [watchId], references: [id], onDelete: Cascade)
+
+  @@index([watchId])
+  @@index([triggeredAt(sort: Desc)])
+  @@map("watch_alerts")
+}
+
+model XShieldRiskReport {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  apiKeyId    String?  @db.Uuid  // null for public/anonymous
+  domain      String
+  riskScore   Int      @db.SmallInt
+  riskLevel   RiskLevel
+  findings    Json     // full structured report
+  mitreMapping Json?   // ATT&CK technique mappings
+  createdAt   DateTime @default(now())
+
+  apiKey      XShieldApiKey? @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+
+  @@index([domain, createdAt(sort: Desc)])
+  @@index([apiKeyId, createdAt(sort: Desc)])
+  @@index([riskLevel])
+  @@map("xshield_risk_reports")
+}

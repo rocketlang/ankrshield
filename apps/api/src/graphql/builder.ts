@@ -16,6 +16,9 @@ export interface Context {
     name: string | null;
     tier: string;
   } | null;
+  request?: {
+    headers: Record<string, string | string[] | undefined>;
+  };
 }
 
 export const builder = new SchemaBuilder<{

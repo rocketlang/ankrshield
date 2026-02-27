@@ -18,11 +18,13 @@ import './types/device';
 import './types/user';
 import './types/auth';
 import './types/warrior';
+import './types/xshield';
 
 // Import resolvers
 import './resolvers/auth';
 import './resolvers/query';
 import './resolvers/warrior';
+import './resolvers/xshield';
 
 // Build and export schema
 export const schema = builder.toSchema();
