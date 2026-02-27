@@ -1712,6 +1712,98 @@ Date: ${now.toLocaleDateString('en-IN')}`;
       recent: attackerLog.slice(-20).reverse(),
     }));
 
+    // ─── Billing endpoints ────────────────────────────────────────────────────
+    // Stripe checkout + portal + webhook for xShield API key tier upgrades
+
+    fastify.post<{
+      Body: { plan: string; email: string; apiKeyId: string };
+    }>('/billing/checkout', async (request, reply) => {
+      const { plan, email, apiKeyId } = request.body ?? {};
+      if (!plan || !email || !apiKeyId) {
+        return reply.status(400).send({ error: 'plan, email, apiKeyId required' });
+      }
+      if (!['STARTER', 'PRO'].includes(plan)) {
+        return reply.status(400).send({ error: 'plan must be STARTER or PRO' });
+      }
+      try {
+        const { createCheckoutSession } = await import('./billing/stripe.js');
+        // Fetch existing stripeCustomerId if any
+        const key = await (prisma as any).xShieldApiKey.findUnique({ where: { id: apiKeyId } });
+        if (!key) return reply.status(404).send({ error: 'API key not found' });
+
+        const result = await createCheckoutSession({
+          plan: plan as 'STARTER' | 'PRO',
+          email,
+          apiKeyId,
+          stripeCustomerId: key.stripeCustomerId ?? undefined,
+        });
+        return { checkoutUrl: result.url, sessionId: result.sessionId };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return reply.status(500).send({ error: msg });
+      }
+    });
+
+    fastify.get<{ Querystring: { apiKeyId: string } }>(
+      '/billing/portal',
+      async (request, reply) => {
+        const { apiKeyId } = request.query;
+        if (!apiKeyId) return reply.status(400).send({ error: 'apiKeyId required' });
+        try {
+          const key = await (prisma as any).xShieldApiKey.findUnique({ where: { id: apiKeyId } });
+          if (!key?.stripeCustomerId) {
+            return reply.status(404).send({ error: 'No active subscription found for this key' });
+          }
+          const { createPortalSession } = await import('./billing/stripe.js');
+          const url = await createPortalSession(key.stripeCustomerId);
+          return { portalUrl: url };
+        } catch (err: unknown) {
+          return reply
+            .status(500)
+            .send({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    );
+
+    // Webhook must receive raw body — registered before JSON parser applies
+    fastify.post(
+      '/billing/webhook',
+      {
+        config: { rawBody: true },
+        schema: { hide: true },
+      },
+      async (request, reply) => {
+        const sig = request.headers['stripe-signature'] as string;
+        if (!sig) return reply.status(400).send({ error: 'Missing stripe-signature header' });
+
+        try {
+          const { handleWebhookEvent } = await import('./billing/stripe.js');
+          const rawBody = (request as any).rawBody ?? Buffer.from(JSON.stringify(request.body));
+          const result = await handleWebhookEvent(rawBody, sig, prisma);
+          return { received: true, ...result };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          fastify.log.warn(`Webhook error: ${msg}`);
+          return reply.status(400).send({ error: msg });
+        }
+      }
+    );
+
+    fastify.get('/billing/plans', async () => {
+      const { PLANS } = await import('./billing/stripe.js');
+      return {
+        plans: Object.entries(PLANS).map(([key, p]) => ({
+          id: key,
+          name: p.name,
+          price: p.price,
+          currency: p.currency,
+          interval: p.interval,
+          scans: p.scans === -1 ? 'unlimited' : p.scans,
+          features: p.features,
+        })),
+      };
+    });
+
     // ─── Risk Intelligence endpoints ─────────────────────────────────────────
     // Full digital risk report for a domain (GreyNoise + Shodan + HIBP + urlscan)
     fastify.get<{ Querystring: { domain?: string } }>('/risk/report', async (request, reply) => {

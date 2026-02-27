@@ -5,6 +5,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+
 import { scanDomain } from './risk-engine';
 
 let pollerInterval: NodeJS.Timeout | null = null;
@@ -16,7 +17,7 @@ export function startWatchPoller(prisma: PrismaClient): void {
 
   const run = async () => {
     try {
-      const watches = await (prisma as any).domainWatch.findMany({
+      const watches = await (prisma as any).xShieldDomainWatch.findMany({
         where: {
           status: 'ACTIVE',
           OR: [
@@ -35,7 +36,7 @@ export function startWatchPoller(prisma: PrismaClient): void {
         try {
           const report = await scanDomain(watch.domain);
 
-          await (prisma as any).domainWatch.update({
+          await (prisma as any).xShieldDomainWatch.update({
             where: { id: watch.id },
             data: {
               lastRiskScore: report.riskScore,
@@ -88,7 +89,7 @@ export function startWatchPoller(prisma: PrismaClient): void {
         }
 
         // Brief pause between domains (rate-limit friendly)
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise((r) => setTimeout(r, 1000));
       }
     } catch (err) {
       console.error('[watch-poller] Cycle error:', err);

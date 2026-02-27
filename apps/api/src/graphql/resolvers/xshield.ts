@@ -136,7 +136,7 @@ builder.queryField('xshieldWatches', (t) =>
     type: ['DomainWatch'],
     resolve: async (_parent, _args, context) => {
       const apiKey = await requireApiKey(context);
-      return (prisma as any).domainWatch.findMany({
+      return (prisma as any).xShieldDomainWatch.findMany({
         where: { apiKeyId: apiKey.id, status: { not: 'DELETED' } },
         orderBy: { createdAt: 'desc' },
       });
@@ -154,7 +154,7 @@ builder.queryField('xshieldWatchAlerts', (t) =>
     resolve: async (_parent, { watchId, limit }, context) => {
       const apiKey = await requireApiKey(context);
       // Verify ownership
-      const watch = await (prisma as any).domainWatch.findFirst({
+      const watch = await (prisma as any).xShieldDomainWatch.findFirst({
         where: { id: watchId, apiKeyId: apiKey.id },
       });
       if (!watch) throw new Error('Watch not found');
@@ -208,7 +208,7 @@ builder.queryField('xshieldStatus', (t) =>
     resolve: async () => {
       const [totalScans, activeWatches, totalApiKeys] = await Promise.all([
         (prisma as any).xShieldRiskReport.count(),
-        (prisma as any).domainWatch.count({ where: { status: 'ACTIVE' } }),
+        (prisma as any).xShieldDomainWatch.count({ where: { status: 'ACTIVE' } }),
         (prisma as any).xShieldApiKey.count({ where: { isActive: true } }),
       ]);
 
@@ -317,14 +317,14 @@ builder.mutationField('xshieldAddWatch', (t) =>
       }
 
       // Check for existing watch
-      const existing = await (prisma as any).domainWatch.findFirst({
+      const existing = await (prisma as any).xShieldDomainWatch.findFirst({
         where: { apiKeyId: apiKey.id, domain: input.domain.toLowerCase() },
       });
       if (existing && existing.status !== 'DELETED') {
         throw new Error(`Already watching ${input.domain}`);
       }
 
-      return (prisma as any).domainWatch.upsert({
+      return (prisma as any).xShieldDomainWatch.upsert({
         where: { apiKeyId_domain: { apiKeyId: apiKey.id, domain: input.domain.toLowerCase() } },
         create: {
           apiKeyId: apiKey.id,
@@ -351,12 +351,12 @@ builder.mutationField('xshieldRemoveWatch', (t) =>
     },
     resolve: async (_parent, { watchId }, context) => {
       const apiKey = await requireApiKey(context);
-      const watch = await (prisma as any).domainWatch.findFirst({
+      const watch = await (prisma as any).xShieldDomainWatch.findFirst({
         where: { id: watchId, apiKeyId: apiKey.id },
       });
       if (!watch) throw new Error('Watch not found');
 
-      await (prisma as any).domainWatch.update({
+      await (prisma as any).xShieldDomainWatch.update({
         where: { id: watchId },
         data: { status: 'DELETED' },
       });
@@ -373,12 +373,12 @@ builder.mutationField('xshieldPauseWatch', (t) =>
     },
     resolve: async (_parent, { watchId }, context) => {
       const apiKey = await requireApiKey(context);
-      const watch = await (prisma as any).domainWatch.findFirst({
+      const watch = await (prisma as any).xShieldDomainWatch.findFirst({
         where: { id: watchId, apiKeyId: apiKey.id },
       });
       if (!watch) throw new Error('Watch not found');
 
-      return (prisma as any).domainWatch.update({
+      return (prisma as any).xShieldDomainWatch.update({
         where: { id: watchId },
         data: { status: 'PAUSED' },
       });
@@ -394,12 +394,12 @@ builder.mutationField('xshieldResumeWatch', (t) =>
     },
     resolve: async (_parent, { watchId }, context) => {
       const apiKey = await requireApiKey(context);
-      const watch = await (prisma as any).domainWatch.findFirst({
+      const watch = await (prisma as any).xShieldDomainWatch.findFirst({
         where: { id: watchId, apiKeyId: apiKey.id },
       });
       if (!watch) throw new Error('Watch not found');
 
-      return (prisma as any).domainWatch.update({
+      return (prisma as any).xShieldDomainWatch.update({
         where: { id: watchId },
         data: { status: 'ACTIVE' },
       });
