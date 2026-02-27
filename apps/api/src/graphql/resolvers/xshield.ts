@@ -23,6 +23,10 @@ import crypto from 'crypto';
 
 import { runRiskEngine, buildRemediationPlaybook } from '@ankrshield/risk-intelligence';
 
+import {
+  checkIndiaThreatIntel,
+  fingerprintPhishingKit,
+} from '../../xshield/india-threat-bridge.js';
 import { scanDomain, generateTyposquats } from '../../xshield/risk-engine';
 import { builder, prisma } from '../builder';
 import { XShieldApiKeyCreateInput, WatchCreateInput } from '../types/xshield';
@@ -403,6 +407,39 @@ builder.mutationField('xshieldResumeWatch', (t) =>
         where: { id: watchId },
         data: { status: 'ACTIVE' },
       });
+    },
+  })
+);
+
+// ── India Threat Intelligence (X10) ──────────────────────────────────────────
+
+builder.queryField('xshieldIndiaThreat', (t) =>
+  t.field({
+    type: 'IndiaThreatResult',
+    description:
+      'Check a domain for India-specific threat patterns: UPI fraud, government impersonation, CERT-In advisories, telecom DLT fraud.',
+    args: {
+      domain: t.arg.string({ required: true }),
+      ip: t.arg.string({ required: false }),
+    },
+    resolve: async (_parent, { domain, ip }) => {
+      return checkIndiaThreatIntel(domain, ip ?? undefined);
+    },
+  })
+);
+
+// ── Phishing Kit Fingerprinter (X12) ─────────────────────────────────────────
+
+builder.queryField('xshieldPhishingKit', (t) =>
+  t.field({
+    type: 'PhishingKitResult',
+    description:
+      'Fetch and fingerprint a domain for known phishing kit signatures (GoPhish, Evilginx2, Modlishka, King Phisher, Zphisher, BlackEye).',
+    args: {
+      domain: t.arg.string({ required: true }),
+    },
+    resolve: async (_parent, { domain }) => {
+      return fingerprintPhishingKit(domain);
     },
   })
 );

@@ -35,7 +35,9 @@
       "@ankrshield/android-monitor": ["./packages/android-monitor/src"],
       "@ankrshield/risk-intelligence": ["./packages/risk-intelligence/src"],
       "@ankrshield/tracker-db": ["./packages/tracker-db/src"],
-      "@ankrshield/crypto": ["./packages/crypto/src"]
+      "@ankrshield/crypto": ["./packages/crypto/src"],
+      "@ankrshield/sms-shield": ["./packages/sms-shield/src"],
+      "@ankrshield/dpdp-scanner": ["./packages/dpdp-scanner/src"]
     }
   },
   "exclude": ["node_modules", "dist", "build", ".next", "out"]

@@ -272,4 +272,29 @@ builder.objectType('XShieldPlaybook', {
   }),
 });
 
+// ── IndiaThreatResult (X10) ──────────────────────────────────────────────────
+
+builder.objectType('IndiaThreatResult', {
+  fields: (t) => ({
+    isIndiaTarget: t.boolean({ resolve: (r: any) => r.isIndiaTarget }),
+    matchedPatterns: t.stringList({ resolve: (r: any) => r.matchedPatterns ?? [] }),
+    certInAdvisoryMatch: t.boolean({ resolve: (r: any) => r.certInAdvisoryMatch }),
+    upiFraudIndicator: t.boolean({ resolve: (r: any) => r.upiFraudIndicator }),
+    govtImpersonation: t.boolean({ resolve: (r: any) => r.govtImpersonation }),
+    riskScore: t.int({ resolve: (r: any) => r.riskScore }),
+  }),
+});
+
+// ── PhishingKitResult (X12) ──────────────────────────────────────────────────
+
+builder.objectType('PhishingKitResult', {
+  fields: (t) => ({
+    detected: t.boolean({ resolve: (r: any) => r.detected }),
+    kitName: t.string({ nullable: true, resolve: (r: any) => r.kitName ?? null }),
+    confidence: t.int({ resolve: (r: any) => r.confidence }),
+    indicators: t.stringList({ resolve: (r: any) => r.indicators ?? [] }),
+    riskScore: t.int({ resolve: (r: any) => r.riskScore }),
+  }),
+});
+
 export { XShieldRiskReportRef, DomainWatchRef, WatchAlertRef, XShieldApiKeyRef };

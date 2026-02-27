@@ -1,0 +1,20 @@
+{
+  "name": "@ankrshield/sms-shield",
+  "version": "1.0.0",
+  "description": "OTP and SMS fraud detection for India",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

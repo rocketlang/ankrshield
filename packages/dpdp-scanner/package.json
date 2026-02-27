@@ -1,0 +1,20 @@
+{
+  "name": "@ankrshield/dpdp-scanner",
+  "version": "1.0.0",
+  "description": "DPDP Act 2023 compliance scanner for Android apps",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

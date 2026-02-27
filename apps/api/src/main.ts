@@ -6,6 +6,8 @@ import { execSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import os from 'node:os';
 
+import { DNSResolver } from '@ankrshield/dns-resolver';
+import { scanApp } from '@ankrshield/dpdp-scanner';
 import {
   runRiskEngine,
   scanIpWithGreyNoise,
@@ -14,6 +16,7 @@ import {
   scanSupplyChain,
   parseManifest,
 } from '@ankrshield/risk-intelligence';
+import { analyzeSms } from '@ankrshield/sms-shield';
 import { SpywareScanner } from '@ankrshield/spyware-detector';
 import fastifyCookie from '@fastify/cookie';
 import fastifySwagger from '@fastify/swagger';
@@ -32,6 +35,7 @@ import authPlugin from './plugins/auth';
 import securityPlugin from './plugins/security';
 import { getWarrior, startWarrior, stopWarrior } from './warrior/warrior-service';
 import { startDomainWatcher, stopDomainWatcher } from './watch/domain-watcher.js';
+import { checkIndiaThreatIntel, fingerprintPhishingKit } from './xshield/india-threat-bridge.js';
 import { startWatchPoller, stopWatchPoller } from './xshield/watch-poller';
 
 // ─── API Key helpers ──────────────────────────────────────────────────────────
@@ -1804,6 +1808,10 @@ Date: ${now.toLocaleDateString('en-IN')}`;
       };
     });
 
+    // ─── TAXII 2.1 routes (X11) ──────────────────────────────────────────────
+    const { registerTaxiiRoutes } = await import('./taxii/server.js');
+    await registerTaxiiRoutes(fastify, prisma);
+
     // ─── Risk Intelligence endpoints ─────────────────────────────────────────
     // Full digital risk report for a domain (GreyNoise + Shodan + HIBP + urlscan)
     fastify.get<{ Querystring: { domain?: string } }>('/risk/report', async (request, reply) => {
@@ -2583,6 +2591,39 @@ Date: ${now.toLocaleDateString('en-IN')}`;
       }
     );
 
+    // ─── India Threat Intelligence endpoint (X10) ────────────────────────────
+    fastify.get<{ Querystring: { domain?: string; ip?: string } }>(
+      '/risk/india-threat',
+      async (request, reply) => {
+        const domain = request.query.domain?.trim();
+        if (!domain) return reply.status(400).send({ error: 'domain query param required' });
+        try {
+          const ip = request.query.ip?.trim();
+          const result = await checkIndiaThreatIntel(domain, ip);
+          return result;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return reply.status(500).send({ error: msg });
+        }
+      }
+    );
+
+    // ─── Phishing Kit Fingerprinter endpoint (X12) ───────────────────────────
+    fastify.get<{ Querystring: { domain?: string } }>(
+      '/risk/phishing-kit',
+      async (request, reply) => {
+        const domain = request.query.domain?.trim();
+        if (!domain) return reply.status(400).send({ error: 'domain query param required' });
+        try {
+          const result = await fingerprintPhishingKit(domain);
+          return result;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return reply.status(500).send({ error: msg });
+        }
+      }
+    );
+
     // GreyNoise classification for a single IP (useful for live threat feed)
     fastify.get<{ Params: { ip: string } }>('/risk/ip/:ip', async (request, reply) => {
       const { ip } = request.params;
@@ -2813,6 +2854,123 @@ Date: ${now.toLocaleDateString('en-IN')}`;
       }));
       return reply.send({ sessions: list });
     });
+
+    // ─── SMS Shield endpoints ─────────────────────────────────────────────────
+
+    // POST /security/sms-analyze — analyse an SMS for India-specific fraud patterns
+    fastify.post<{ Body: { content?: string; senderId?: string } }>(
+      '/security/sms-analyze',
+      async (request, reply) => {
+        const { content: smsContent, senderId } = (request.body ?? {}) as {
+          content?: string;
+          senderId?: string;
+        };
+        if (!smsContent?.trim()) {
+          return reply.status(400).send({ error: 'content is required' });
+        }
+        try {
+          const result = analyzeSms(smsContent, senderId);
+          // If a domain was extracted from a URL in the SMS, run xShield IOC check
+          let domainRisk: unknown = null;
+          if (result.domain) {
+            try {
+              domainRisk = await checkIndiaThreatIntel(result.domain, undefined);
+            } catch {
+              // IOC check is best-effort — never fail the SMS analysis
+            }
+          }
+          return { ...result, domainRisk };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return reply.status(500).send({ error: msg });
+        }
+      }
+    );
+
+    // ─── DPDP Scanner endpoints ───────────────────────────────────────────────
+
+    // POST /security/dpdp-scan — DPDP Act 2023 compliance scan for an Android app
+    fastify.post<{
+      Body: {
+        appName?: string;
+        packageName?: string;
+        permissions?: string[];
+        hasPrivacyPolicy?: boolean;
+        hasDataDeletion?: boolean;
+        targetsChildren?: boolean;
+        crossBorderTransfer?: boolean;
+      };
+    }>('/security/dpdp-scan', async (request, reply) => {
+      const body = (request.body ?? {}) as {
+        appName?: string;
+        packageName?: string;
+        permissions?: string[];
+        hasPrivacyPolicy?: boolean;
+        hasDataDeletion?: boolean;
+        targetsChildren?: boolean;
+        crossBorderTransfer?: boolean;
+      };
+      const {
+        appName,
+        packageName,
+        permissions,
+        hasPrivacyPolicy = false,
+        hasDataDeletion = false,
+        targetsChildren = false,
+        crossBorderTransfer = false,
+      } = body;
+
+      if (!appName?.trim() || !packageName?.trim()) {
+        return reply.status(400).send({ error: 'appName and packageName are required' });
+      }
+      if (!Array.isArray(permissions)) {
+        return reply.status(400).send({ error: 'permissions must be an array of strings' });
+      }
+
+      try {
+        const result = scanApp({
+          appName: appName.trim(),
+          packageName: packageName.trim(),
+          permissions,
+          hasPrivacyPolicy,
+          hasDataDeletion,
+          targetsChildren,
+          crossBorderTransfer,
+        });
+        return result;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return reply.status(500).send({ error: msg });
+      }
+    });
+
+    // ─── DNS Lookup endpoints ─────────────────────────────────────────────────
+
+    // Shared DNS resolver instance (lazy singleton, no blocklist required for API)
+    const dnsResolver = new DNSResolver({ cacheEnabled: true });
+
+    // GET /dns/lookup?domain=example.com
+    fastify.get<{ Querystring: { domain?: string } }>('/dns/lookup', async (request, reply) => {
+      const domain = (request.query.domain ?? '').trim();
+      if (!domain) {
+        return reply.status(400).send({ error: 'domain query param required' });
+      }
+      try {
+        const blocked = await dnsResolver.isBlocked(domain);
+        const resolved = blocked ? null : await dnsResolver.resolve(domain);
+        return {
+          domain,
+          resolved,
+          blocked,
+          stats: dnsResolver.stats,
+        };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return reply.status(500).send({ error: msg });
+      }
+    });
+
+    // ─── End SMS Shield / DPDP / DNS endpoints ────────────────────────────────
 
     // ─── End Session System ────────────────────────────────────────────────────
 

@@ -18,7 +18,9 @@
       "@ankrshield/crypto": ["../../packages/crypto/src"],
       "@ankrshield/risk-intelligence": ["../../packages/risk-intelligence/src"],
       "@ankrshield/spyware-detector": ["../../packages/spyware-detector/src"],
-      "@ankrshield/ai-warrior": ["../../packages/ai-warrior/src"]
+      "@ankrshield/ai-warrior": ["../../packages/ai-warrior/src"],
+      "@ankrshield/sms-shield": ["../../packages/sms-shield/src"],
+      "@ankrshield/dpdp-scanner": ["../../packages/dpdp-scanner/src"]
     }
   },
   "include": ["src/**/*"],
@@ -34,6 +36,8 @@
     { "path": "../../packages/crypto" },
     { "path": "../../packages/risk-intelligence" },
     { "path": "../../packages/spyware-detector" },
-    { "path": "../../packages/ai-warrior" }
+    { "path": "../../packages/ai-warrior" },
+    { "path": "../../packages/sms-shield" },
+    { "path": "../../packages/dpdp-scanner" }
   ]
 }
