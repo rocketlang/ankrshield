@@ -206,12 +206,39 @@ export class WarriorService {
   }
 
   async getRiskScore(domain: string): Promise<RiskScore | null> {
-    const res = await fetch(`${API_BASE}/risk/score?domain=${encodeURIComponent(domain)}`);
-    if (!res.ok) return null;
-    return res.json() as Promise<RiskScore>;
+    // GraphQL — xshieldScan is unauthenticated (anonymous free scan)
+    try {
+      const data = await gql(
+        `query($domain: String!) {
+          xshieldScan(domain: $domain) {
+            domain riskScore riskLevel scannedAt
+            findings { source signal severity }
+          }
+        }`,
+        { domain }
+      );
+      const scan = (data as any)?.xshieldScan;
+      if (!scan) return null;
+      const categories = [
+        ...new Set<string>((scan.findings as any[]).map((f: any) => f.source as string)),
+      ];
+      return {
+        domain: scan.domain,
+        score: scan.riskScore,
+        level: (scan.riskLevel as string).toLowerCase(),
+        categories,
+        lastSeen: scan.scannedAt,
+      };
+    } catch {
+      // Fallback to REST for older server versions
+      const res = await fetch(`${API_BASE}/risk/score?domain=${encodeURIComponent(domain)}`);
+      if (!res.ok) return null;
+      return res.json() as Promise<RiskScore>;
+    }
   }
 
   async getRiskPlaybook(domain: string): Promise<RiskPlaybook | null> {
+    // REST — public endpoint, returns flat steps[] for mobile
     const res = await fetch(`${API_BASE}/risk/playbook?domain=${encodeURIComponent(domain)}`);
     if (!res.ok) return null;
     return res.json() as Promise<RiskPlaybook>;
