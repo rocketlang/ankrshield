@@ -13,6 +13,7 @@ import CommandCenter from './pages/CommandCenter';
 import Dashboard from './pages/Dashboard';
 import Developers from './pages/Developers';
 import Devices from './pages/Devices';
+import Docs from './pages/Docs';
 import EvidenceReport from './pages/EvidenceReport';
 import Landing from './pages/Landing';
 import LiveThreats from './pages/LiveThreats';
@@ -40,6 +41,7 @@ function AppRoutes() {
       <Route path="/auth/verify" element={<VerifyMagicLink />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/developers" element={<Developers />} />
+      <Route path="/docs" element={<Docs />} />
       <Route path="/onboarding" element={<Onboarding />} />
 
       {/* Protected Routes */}

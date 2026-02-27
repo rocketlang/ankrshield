@@ -11,10 +11,12 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  Share,
 } from 'react-native';
 
 import { PrivacyScoreCircle } from '../components/PrivacyScoreCircle';
 import { StatsCard } from '../components/StatsCard';
+import { MdmStorage } from '../mdm/storage';
 import { startBlocklistSync, getBlocklistStats } from '../services/ioc-sync';
 import { PrivacyService } from '../services/PrivacyService';
 import { startReporting } from '../services/StatsReporter';
@@ -36,6 +38,47 @@ export function HomeScreen({ navigation }: any) {
   const [dnsPaused, setDnsPaused] = useState(false);
   const [pauseUntilMs, setPauseUntilMs] = useState(0);
   const [iocStats, setIocStats] = useState(getBlocklistStats());
+  const [streak, setStreak] = useState(0);
+  const [_lastThreatDate, setLastThreatDate] = useState<Date | null>(null);
+
+  async function loadStreakState() {
+    try {
+      const storedStreak = await MdmStorage.getItem('@ankrshield/streak');
+      const storedThreat = await MdmStorage.getItem('@ankrshield/lastThreat');
+      const today = new Date().toDateString();
+      const threatDate = storedThreat ? new Date(storedThreat) : null;
+      setLastThreatDate(threatDate);
+      if (threatDate && threatDate.toDateString() === today) {
+        // New threat today — reset streak
+        setStreak(0);
+        await MdmStorage.setItem('@ankrshield/streak', '0');
+      } else {
+        const current = storedStreak ? parseInt(storedStreak, 10) : 0;
+        setStreak(isNaN(current) ? 0 : current);
+      }
+    } catch (_e) {
+      // Storage unavailable — leave streak at 0
+    }
+  }
+
+  function streakMilestoneMessage(days: number): string | null {
+    if (days >= 100) return 'Elite defender 💎';
+    if (days >= 30) return 'One month shield 🛡️';
+    if (days >= 7) return 'One week clean 🎉';
+    return null;
+  }
+
+  async function handleShareScore() {
+    const scoreValue = score?.totalScore ?? 0;
+    try {
+      await Share.share({
+        message: `My phone has a ${scoreValue}/100 security score on AnkrShield — India's privacy-first security app. Try it: https://xshieldai.com`,
+        title: 'My AnkrShield Security Score',
+      });
+    } catch (_e) {
+      // User cancelled share — no-op
+    }
+  }
 
   async function syncPauseState() {
     try {
@@ -66,6 +109,7 @@ export function HomeScreen({ navigation }: any) {
 
   useEffect(() => {
     loadData();
+    loadStreakState();
     const serverInterval = setInterval(loadData, 30000);
 
     // Poll on-device VPN stats every 5 seconds
@@ -188,6 +232,20 @@ export function HomeScreen({ navigation }: any) {
         </Text>
       </View>
 
+      {/* Security streak card */}
+      <View style={styles.streakCard}>
+        {streak > 0 ? (
+          <>
+            <Text style={styles.streakTitle}>🔥 {streak} day streak — no new threats</Text>
+            {streakMilestoneMessage(streak) ? (
+              <Text style={styles.streakMilestone}>{streakMilestoneMessage(streak)}</Text>
+            ) : null}
+          </>
+        ) : (
+          <Text style={styles.streakEmpty}>Start your streak by staying protected today</Text>
+        )}
+      </View>
+
       {score && (
         <View style={styles.scoreContainer}>
           <PrivacyScoreCircle score={score.totalScore} level={score.level} />
@@ -206,6 +264,11 @@ export function HomeScreen({ navigation }: any) {
               <Text style={styles.breakdownValue}>{score.appScore}</Text>
             </View>
           </View>
+
+          {/* Share score button */}
+          <TouchableOpacity style={styles.shareButton} onPress={handleShareScore}>
+            <Text style={styles.shareButtonText}>Share Score</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -601,5 +664,46 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.2,
+  },
+  streakCard: {
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 4,
+    backgroundColor: '#0d1a0d',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#166534',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  streakTitle: {
+    color: '#4ade80',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  streakMilestone: {
+    color: '#86efac',
+    fontSize: 11,
+    marginTop: 3,
+  },
+  streakEmpty: {
+    color: '#6b7280',
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  shareButton: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  shareButtonText: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });
