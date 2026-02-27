@@ -12,15 +12,18 @@ const httpLink = createHttpLink({
   uri: import.meta.env.VITE_API_URL || 'http://localhost:4250/graphql',
 });
 
-// Auth link - adds JWT token to requests
+// Auth link - adds JWT token AND xShield API key to requests
 const authLink = setContext((_, { headers }) => {
   // Get token from localStorage
   const token = localStorage.getItem('ankrshield_token');
+  // Get xShield API key from localStorage (used by xshieldApiKeyInfo, xshieldWatches, etc.)
+  const apiKey = localStorage.getItem('ankrshield_api_key');
 
   return {
     headers: {
       ...headers,
       authorization: token ? `Bearer ${token}` : '',
+      ...(apiKey ? { 'X-API-Key': apiKey } : {}),
     },
   };
 });
@@ -29,9 +32,7 @@ const authLink = setContext((_, { headers }) => {
 const errorLink = onError(({ graphQLErrors, networkError }) => {
   if (graphQLErrors) {
     graphQLErrors.forEach(({ message, locations, path }) => {
-      console.error(
-        `[GraphQL error]: Message: ${message}, Location: ${locations}, Path: ${path}`
-      );
+      console.error(`[GraphQL error]: Message: ${message}, Location: ${locations}, Path: ${path}`);
 
       // Handle authentication errors
       if (message.includes('Not authenticated') || message.includes('Invalid token')) {

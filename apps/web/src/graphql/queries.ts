@@ -225,3 +225,85 @@ export const DEPLOY_HONEYPOTS_MUTATION = gql`
     deployDefaultHoneypots
   }
 `;
+
+// ── xShield Intelligence Queries ──────────────────────────────────────────────
+
+export const XSHIELD_STATUS_QUERY = gql`
+  query XShieldStatus {
+    xshieldStatus {
+      status
+      totalScans
+      activeWatches
+      totalApiKeys
+      sources
+      version
+      timestamp
+    }
+  }
+`;
+
+export const API_KEY_INFO_QUERY = gql`
+  query ApiKeyInfo {
+    xshieldApiKeyInfo {
+      id
+      name
+      email
+      tier
+      monthlyQuota
+      usedThisMonth
+      quotaResetAt
+      isActive
+      keyPrefix
+      createdAt
+    }
+  }
+`;
+
+export const WATCHES_QUERY = gql`
+  query Watches {
+    xshieldWatches {
+      id
+      domain
+      status
+      alertThreshold
+      lastRiskScore
+      lastRiskLevel
+      lastScannedAt
+      createdAt
+    }
+  }
+`;
+
+export const IOC_FEED_QUERY = gql`
+  query IocFeed($limit: Int, $minRiskScore: Int) {
+    xshieldIocFeed(limit: $limit, minRiskScore: $minRiskScore)
+  }
+`;
+
+export const XSHIELD_SCAN_QUERY = gql`
+  query XShieldScan($domain: String!) {
+    xshieldScan(domain: $domain) {
+      domain
+      riskScore
+      riskLevel
+      scannedAt
+      findings {
+        source
+        signal
+        severity
+      }
+    }
+  }
+`;
+
+export const WATCH_ALERTS_QUERY = gql`
+  query WatchAlerts($watchId: String!, $limit: Int) {
+    xshieldWatchAlerts(watchId: $watchId, limit: $limit) {
+      id
+      domain
+      riskScore
+      riskLevel
+      triggeredAt
+    }
+  }
+`;

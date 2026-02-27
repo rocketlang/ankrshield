@@ -77,5 +77,18 @@
       </intent-filter>
     </receiver>
 
+    <!-- Shield Status home screen widget -->
+    <receiver
+      android:name=".ShieldStatusWidget"
+      android:exported="true"
+      android:label="xShield Status">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/shield_widget_info"/>
+    </receiver>
+
   </application>
 </manifest>

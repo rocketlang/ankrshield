@@ -30,6 +30,7 @@ class MainApplication : Application(), ReactApplication {
             packages.add(DnsVpnPackage())
             packages.add(AppScannerPackage())
             packages.add(WhatsAppGuardPackage())
+            packages.add(WidgetPackage())
             return packages
           }
 
