@@ -1,0 +1,26 @@
+{
+  "name": "@xshieldai/warrior",
+  "version": "1.0.0",
+  "description": "Self-host xShield threat intelligence — one command setup",
+  "bin": {
+    "warrior": "./bin/warrior.js"
+  },
+  "main": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx src/index.ts"
+  },
+  "keywords": [
+    "xshield",
+    "threat-intelligence",
+    "security",
+    "self-host"
+  ],
+  "license": "Apache-2.0",
+  "dependencies": {
+    "commander": "^11.0.0",
+    "chalk": "^5.3.0",
+    "ora": "^7.0.1",
+    "inquirer": "^9.2.0"
+  }
+}
