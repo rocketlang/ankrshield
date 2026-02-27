@@ -1755,13 +1755,21 @@ Date: ${now.toLocaleDateString('en-IN')}`;
           shodanApiKey: process.env.SHODAN_API_KEY,
           enableUrlscan: false, // skip urlscan for quick score
         });
+        // Derive unique category labels from risk factors for the mobile app
+        const categories = [...new Set(report.factors.map((f) => f.category.replace(/_/g, ' ')))];
         return {
+          // Mobile-app shape (RiskScore interface)
           domain: report.domain,
+          score: report.riskScore,
+          level: report.riskLevel,
+          categories,
+          lastSeen: report.generatedAt,
+          // Extended fields for web dashboard
           serverIp: report.serverIp,
           riskScore: report.riskScore,
           riskLevel: report.riskLevel,
           factorCount: report.factors.length,
-          durationMs: report.durationMs,
+          durationMs: (report as any).durationMs,
         };
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -2358,7 +2366,28 @@ Date: ${now.toLocaleDateString('en-IN')}`;
       try {
         const report = await runRiskEngine({ domain, shodanApiKey: process.env.SHODAN_API_KEY });
         const playbook = buildRemediationPlaybook(report);
-        return playbook;
+        // Flatten actions → steps for the Android app (RiskPlaybook interface)
+        const steps = playbook.actions.map((action) => ({
+          title: action.title,
+          description: action.description,
+          // First copy-pasteable command from the action's steps, if any
+          command: action.steps.find((s) => s.command)?.command,
+        }));
+        return {
+          // Mobile-app shape (RiskPlaybook interface)
+          domain: playbook.domain,
+          steps,
+          // Extended fields for web dashboard
+          reportId: playbook.reportId,
+          generatedAt: playbook.generatedAt,
+          riskScore: playbook.riskScore,
+          riskLevel: playbook.riskLevel,
+          totalActions: playbook.totalActions,
+          estimatedTotalMinutes: playbook.estimatedTotalMinutes,
+          summary: playbook.summary,
+          cicdYaml: playbook.cicdYaml,
+          actions: playbook.actions,
+        };
       } catch (err: unknown) {
         return reply.status(500).send({ error: err instanceof Error ? err.message : String(err) });
       }
