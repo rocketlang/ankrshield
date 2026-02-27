@@ -15,6 +15,9 @@ import {
   buildRemediationPlaybook,
   scanSupplyChain,
   parseManifest,
+  checkBrandImpersonation,
+  generateThreatNarrative,
+  monitorCertTransparency,
 } from '@ankrshield/risk-intelligence';
 import { analyzeSms } from '@ankrshield/sms-shield';
 import { SpywareScanner } from '@ankrshield/spyware-detector';
@@ -78,6 +81,9 @@ async function checkRateLimit(keyId: string, tier: string): Promise<boolean> {
     return true;
   }
 }
+
+// ─── Magic Link token store (in-memory, 15-min TTL) ──────────────────────────
+const magicTokenStore = new Map<string, { email: string; expiresAt: number }>();
 
 const fastify = Fastify({
   logger: {
@@ -2161,6 +2167,143 @@ Date: ${now.toLocaleDateString('en-IN')}`;
       }
     );
 
+    // POST /auth/magic-link — request a passwordless login link
+    fastify.post<{ Body: { email: string } }>(
+      '/auth/magic-link',
+      {
+        schema: {
+          tags: ['auth'],
+          summary: 'Request a magic link (passwordless login)',
+          body: {
+            type: 'object',
+            required: ['email'],
+            properties: {
+              email: { type: 'string', format: 'email' },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const { email } = request.body;
+        const normalizedEmail = email.toLowerCase();
+
+        // Generate secure token (64 hex chars = 32 random bytes)
+        const token = randomBytes(32).toString('hex');
+        const tokenHash = createHash('sha256').update(token).digest('hex');
+
+        // Store with 15-minute expiry
+        magicTokenStore.set(tokenHash, {
+          email: normalizedEmail,
+          expiresAt: Date.now() + 15 * 60 * 1000,
+        });
+
+        const appUrl = process.env.APP_URL ?? 'https://xshieldai.com';
+        const magicUrl = `${appUrl}/auth/verify?token=${token}`;
+
+        // Best-effort email delivery — never reveal whether email exists
+        try {
+          const emailTo = normalizedEmail;
+          const subject = 'Your xShield login link';
+          const body = `Click to log in to xShield:
+
+${magicUrl}
+
+This link expires in 15 minutes.
+
+If you did not request this, you can safely ignore this email.`;
+
+          // Log the magic link in dev so it can be used without email infra
+          fastify.log.info(`[magic-link] ${emailTo} → ${magicUrl}`);
+
+          // Fire-and-forget via ankr-wire HTTP endpoint if configured
+          const wireUrl = process.env.ANKR_WIRE_URL ?? process.env.ANKR_WIRE_REST_URL;
+          if (wireUrl) {
+            void fetch(`${wireUrl}/notify/email`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ to: emailTo, subject, text: body }),
+            }).catch(() => {
+              /* best effort */
+            });
+          }
+        } catch {
+          // Never fail — don't reveal email existence
+        }
+
+        return reply.send({ success: true, message: 'Magic link sent to your email' });
+      }
+    );
+
+    // GET /auth/verify?token= — verify magic link, issue JWT session
+    fastify.get<{ Querystring: { token?: string } }>(
+      '/auth/verify',
+      {
+        schema: {
+          tags: ['auth'],
+          summary: 'Verify magic link token and create session',
+          querystring: {
+            type: 'object',
+            properties: { token: { type: 'string' } },
+          },
+        },
+      },
+      async (request, reply) => {
+        const rawToken = request.query.token;
+        if (!rawToken) return reply.status(400).send({ error: 'token required' });
+
+        const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+        const entry = magicTokenStore.get(tokenHash);
+
+        if (!entry || Date.now() > entry.expiresAt) {
+          magicTokenStore.delete(tokenHash);
+          return reply.status(401).send({ error: 'Invalid or expired link' });
+        }
+
+        // Single-use: delete immediately
+        magicTokenStore.delete(tokenHash);
+
+        const { email } = entry;
+
+        // Find or create user
+        let user = await prisma.user.findUnique({ where: { email } });
+        if (!user) {
+          user = await prisma.user.create({
+            data: { email, password: '', name: null },
+          });
+        }
+
+        // Issue JWT + refresh session
+        const jwtToken = signJwt(user.id, user.email, user.tier);
+        const refreshToken = randomBytes(64).toString('hex');
+        await prisma.session.create({
+          data: {
+            userId: user.id,
+            token: jwtToken,
+            refreshToken,
+            expiresAt: new Date(Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000),
+          },
+        });
+
+        setCookieRefresh(reply as Parameters<typeof setCookieRefresh>[0], refreshToken);
+
+        // Set apiKey cookie (30 days) for convenience
+        void reply.setCookie('apiKey', jwtToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          path: '/',
+          maxAge: 86400 * 30,
+        });
+
+        return reply.send({
+          success: true,
+          token: jwtToken,
+          email: user.email,
+          user: { id: user.id, email: user.email, name: user.name, tier: user.tier },
+        });
+      }
+    );
+
     // ─── Integrations — Slack ─────────────────────────────────────────────────
 
     // POST /integrations/slack — save or update Slack incoming webhook URL
@@ -2624,6 +2767,79 @@ Date: ${now.toLocaleDateString('en-IN')}`;
       }
     );
 
+    // Brand Impersonation Monitor (X6) REST endpoint
+    // GET /brand/report?brandTerms=ankr,ankrshield
+    fastify.get(
+      '/brand/report',
+      {
+        schema: {
+          tags: ['brand'],
+          summary: 'Brand impersonation check (heuristic, no auth required)',
+        },
+      },
+      async (request, reply) => {
+        const q = request.query as { brandTerms?: string; candidates?: string };
+        const rawTerms = q.brandTerms ? q.brandTerms.trim() : '';
+        if (!rawTerms)
+          return reply
+            .status(400)
+            .send({ error: 'brandTerms query param required (comma-separated)' });
+        const brandTerms = rawTerms
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean);
+        const rawCandidates = q.candidates ? q.candidates.trim() : '';
+        const candidateList = rawCandidates
+          ? rawCandidates
+              .split(',')
+              .map((n) => ({ name: n.trim() }))
+              .filter((c) => c.name)
+          : [];
+        try {
+          return checkBrandImpersonation(brandTerms, candidateList);
+        } catch (err) {
+          return reply
+            .status(500)
+            .send({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    );
+
+    // AI Threat Narrative (X9) REST endpoint
+    // GET /risk/narrative?domain=example.com
+    fastify.get(
+      '/risk/narrative',
+      {
+        schema: {
+          tags: ['risk'],
+          summary: 'AI threat narrative for a domain (uses ANKR AI Proxy)',
+        },
+      },
+      async (request, reply) => {
+        const q = request.query as { domain?: string };
+        const domain = q.domain ? q.domain.trim() : '';
+        if (!domain) return reply.status(400).send({ error: 'domain query param required' });
+        try {
+          const report = await runRiskEngine({
+            domain,
+            shodanApiKey: process.env.SHODAN_API_KEY,
+            otxApiKey: process.env.OTX_API_KEY,
+            githubToken: process.env.GITHUB_TOKEN,
+            enableGithubDork: !!process.env.GITHUB_TOKEN,
+            enableThreatNarrative: true,
+            anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+          });
+          if (report.threatNarrative) return report.threatNarrative;
+          const narrative = await generateThreatNarrative(report, process.env.ANTHROPIC_API_KEY);
+          if (!narrative) return reply.status(503).send({ error: 'AI narrative not available' });
+          return narrative;
+        } catch (err) {
+          return reply
+            .status(500)
+            .send({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    );
     // GreyNoise classification for a single IP (useful for live threat feed)
     fastify.get<{ Params: { ip: string } }>('/risk/ip/:ip', async (request, reply) => {
       const { ip } = request.params;
@@ -2637,6 +2853,72 @@ Date: ${now.toLocaleDateString('en-IN')}`;
         return reply.status(500).send({ error: msg });
       }
     });
+
+    // ─── Certificate Transparency SSE Stream ─────────────────────────────────
+    // GET /risk/cert-stream?domain=example.com
+    // Server-Sent Events stream — polls crt.sh every 60s, emits new certs.
+    fastify.get<{ Querystring: { domain?: string } }>(
+      '/risk/cert-stream',
+      async (request, reply) => {
+        const domain = request.query.domain?.trim();
+        if (!domain) {
+          return reply.status(400).send({ error: 'domain required' });
+        }
+
+        // SSE headers
+        reply.raw.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          Connection: 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+          'X-Accel-Buffering': 'no',
+        });
+
+        const send = (eventType: string, data: unknown) => {
+          reply.raw.write(`event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`);
+        };
+
+        send('connected', { domain, timestamp: new Date().toISOString() });
+
+        let polling = true;
+        const lastSeen = new Set<string>();
+
+        const poll = async () => {
+          try {
+            const records = await monitorCertTransparency(domain);
+            const newCerts = records.filter((r) => !lastSeen.has(r.commonName));
+
+            for (const cert of newCerts) {
+              lastSeen.add(cert.commonName);
+              send('cert', {
+                commonName: cert.commonName,
+                issuer: cert.issuer,
+                notBefore: cert.loggedAt,
+                isTyposquat: !cert.isLegitimate,
+                riskScore: cert.isLegitimate ? 0 : 40,
+              });
+            }
+
+            send('heartbeat', { timestamp: new Date().toISOString(), total: lastSeen.size });
+          } catch {
+            // Ignore individual poll errors — stream stays open
+          }
+
+          if (polling) {
+            setTimeout(() => {
+              void poll();
+            }, 60_000);
+          }
+        };
+
+        await poll();
+
+        request.raw.on('close', () => {
+          polling = false;
+          reply.raw.end();
+        });
+      }
+    );
 
     // ─── Session / Room System ─────────────────────────────────────────────────
     // In-memory store — survives as long as the process is running.

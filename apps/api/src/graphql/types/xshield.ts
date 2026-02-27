@@ -123,6 +123,18 @@ XShieldRiskReportRef.implement({
         return Array.isArray(m?.recommendations) ? m.recommendations : [];
       },
     }),
+
+    threatNarrative: t.field({
+      type: 'ThreatNarrative',
+      nullable: true,
+      resolve: (report) => (report as any).parsedThreatNarrative ?? null,
+    }),
+
+    brandFindings: t.field({
+      type: 'BrandMonitorResult',
+      nullable: true,
+      resolve: (report) => (report as any).parsedBrandFindings ?? null,
+    }),
   }),
 });
 
@@ -294,6 +306,77 @@ builder.objectType('PhishingKitResult', {
     confidence: t.int({ resolve: (r: any) => r.confidence }),
     indicators: t.stringList({ resolve: (r: any) => r.indicators ?? [] }),
     riskScore: t.int({ resolve: (r: any) => r.riskScore }),
+  }),
+});
+
+// ── BrandFinding / BrandMonitorResult (X6) ───────────────────────────────────
+
+builder.objectType('BrandFinding', {
+  fields: (t) => ({
+    inputTerm: t.string({ resolve: (r: any) => r.inputTerm }),
+    candidate: t.string({ resolve: (r: any) => r.candidate }),
+    platform: t.string({ resolve: (r: any) => r.platform }),
+    similarityScore: t.int({ resolve: (r: any) => r.similarityScore }),
+    riskScore: t.int({ resolve: (r: any) => r.riskScore }),
+    impersonationPatterns: t.stringList({ resolve: (r: any) => r.impersonationPatterns }),
+    reason: t.string({ resolve: (r: any) => r.reason }),
+  }),
+});
+
+builder.objectType('BrandMonitorResult', {
+  fields: (t) => ({
+    brandTerms: t.stringList({ resolve: (r: any) => r.brandTerms }),
+    totalScore: t.int({ resolve: (r: any) => r.totalScore }),
+    highRiskCount: t.int({ resolve: (r: any) => r.highRiskCount }),
+    findings: t.field({ type: ['BrandFinding'], resolve: (r: any) => r.findings }),
+  }),
+});
+
+// ── SupplyChainFinding / SupplyChainPackageReport (X7) ────────────────────────
+
+builder.objectType('SupplyChainFinding', {
+  fields: (t) => ({
+    type: t.string({ resolve: (r: any) => r.type }),
+    severity: t.string({ resolve: (r: any) => r.severity }),
+    message: t.string({ resolve: (r: any) => r.title ?? r.message ?? '' }),
+    packageName: t.string({ nullable: true, resolve: (r: any) => r.packageName ?? null }),
+    cveId: t.string({ nullable: true, resolve: (r: any) => r.cveId ?? null }),
+    score: t.int({ resolve: (r: any) => r.score ?? 0 }),
+  }),
+});
+
+builder.objectType('SupplyChainPackageReport', {
+  fields: (t) => ({
+    packageName: t.string({ resolve: (r: any) => r.name ?? r.packageName }),
+    ecosystem: t.string({ resolve: (r: any) => r.ecosystem }),
+    riskScore: t.int({ resolve: (r: any) => r.score ?? r.riskScore ?? 0 }),
+    findings: t.field({ type: ['SupplyChainFinding'], resolve: (r: any) => r.findings ?? [] }),
+    summary: t.string({ resolve: (r: any) => r.summary ?? '' }),
+    latestVersion: t.string({ nullable: true, resolve: (r: any) => r.latestVersion ?? null }),
+    publishedAt: t.string({ nullable: true, resolve: (r: any) => r.publishedAt ?? null }),
+    repositoryUrl: t.string({ nullable: true, resolve: (r: any) => r.repositoryUrl ?? null }),
+    monthlyDownloads: t.int({ nullable: true, resolve: (r: any) => r.monthlyDownloads ?? null }),
+    maintainerCount: t.int({ nullable: true, resolve: (r: any) => r.maintainerCount ?? null }),
+  }),
+});
+
+// ── ThreatNarrative (X9) ──────────────────────────────────────────────────────
+
+builder.objectType('ThreatNarrative', {
+  fields: (t) => ({
+    executiveSummary: t.string({ resolve: (r: any) => r.executiveSummary }),
+    technicalBrief: t.string({ resolve: (r: any) => r.technicalBrief }),
+    immediateActions: t.stringList({ resolve: (r: any) => r.immediateActions }),
+    riskExplanation: t.string({ resolve: (r: any) => r.riskExplanation }),
+    threatActorProfile: t.string({
+      nullable: true,
+      resolve: (r: any) => r.threatActorProfile ?? null,
+    }),
+    estimatedTimeToExploit: t.string({
+      nullable: true,
+      resolve: (r: any) => r.estimatedTimeToExploit ?? null,
+    }),
+    generatedBy: t.string({ nullable: true, resolve: (r: any) => r.generatedBy ?? null }),
   }),
 });
 

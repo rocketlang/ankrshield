@@ -21,7 +21,13 @@
 
 import crypto from 'crypto';
 
-import { runRiskEngine, buildRemediationPlaybook } from '@ankrshield/risk-intelligence';
+import {
+  runRiskEngine,
+  buildRemediationPlaybook,
+  checkBrandImpersonation,
+  scanSupplyChain,
+  generateThreatNarrative,
+} from '@ankrshield/risk-intelligence';
 
 import {
   checkIndiaThreatIntel,
@@ -130,6 +136,8 @@ builder.queryField('xshieldScan', (t) =>
         parsedFindings: report.findings,
         parsedMitre: report.mitreMapping,
         parsedSourceBreakdown: report.sourceBreakdown,
+        parsedThreatNarrative: report.threatNarrative ?? null,
+        parsedBrandFindings: report.brandFindings ?? null,
       });
     },
   })
@@ -490,6 +498,99 @@ builder.queryField('xshieldPlaybook', (t) =>
       });
 
       return playbook;
+    },
+  })
+);
+
+// ── Brand Impersonation Monitor (X6) ─────────────────────────────────────────
+
+builder.queryField('xshieldBrandMonitor', (t) =>
+  t.field({
+    type: 'BrandMonitorResult',
+    description:
+      'Heuristic brand impersonation check. FREE tier — no auth required. ' +
+      'Detects typosquats, lookalike handles, and impersonation patterns on social platforms.',
+    args: {
+      brandTerms: t.arg.stringList({ required: true }),
+      candidates: t.arg.stringList({ required: false }),
+    },
+    resolve: async (_parent, { brandTerms, candidates }) => {
+      const candidateList = (candidates ?? []).map((name: string) => ({ name }));
+      return checkBrandImpersonation(brandTerms, candidateList);
+    },
+  })
+);
+
+// ── Supply Chain Scanner (X7) ─────────────────────────────────────────────────
+
+builder.queryField('xshieldSupplyChain', (t) =>
+  t.field({
+    type: ['SupplyChainPackageReport'],
+    description:
+      'Scan npm / PyPI packages for supply chain risks: typosquatting, known CVEs, ' +
+      'abandoned packages, low-download new packages. FREE tier — no auth required.',
+    args: {
+      packages: t.arg.stringList({ required: true }), // format: npm:lodash or pypi:requests
+    },
+    resolve: async (_parent, { packages }) => {
+      // Parse ecosystem:name or ecosystem:name@version format
+      const parsed = (packages ?? [])
+        .map((p: string) => {
+          const [eco, rest] = p.split(':', 2);
+          if (!rest) return null;
+          const [name, version] = rest.split('@', 2);
+          if (eco !== 'npm' && eco !== 'pypi') return null;
+          return { ecosystem: eco as 'npm' | 'pypi', name, version };
+        })
+        .filter(Boolean) as Array<{ ecosystem: 'npm' | 'pypi'; name: string; version?: string }>;
+
+      if (parsed.length === 0) {
+        throw new Error(
+          'No valid packages. Use format npm:lodash or pypi:requests or npm:express@4.18.2'
+        );
+      }
+
+      const report = await scanSupplyChain(parsed);
+      // Return the flat package list — each item matches SupplyChainPackageReport
+      return report.packages;
+    },
+  })
+);
+
+// ── AI Threat Narrative (X9) ──────────────────────────────────────────────────
+
+builder.queryField('xshieldNarrative', (t) =>
+  t.field({
+    type: 'ThreatNarrative',
+    nullable: true,
+    description:
+      'Generate an AI-powered threat narrative for a domain. ' +
+      'Runs a full risk scan then produces executive summary, technical brief, and remediation actions. ' +
+      'Requires STARTER+ API key.',
+    args: { domain: t.arg.string({ required: true }) },
+    resolve: async (_parent, { domain }, context) => {
+      const apiKey = await requireApiKey(context);
+      if (apiKey.tier === 'FREE') {
+        throw new Error(
+          'xshieldNarrative requires STARTER+ tier. Upgrade at xshieldai.com/pricing'
+        );
+      }
+      await checkAndDecrementQuota(apiKey.id);
+
+      // Full risk scan with narrative enabled
+      const report = await runRiskEngine({
+        domain,
+        shodanApiKey: process.env.SHODAN_API_KEY,
+        otxApiKey: process.env.OTX_API_KEY,
+        githubToken: process.env.GITHUB_TOKEN,
+        enableGithubDork: !!process.env.GITHUB_TOKEN,
+        enableThreatNarrative: true,
+        anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+      });
+
+      // Return narrative from report if present, else generate separately
+      if (report.threatNarrative) return report.threatNarrative;
+      return generateThreatNarrative(report, process.env.ANTHROPIC_API_KEY);
     },
   })
 );
