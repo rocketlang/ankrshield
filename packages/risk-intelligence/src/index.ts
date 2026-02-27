@@ -97,6 +97,7 @@ export {
   checkBrandImpersonation,
   analyseCandidateForBrand,
   brandToFactors,
+  compareVisualSimilarity,
 } from './detectors/social-brand-monitor.js';
 export type { BrandFinding, BrandMonitorResult } from './detectors/social-brand-monitor.js';
 

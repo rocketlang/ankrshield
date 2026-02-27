@@ -188,11 +188,9 @@ export async function runRiskEngine(options: RiskEngineOptions): Promise<RiskRep
     enableEntropy ? checkDirectoryEntropy(options.entropyDirectories) : Promise.resolve(null),
     enableQr && options.qrUrl ? checkQrThreat(options.qrUrl) : Promise.resolve(null),
     enableSocialC2 ? checkSocialC2(domain) : Promise.resolve(null),
-    Promise.resolve(
-      enableBrandMonitor && options.brandTerms && options.brandCandidates
-        ? checkBrandImpersonation(options.brandTerms, options.brandCandidates)
-        : null
-    ),
+    enableBrandMonitor && options.brandTerms && options.brandCandidates
+      ? checkBrandImpersonation(options.brandTerms, options.brandCandidates)
+      : Promise.resolve(null),
   ]);
 
   // Exfil detection is synchronous — run separately

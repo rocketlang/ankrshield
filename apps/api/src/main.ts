@@ -27,6 +27,7 @@ import fastifySwaggerUi from '@fastify/swagger-ui';
 import Fastify from 'fastify';
 import Redis from 'ioredis';
 import mercurius from 'mercurius';
+import WS from 'ws';
 
 import { hashPassword, comparePassword } from './auth/password.js';
 import { prisma } from './graphql/builder';
@@ -81,6 +82,179 @@ async function checkRateLimit(keyId: string, tier: string): Promise<boolean> {
     return true;
   }
 }
+
+// ─── CertstreamManager (X8-P2) ────────────────────────────────────────────────
+// Connects to the public certstream WebSocket (wss://certstream.calidog.io/)
+// for near-real-time CT log data. Maintains a rolling buffer of the last 1000
+// cert entries, keyed by domain (exact + parent). Falls back to crt.sh polling
+// if not connected.
+
+interface CertEntry {
+  commonName: string;
+  allDomains: string[];
+  issuer: string;
+  loggedAt: string; // ISO timestamp
+  source?: string;
+}
+
+type CertListener = (entry: CertEntry) => void;
+
+class CertstreamManager {
+  private ws: WS | null = null;
+  // Rolling buffer: domain → last 1000 entries (across all domains sharing a key)
+  private buffer = new Map<string, CertEntry[]>();
+  // Per-domain subscriber lists for live push
+  private listeners = new Map<string, Set<CertListener>>();
+  // Seen cert ids for dedup (commonName+loggedAt hash → true)
+  private seenIds = new Set<string>();
+  private connected = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private stopped = false;
+
+  readonly BUFFER_MAX = 1000;
+  readonly DEDUP_MAX = 5000;
+
+  connect() {
+    if (this.stopped) return;
+    try {
+      this.ws = new WS('wss://certstream.calidog.io/', {
+        handshakeTimeout: 10_000,
+      });
+
+      this.ws.on('open', () => {
+        this.connected = true;
+        console.log('[certstream] Connected to wss://certstream.calidog.io/');
+      });
+
+      this.ws.on('message', (raw: WS.RawData) => {
+        try {
+          const msg = JSON.parse(raw.toString()) as {
+            message_type?: string;
+            data?: {
+              leaf_cert?: {
+                all_domains?: string[];
+                subject?: { CN?: string };
+              };
+              source?: { url?: string };
+              seen?: number;
+            };
+          };
+          if (msg.message_type !== 'certificate_update') return;
+          const leaf = msg.data?.leaf_cert;
+          if (!leaf) return;
+
+          const allDomains: string[] = (leaf.all_domains ?? []).filter(
+            (d): d is string => typeof d === 'string' && d.length > 0
+          );
+          const commonName = leaf.subject?.CN ?? allDomains[0] ?? '';
+          const source = msg.data?.source?.url ?? '';
+          const loggedAt = msg.data?.seen
+            ? new Date(msg.data.seen * 1000).toISOString()
+            : new Date().toISOString();
+
+          const dedupKey = `${commonName}:${loggedAt}`;
+          if (this.seenIds.has(dedupKey)) return;
+          this.seenIds.add(dedupKey);
+          // Trim seenIds to avoid unbounded growth
+          if (this.seenIds.size > this.DEDUP_MAX) {
+            const first = this.seenIds.values().next().value;
+            if (first) this.seenIds.delete(first);
+          }
+
+          const entry: CertEntry = { commonName, allDomains, issuer: source, loggedAt, source };
+
+          // Index under each domain key (exact domain + parent domain)
+          const domainKeys = new Set<string>();
+          for (const d of allDomains) {
+            domainKeys.add(d.toLowerCase().replace(/^\*\./, ''));
+            // Also index under parent: sub.example.com → example.com
+            const parts = d.split('.');
+            if (parts.length > 2) {
+              domainKeys.add(parts.slice(-2).join('.').toLowerCase());
+            }
+          }
+
+          for (const key of domainKeys) {
+            if (!this.buffer.has(key)) this.buffer.set(key, []);
+            const arr = this.buffer.get(key)!;
+            arr.push(entry);
+            if (arr.length > this.BUFFER_MAX) arr.splice(0, arr.length - this.BUFFER_MAX);
+
+            // Notify live listeners for this domain key
+            const subs = this.listeners.get(key);
+            if (subs) {
+              for (const fn of subs) {
+                try {
+                  fn(entry);
+                } catch {
+                  /* ignore listener errors */
+                }
+              }
+            }
+          }
+        } catch {
+          /* malformed frame — ignore */
+        }
+      });
+
+      this.ws.on('error', (err: Error) => {
+        console.warn('[certstream] WebSocket error:', err.message);
+      });
+
+      this.ws.on('close', () => {
+        this.connected = false;
+        this.ws = null;
+        console.log('[certstream] Disconnected — reconnecting in 15s');
+        if (!this.stopped) {
+          this.reconnectTimer = setTimeout(() => this.connect(), 15_000);
+        }
+      });
+    } catch (err) {
+      // ws package unavailable — silently skip; SSE endpoint will poll crt.sh
+      console.warn('[certstream] Could not initialise WebSocket:', err);
+    }
+  }
+
+  stop() {
+    this.stopped = true;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.ws?.close();
+    this.ws = null;
+  }
+
+  isConnected(): boolean {
+    return this.connected;
+  }
+
+  /** Return buffered certs for a domain (exact match OR parent domain). */
+  getBuffer(domain: string): CertEntry[] {
+    const key = domain.toLowerCase().replace(/^\*\./, '');
+    return this.buffer.get(key) ?? [];
+  }
+
+  /** Subscribe to live cert events for a domain. Returns unsubscribe fn. */
+  subscribe(domain: string, fn: CertListener): () => void {
+    const key = domain.toLowerCase().replace(/^\*\./, '');
+    if (!this.listeners.has(key)) this.listeners.set(key, new Set());
+    this.listeners.get(key)!.add(fn);
+    return () => {
+      this.listeners.get(key)?.delete(fn);
+    };
+  }
+}
+
+const certstreamManager = new CertstreamManager();
+
+/** Call at server startup to begin certstream WebSocket connection. */
+function startCertstream() {
+  certstreamManager.connect();
+}
+
+function stopCertstream() {
+  certstreamManager.stop();
+}
+
+// ─── End CertstreamManager ────────────────────────────────────────────────────
 
 const fastify = Fastify({
   logger: {
@@ -2892,7 +3066,7 @@ If you did not request this, you can safely ignore this email.`;
               .filter((c) => c.name)
           : [];
         try {
-          return checkBrandImpersonation(brandTerms, candidateList);
+          return await checkBrandImpersonation(brandTerms, candidateList);
         } catch (err) {
           return reply
             .status(500)
@@ -2953,7 +3127,9 @@ If you did not request this, you can safely ignore this email.`;
 
     // ─── Certificate Transparency SSE Stream ─────────────────────────────────
     // GET /risk/cert-stream?domain=example.com
-    // Server-Sent Events stream — polls crt.sh every 60s, emits new certs.
+    // Server-Sent Events — uses CertstreamManager (wss://certstream.calidog.io/)
+    // for near-real-time CT log data. Falls back to crt.sh polling (30s, dedup)
+    // if the WebSocket is not connected.
     fastify.get<{ Querystring: { domain?: string } }>(
       '/risk/cert-stream',
       { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
@@ -2976,45 +3152,109 @@ If you did not request this, you can safely ignore this email.`;
           reply.raw.write(`event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`);
         };
 
-        send('connected', { domain, timestamp: new Date().toISOString() });
+        const certEntryToEvent = (entry: {
+          commonName: string;
+          issuer: string;
+          loggedAt: string;
+        }) => ({
+          commonName: entry.commonName,
+          issuer: entry.issuer,
+          notBefore: entry.loggedAt,
+          isTyposquat: !entry.commonName.includes(domain.replace(/^\*\./, '')),
+          riskScore: entry.commonName.includes(domain.replace(/^\*\./, '')) ? 0 : 40,
+        });
 
-        let polling = true;
-        const lastSeen = new Set<string>();
+        send('connected', {
+          domain,
+          timestamp: new Date().toISOString(),
+          mode: certstreamManager.isConnected() ? 'live' : 'polling',
+        });
 
-        const poll = async () => {
-          try {
-            const records = await monitorCertTransparency(domain);
-            const newCerts = records.filter((r) => !lastSeen.has(r.commonName));
+        let active = true;
 
-            for (const cert of newCerts) {
-              lastSeen.add(cert.commonName);
-              send('cert', {
-                commonName: cert.commonName,
-                issuer: cert.issuer,
-                notBefore: cert.loggedAt,
-                isTyposquat: !cert.isLegitimate,
-                riskScore: cert.isLegitimate ? 0 : 40,
+        if (certstreamManager.isConnected()) {
+          // ── Live certstream path ──────────────────────────────────────────
+          // 1. Flush any buffered certs immediately
+          const buffered = certstreamManager.getBuffer(domain);
+          for (const entry of buffered) {
+            send('cert', certEntryToEvent(entry));
+          }
+
+          // 2. Subscribe to new real-time certs
+          const unsub = certstreamManager.subscribe(domain, (entry) => {
+            if (!active) return;
+            send('cert', certEntryToEvent(entry));
+          });
+
+          // 3. Heartbeat every 30s
+          const heartbeat = setInterval(() => {
+            if (!active) return;
+            send('heartbeat', { timestamp: new Date().toISOString(), source: 'certstream' });
+          }, 30_000);
+
+          request.raw.on('close', () => {
+            active = false;
+            unsub();
+            clearInterval(heartbeat);
+            reply.raw.end();
+          });
+        } else {
+          // ── Fallback: crt.sh polling (30s interval) with deduplication ───
+          // Track last 50 seen cert IDs per poll cycle to avoid re-emitting.
+          const seenIds = new Map<string, number>(); // certId → insertion order
+          let seenCounter = 0;
+
+          const poll = async () => {
+            try {
+              const records = await monitorCertTransparency(domain);
+              for (const cert of records) {
+                const id = cert.commonName;
+                if (seenIds.has(id)) continue;
+                // Keep dedup map bounded to 50 entries
+                if (seenIds.size >= 50) {
+                  // Remove oldest entry
+                  let oldestKey: string | undefined;
+                  let oldestVal = Infinity;
+                  for (const [k, v] of seenIds) {
+                    if (v < oldestVal) {
+                      oldestVal = v;
+                      oldestKey = k;
+                    }
+                  }
+                  if (oldestKey) seenIds.delete(oldestKey);
+                }
+                seenIds.set(id, seenCounter++);
+                send('cert', {
+                  commonName: cert.commonName,
+                  issuer: cert.issuer,
+                  notBefore: cert.loggedAt,
+                  isTyposquat: !cert.isLegitimate,
+                  riskScore: cert.isLegitimate ? 0 : 40,
+                });
+              }
+              send('heartbeat', {
+                timestamp: new Date().toISOString(),
+                total: seenIds.size,
+                source: 'crtsh',
               });
+            } catch {
+              // Ignore individual poll errors — stream stays open
             }
 
-            send('heartbeat', { timestamp: new Date().toISOString(), total: lastSeen.size });
-          } catch {
-            // Ignore individual poll errors — stream stays open
-          }
+            if (active) {
+              setTimeout(() => {
+                void poll();
+              }, 30_000);
+            }
+          };
 
-          if (polling) {
-            setTimeout(() => {
-              void poll();
-            }, 60_000);
-          }
-        };
+          await poll();
 
-        await poll();
-
-        request.raw.on('close', () => {
-          polling = false;
-          reply.raw.end();
-        });
+          request.raw.on('close', () => {
+            active = false;
+            reply.raw.end();
+          });
+        }
       }
     );
 
@@ -3462,6 +3702,12 @@ If you did not request this, you can safely ignore this email.`;
     // Start xShield watch poller (persisted domain watch + alert engine)
     startWatchPoller(prisma);
     fastify.log.info(`🛡️  xShield watch poller started — scanning watched domains every 5 minutes`);
+
+    // Start certstream WebSocket (X8-P2) — real-time CT log feed
+    startCertstream();
+    fastify.log.info(
+      `📜 Certstream started — connecting to wss://certstream.calidog.io/ for CT log data`
+    );
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -3476,6 +3722,7 @@ signals.forEach((signal) => {
     stopMonitor();
     stopDomainWatcher();
     stopWatchPoller();
+    stopCertstream();
     await stopWarrior();
     await fastify.close();
     await prisma.$disconnect();

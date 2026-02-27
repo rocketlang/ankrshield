@@ -27,6 +27,7 @@ export interface BrandFinding {
   impersonationPatterns: string[]; // Which patterns matched
   riskScore: number; // Overall threat score 0-100
   reason: string;
+  visualMatch?: boolean; // true if favicon pHash distance < 10
 }
 
 export interface BrandMonitorResult {
@@ -157,6 +158,91 @@ function generateTyposquatVariants(term: string): Set<string> {
 }
 
 // ---------------------------------------------------------------------------
+// pHash-based favicon visual similarity (X6-P2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Computes a simple difference hash (dHash) fingerprint from the first 64
+ * bytes of a favicon binary. Each adjacent byte pair is XOR-ed; the number
+ * of set bits in the result is counted as the "distance" between two favicons.
+ *
+ * This avoids importing image-processing libraries (sharp/jimp) while still
+ * giving a useful signal: identical or re-used favicons will have distance 0,
+ * structurally similar ones will be < 10, and unrelated ones will be higher.
+ */
+function faviconDHash(bytes: Uint8Array): number[] {
+  const sample = bytes.slice(0, 64);
+  const hash: number[] = [];
+  for (let i = 0; i < sample.length - 1; i++) {
+    hash.push((sample[i] ?? 0) ^ (sample[i + 1] ?? 0));
+  }
+  return hash;
+}
+
+function countBits(n: number): number {
+  let count = 0;
+  let v = n >>> 0;
+  while (v) {
+    count += v & 1;
+    v >>>= 1;
+  }
+  return count;
+}
+
+function hashDistance(a: number[], b: number[]): number {
+  const len = Math.min(a.length, b.length);
+  let dist = 0;
+  for (let i = 0; i < len; i++) {
+    dist += countBits((a[i] ?? 0) ^ (b[i] ?? 0));
+  }
+  return dist;
+}
+
+/**
+ * Fetches favicons for two domains and returns a perceptual similarity result.
+ * A distance < 10 (out of a max of ~504 for 63 byte-pairs × 8 bits) indicates
+ * the favicons are visually near-identical — a strong phishing/impersonation
+ * signal when the domains are different.
+ *
+ * Returns `{ similar: false }` (no-throw) if either fetch fails or times out.
+ */
+export async function compareVisualSimilarity(
+  brandDomain: string,
+  targetDomain: string
+): Promise<{ similar: boolean; distance?: number }> {
+  const fetchFavicon = async (domain: string): Promise<Uint8Array | null> => {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5_000);
+      const res = await fetch(`https://${domain}/favicon.ico`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) return null;
+      const buf = await res.arrayBuffer();
+      return new Uint8Array(buf);
+    } catch {
+      return null;
+    }
+  };
+
+  const [brandBytes, targetBytes] = await Promise.all([
+    fetchFavicon(brandDomain),
+    fetchFavicon(targetDomain),
+  ]);
+
+  if (!brandBytes || !targetBytes || brandBytes.length < 2 || targetBytes.length < 2) {
+    return { similar: false };
+  }
+
+  const brandHash = faviconDHash(brandBytes);
+  const targetHash = faviconDHash(targetBytes);
+  const distance = hashDistance(brandHash, targetHash);
+
+  return distance < 10 ? { similar: true, distance } : { similar: false, distance };
+}
+
+// ---------------------------------------------------------------------------
 // Main analysis function — checks a single candidate against brand terms
 // ---------------------------------------------------------------------------
 
@@ -258,11 +344,21 @@ export function analyseCandidateForBrand(
  *   - Twitter/X username search
  *   - GitHub org/user search
  *   - User-submitted suspicious handles
+ *
+ * When a candidate includes a `domain` field AND its initial confidence is
+ * > 0.6 (similarityScore > 60), a favicon pHash comparison is performed
+ * against the first brand term's domain. A visual match boosts confidence
+ * by 0.1 (capped at 100) and sets `visualMatch: true`.
+ *
+ * @param brandDomain - The authoritative domain for the brand (e.g. "ankr.com").
+ *   Used as the reference favicon for visual similarity checks. Optional —
+ *   if omitted, visual checks are skipped.
  */
-export function checkBrandImpersonation(
+export async function checkBrandImpersonation(
   brandTerms: string[],
-  candidates: Array<{ name: string; platform?: string }>
-): BrandMonitorResult {
+  candidates: Array<{ name: string; platform?: string; domain?: string }>,
+  brandDomain?: string
+): Promise<BrandMonitorResult> {
   const findings: BrandFinding[] = [];
 
   for (const candidate of candidates) {
@@ -271,7 +367,22 @@ export function checkBrandImpersonation(
       brandTerms,
       candidate.platform ?? 'unknown'
     );
-    if (finding) findings.push(finding);
+    if (!finding) continue;
+
+    // Visual similarity check (X6-P2): run when confidence > 60 and we have
+    // both a brand domain and the candidate's domain to compare.
+    if (finding.similarityScore > 60 && brandDomain && candidate.domain) {
+      const visual = await compareVisualSimilarity(brandDomain, candidate.domain);
+      if (visual.similar) {
+        finding.visualMatch = true;
+        // Boost confidence by 10 points, cap at 100
+        finding.similarityScore = Math.min(finding.similarityScore + 10, 100);
+        finding.riskScore = Math.min(finding.riskScore + 10, 100);
+        finding.reason += ` [visual favicon match, pHash distance=${visual.distance}]`;
+      }
+    }
+
+    findings.push(finding);
   }
 
   // Sort by risk score descending
