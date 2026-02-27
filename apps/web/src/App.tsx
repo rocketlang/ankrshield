@@ -17,6 +17,7 @@ import EvidenceReport from './pages/EvidenceReport';
 import Landing from './pages/Landing';
 import LiveThreats from './pages/LiveThreats';
 import Login from './pages/Login';
+import MdmAdmin from './pages/MdmAdmin';
 import Onboarding from './pages/Onboarding';
 import Policies from './pages/Policies';
 import Pricing from './pages/Pricing';
@@ -38,16 +39,7 @@ function AppRoutes() {
       <Route path="/auth/verify" element={<VerifyMagicLink />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/developers" element={<Developers />} />
-
-      {/* Onboarding — protected, shown once after registration */}
-      <Route
-        path="/onboarding"
-        element={
-          <ProtectedRoute>
-            <Onboarding />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/onboarding" element={<Onboarding />} />
 
       {/* Protected Routes */}
       <Route
@@ -111,6 +103,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <SupplyChain />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/mdm"
+        element={
+          <ProtectedRoute>
+            <MdmAdmin />
           </ProtectedRoute>
         }
       />

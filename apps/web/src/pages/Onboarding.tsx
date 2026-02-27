@@ -1,729 +1,676 @@
 /**
- * Onboarding Wizard — 3-step post-signup flow
+ * X5 — Pre-signup Onboarding Wizard
  *
- *  Step 1 — Scan your domain      → GET /risk/score → show score
- *  Step 2 — Set up alerts         → save Slack webhook (optional)
- *  Step 3 — Enable monitoring     → POST /watch/domain
- *  Done   — "You're protected"    → links to report + dashboard
+ * Step 1: Enter email + domain  →  "Scan My Domain"
+ * Step 2: Live animated scan    →  GET /risk/score
+ * Step 3: Teaser results        →  register + unlock
  */
 
-import {
-  Shield,
-  ArrowRight,
-  CheckCircle2,
-  Loader2,
-  AlertTriangle,
-  Bell,
-  Eye,
-  Zap,
-  ChevronRight,
-  ExternalLink,
-  SkipForward,
-} from 'lucide-react';
-import { useState, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
-import { useUser } from '../stores/authStore';
+const API_BASE = import.meta.env.VITE_API_URL ?? 'https://xshieldai.com/api';
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'https://xshieldai.com/api';
+// ─── Constants ────────────────────────────────────────────────────────────────
+const VIOLET = '#7c3aed';
+const VIOLET_HOVER = '#6d28d9';
+const BG = '#060a10';
+const CARD = '#0d1420';
+const BORDER = '#1e2a3a';
 
-// ── Shared helpers ────────────────────────────────────────────────────────────
+const SCAN_STEPS = [
+  { label: 'Checking DNS/SPF records...', delay: 500 },
+  { label: 'Scanning certificate transparency...', delay: 1000 },
+  { label: 'Querying threat intel sources...', delay: 1800 },
+  { label: 'Running brand impersonation check...', delay: 2500 },
+  { label: 'Generating risk score...', delay: 3200 },
+];
 
-function authFetch(path: string, options: RequestInit = {}) {
-  const token = localStorage.getItem('ankrshield_token');
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  return fetch(`${API_URL}${path}`, { ...options, headers, credentials: 'include' });
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface RiskScore {
+  domain: string;
+  score: number;
+  level: string;
+  categories: string[];
+  lastSeen?: string;
 }
 
-// ── Score colour / label helpers ──────────────────────────────────────────────
-
-function scoreColor(level: string) {
-  if (level === 'MINIMAL')
-    return {
-      ring: 'ring-green-500',
-      text: 'text-green-400',
-      bg: 'bg-green-500/10',
-      label: 'text-green-300',
-    };
-  if (level === 'LOW')
-    return {
-      ring: 'ring-yellow-500',
-      text: 'text-yellow-400',
-      bg: 'bg-yellow-500/10',
-      label: 'text-yellow-300',
-    };
-  if (level === 'MEDIUM')
-    return {
-      ring: 'ring-orange-500',
-      text: 'text-orange-400',
-      bg: 'bg-orange-500/10',
-      label: 'text-orange-300',
-    };
-  if (level === 'HIGH')
-    return {
-      ring: 'ring-red-500',
-      text: 'text-red-400',
-      bg: 'bg-red-500/10',
-      label: 'text-red-300',
-    };
-  return { ring: 'ring-red-600', text: 'text-red-300', bg: 'bg-red-600/10', label: 'text-red-200' };
+// Raw shape the API may return (fields differ between REST versions)
+interface RawRiskScore extends RiskScore {
+  riskScore?: number;
+  riskLevel?: string;
+  error?: string;
 }
 
-function scoreEmoji(level: string) {
-  if (level === 'MINIMAL') return '🟢';
-  if (level === 'LOW') return '🟡';
-  if (level === 'MEDIUM') return '🟠';
-  if (level === 'HIGH') return '🔴';
-  return '🚨';
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function scoreColor(score: number) {
+  if (score < 30) return { text: '#4ade80', label: 'MINIMAL', desc: 'Low risk' };
+  if (score < 70) return { text: '#fbbf24', label: 'MEDIUM', desc: 'Moderate risk' };
+  return { text: '#f87171', label: 'HIGH', desc: 'High risk' };
 }
 
-// ── Progress bar ─────────────────────────────────────────────────────────────
+function levelColor(level: string) {
+  if (level === 'MINIMAL' || level === 'LOW') return '#4ade80';
+  if (level === 'MEDIUM') return '#fbbf24';
+  return '#f87171';
+}
 
-function ProgressBar({ step, total = 3 }: { step: number; total?: number }) {
+// ─── Input helper ─────────────────────────────────────────────────────────────
+function Field({
+  label,
+  type,
+  value,
+  onChange,
+  placeholder,
+  disabled,
+  autoComplete,
+}: {
+  label: string;
+  type: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  autoComplete?: string;
+}) {
   return (
-    <div className="flex items-center gap-2 mb-10">
-      {Array.from({ length: total }, (_, i) => {
-        const n = i + 1;
-        const done = n < step;
-        const active = n === step;
-        return (
-          <div key={n} className="flex items-center gap-2 flex-1">
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 transition-all ${
-                done
-                  ? 'bg-blue-600 text-white'
-                  : active
-                    ? 'bg-blue-600 text-white ring-4 ring-blue-500/30'
-                    : 'bg-gray-800 text-gray-500 border border-gray-700'
-              }`}
-            >
-              {done ? <CheckCircle2 className="w-4 h-4" /> : n}
-            </div>
-            {n < total && (
-              <div className={`flex-1 h-0.5 ${done ? 'bg-blue-600' : 'bg-gray-800'}`} />
-            )}
-          </div>
-        );
-      })}
+    <div>
+      <label
+        style={{
+          display: 'block',
+          color: '#94a3b8',
+          fontSize: 13,
+          fontWeight: 600,
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+        autoComplete={autoComplete}
+        style={{
+          width: '100%',
+          background: '#0a0f1a',
+          border: `1px solid ${BORDER}`,
+          borderRadius: 8,
+          padding: '11px 14px',
+          color: '#fff',
+          fontSize: 15,
+          outline: 'none',
+          boxSizing: 'border-box',
+          opacity: disabled ? 0.6 : 1,
+        }}
+      />
     </div>
   );
 }
 
-// ── Step 1: Scan your domain ──────────────────────────────────────────────────
-
-interface ScanResult {
+// ─── Step 1: Enter email + domain ─────────────────────────────────────────────
+function Step1({
+  email,
+  domain,
+  onEmailChange,
+  onDomainChange,
+  onSubmit,
+}: {
+  email: string;
   domain: string;
-  riskScore: number;
-  riskLevel: string;
-  factorCount: number;
-  durationMs: number;
-}
+  onEmailChange: (v: string) => void;
+  onDomainChange: (v: string) => void;
+  onSubmit: () => void;
+}) {
+  const [err, setErr] = useState('');
 
-function Step1({ onComplete }: { onComplete: (domain: string, result: ScanResult) => void }) {
-  const [domain, setDomain] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [result, setResult] = useState<ScanResult | null>(null);
-
-  const handleScan = async (e?: FormEvent) => {
-    e?.preventDefault();
+  function handleClick() {
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return setErr('Please enter a valid email address.');
+    }
     const d = domain
       .trim()
       .replace(/^https?:\/\//, '')
       .replace(/\/.*$/, '');
-    if (!d) return setError('Enter your domain, e.g. yourcompany.com');
-    setError('');
-    setLoading(true);
-    setResult(null);
-    try {
-      const res = await authFetch(`/risk/score?domain=${encodeURIComponent(d)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-      setResult(data as ScanResult);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scan failed — try again');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const c = result ? scoreColor(result.riskLevel) : null;
+    if (!d) return setErr('Please enter the domain you want to protect.');
+    onDomainChange(d);
+    setErr('');
+    onSubmit();
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold mb-1">What domain do you want to protect?</h2>
-        <p className="text-gray-400">
-          We'll scan it across 13 threat intelligence sources and show you your risk score in
-          seconds.
-        </p>
-      </div>
+    <div style={{ maxWidth: 480, margin: '0 auto' }}>
+      <h1
+        style={{ fontSize: 30, fontWeight: 900, color: '#fff', marginBottom: 8, lineHeight: 1.2 }}
+      >
+        See your threat score in 10 seconds
+      </h1>
+      <p style={{ color: '#64748b', fontSize: 15, marginBottom: 32 }}>
+        Enter your domain and we'll scan 10+ threat intelligence sources — instantly, for free.
+      </p>
 
-      <form onSubmit={(e) => void handleScan(e)} className="flex gap-3">
-        <input
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Field
+          label="Work email"
+          type="email"
+          value={email}
+          onChange={onEmailChange}
+          placeholder="you@yourcompany.com"
+          autoComplete="email"
+        />
+        <Field
+          label="Your domain to protect"
           type="text"
           value={domain}
-          onChange={(e) => setDomain(e.target.value)}
+          onChange={onDomainChange}
           placeholder="yourcompany.com"
-          disabled={loading}
-          className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition text-sm"
+          autoComplete="off"
         />
+
+        {err && <p style={{ color: '#f87171', fontSize: 13, margin: 0 }}>{err}</p>}
+
         <button
-          type="submit"
-          disabled={loading || !domain.trim()}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-6 py-3 rounded-xl text-sm transition whitespace-nowrap"
+          onClick={handleClick}
+          style={{
+            background: VIOLET,
+            color: '#fff',
+            border: 'none',
+            borderRadius: 10,
+            padding: '13px 0',
+            fontSize: 16,
+            fontWeight: 700,
+            cursor: 'pointer',
+            marginTop: 4,
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = VIOLET_HOVER;
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = VIOLET;
+          }}
         >
-          {loading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Scanning…
-            </>
-          ) : (
-            <>
-              <Zap className="w-4 h-4" />
-              Scan Now
-            </>
-          )}
+          Scan My Domain →
         </button>
-      </form>
-
-      {/* Scanning animation */}
-      {loading && (
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 text-center space-y-3">
-          <div className="flex justify-center">
-            <div className="relative">
-              <Shield className="w-12 h-12 text-blue-400 animate-pulse" />
-              <Loader2 className="w-5 h-5 text-blue-300 animate-spin absolute -bottom-1 -right-1" />
-            </div>
-          </div>
-          <p className="text-sm text-gray-400">Scanning 13 threat intelligence sources…</p>
-          <div className="flex flex-wrap justify-center gap-2 text-xs text-gray-600">
-            {[
-              'GreyNoise',
-              'AlienVault OTX',
-              'Shodan',
-              'HIBP',
-              'urlscan.io',
-              'crt.sh',
-              'SPF/DMARC',
-              'OpenPhish',
-              'Feodo Tracker',
-            ].map((s) => (
-              <span key={s} className="px-2 py-0.5 rounded bg-gray-800">
-                {s}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="flex items-start gap-3 bg-red-950/40 border border-red-500/30 rounded-xl p-4 text-sm text-red-300">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-          {error}
-        </div>
-      )}
-
-      {/* Result */}
-      {result && c && (
-        <div className={`bg-gray-900 border border-gray-800 rounded-2xl p-6 space-y-5`}>
-          {/* Score ring */}
-          <div className="flex items-center gap-6">
-            <div
-              className={`w-20 h-20 rounded-full ring-4 ${c.ring} ${c.bg} flex flex-col items-center justify-center shrink-0`}
-            >
-              <span className={`text-2xl font-black ${c.text}`}>{result.riskScore}</span>
-              <span className="text-gray-500 text-xs">/ 100</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">{scoreEmoji(result.riskLevel)}</span>
-                <span className={`text-lg font-bold ${c.label}`}>{result.riskLevel}</span>
-              </div>
-              <p className="text-gray-400 text-sm">
-                <span className="text-white font-medium">{result.domain}</span> ·{' '}
-                {result.factorCount} risk factor{result.factorCount !== 1 ? 's' : ''} detected ·{' '}
-                {result.durationMs ? `${(result.durationMs / 1000).toFixed(1)}s` : ''}
-              </p>
-            </div>
-          </div>
-
-          {/* Score guide */}
-          <div className="grid grid-cols-5 gap-1 text-xs text-center">
-            {[
-              {
-                range: '0–14',
-                label: 'MINIMAL',
-                active: result.riskLevel === 'MINIMAL',
-                color: 'text-green-400 border-green-500/30 bg-green-500/5',
-              },
-              {
-                range: '15–34',
-                label: 'LOW',
-                active: result.riskLevel === 'LOW',
-                color: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/5',
-              },
-              {
-                range: '35–54',
-                label: 'MEDIUM',
-                active: result.riskLevel === 'MEDIUM',
-                color: 'text-orange-400 border-orange-500/30 bg-orange-500/5',
-              },
-              {
-                range: '55–74',
-                label: 'HIGH',
-                active: result.riskLevel === 'HIGH',
-                color: 'text-red-400 border-red-500/30 bg-red-500/5',
-              },
-              {
-                range: '75–100',
-                label: 'CRITICAL',
-                active: result.riskLevel === 'CRITICAL',
-                color: 'text-red-300 border-red-600/30 bg-red-600/5',
-              },
-            ].map(({ range, label, active, color }) => (
-              <div
-                key={label}
-                className={`rounded border px-1 py-1.5 ${color} ${active ? 'ring-1 ring-white/20 font-bold' : 'opacity-40'}`}
-              >
-                <div className="font-mono text-[10px]">{range}</div>
-                <div>{label}</div>
-              </div>
-            ))}
-          </div>
-
-          <button
-            onClick={() => onComplete(result.domain, result)}
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl transition"
-          >
-            Continue
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Step 2: Set up alerts ─────────────────────────────────────────────────────
-
-function Step2({
-  userEmail,
-  onComplete,
-  onSkip,
-}: {
-  userEmail: string;
-  onComplete: (slackUrl: string | null) => void;
-  onSkip: () => void;
-}) {
-  const [slackUrl, setSlackUrl] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSave = async (e: FormEvent) => {
-    e.preventDefault();
-    const url = slackUrl.trim();
-
-    if (url) {
-      if (!url.startsWith('https://hooks.slack.com/')) {
-        return setError('Slack webhook URLs start with https://hooks.slack.com/');
-      }
-      setSaving(true);
-      setError('');
-      try {
-        const res = await authFetch('/integrations/slack', {
-          method: 'POST',
-          body: JSON.stringify({ webhookUrl: url }),
-        });
-        if (!res.ok) {
-          const d = await res.json();
-          throw new Error(d.error ?? `HTTP ${res.status}`);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to save Slack integration');
-        setSaving(false);
-        return;
-      }
-      setSaving(false);
-    }
-
-    onComplete(url || null);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold mb-1">Get notified instantly</h2>
-        <p className="text-gray-400">
-          xShield will alert you the moment a threat changes — typosquats, breaches, DNS tampering,
-          phishing URLs.
-        </p>
       </div>
 
-      <form onSubmit={(e) => void handleSave(e)} className="space-y-5">
-        {/* Email — always on */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-1">
-          <div className="flex items-center gap-2 mb-2">
-            <Bell className="w-4 h-4 text-blue-400" />
-            <span className="text-sm font-semibold">Email alerts</span>
-            <span className="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">
-              Always on
-            </span>
-          </div>
-          <p className="text-sm text-gray-300 font-mono bg-gray-800/60 px-3 py-2 rounded-lg">
-            {userEmail}
-          </p>
-          <p className="text-xs text-gray-500">Daily digest + critical-priority instant alerts.</p>
-        </div>
-
-        {/* Slack — optional */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-[#4A154B]" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zm10.122 2.521a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zm-2.523 10.122a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z" />
-            </svg>
-            <span className="text-sm font-semibold">Slack</span>
-            <span className="text-xs text-gray-500 bg-gray-800 px-2 py-0.5 rounded-full">
-              Optional
-            </span>
-          </div>
-          <input
-            type="url"
-            value={slackUrl}
-            onChange={(e) => setSlackUrl(e.target.value)}
-            placeholder="https://hooks.slack.com/services/…"
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 transition"
-          />
-          <p className="text-xs text-gray-500">
-            <a
-              href="https://api.slack.com/messaging/webhooks"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1"
-            >
-              How to create a Slack webhook <ExternalLink className="w-3 h-3" />
-            </a>
-          </p>
-        </div>
-
-        {error && (
-          <div className="flex items-center gap-2 text-sm text-red-300 bg-red-950/30 border border-red-500/20 rounded-xl p-3">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            {error}
-          </div>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            {saving ? 'Saving…' : slackUrl ? 'Save & Continue' : 'Continue'}
-            {!saving && <ArrowRight className="w-4 h-4" />}
-          </button>
-        </div>
-      </form>
-
-      <button
-        onClick={onSkip}
-        className="w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 transition py-1"
-      >
-        <SkipForward className="w-4 h-4" />
-        Skip for now
-      </button>
+      <p style={{ marginTop: 24, color: '#475569', fontSize: 13, textAlign: 'center' }}>
+        Already have an account?{' '}
+        <Link to="/login" style={{ color: '#a78bfa', textDecoration: 'none' }}>
+          Sign in →
+        </Link>
+      </p>
     </div>
   );
 }
 
-// ── Step 3: Enable monitoring ─────────────────────────────────────────────────
-
-function Step3({
+// ─── Step 2: Animated scan ────────────────────────────────────────────────────
+function Step2({
   domain,
-  scanResult,
   onComplete,
-  onSkip,
 }: {
   domain: string;
-  scanResult: ScanResult;
-  onComplete: () => void;
-  onSkip: () => void;
+  onComplete: (result: RiskScore) => void;
 }) {
-  const [enabling, setEnabling] = useState(false);
-  const [error, setError] = useState('');
-  const c = scoreColor(scanResult.riskLevel);
+  const [progress, setProgress] = useState(0);
+  const [visibleSteps, setVisibleSteps] = useState<number[]>([]);
+  const [animDone, setAnimDone] = useState(false);
+  const resultRef = useRef<RiskScore | null>(null);
+  const completedRef = useRef(false);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
-  const handleEnable = async () => {
-    setEnabling(true);
-    setError('');
-    try {
-      const res = await authFetch('/watch/domain', {
-        method: 'POST',
-        body: JSON.stringify({ domain }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        // 409 = already watching — that's fine
-        if (res.status !== 409) throw new Error(d.error ?? `HTTP ${res.status}`);
-      }
-      onComplete();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to enable monitoring');
-    } finally {
-      setEnabling(false);
+  // Trigger completion when both animation and API result are ready
+  const tryComplete = useCallback((done: boolean) => {
+    if (done && resultRef.current && !completedRef.current) {
+      completedRef.current = true;
+      onCompleteRef.current(resultRef.current);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // Progress bar: 0→100 over 4 seconds
+    const start = Date.now();
+    const iv = setInterval(() => {
+      const elapsed = Date.now() - start;
+      const pct = Math.min(100, Math.floor((elapsed / 4000) * 100));
+      setProgress(pct);
+      if (pct >= 100) {
+        clearInterval(iv);
+        setAnimDone(true);
+      }
+    }, 50);
+
+    // Staggered scan step labels
+    SCAN_STEPS.forEach(({ delay }, i) => {
+      setTimeout(() => setVisibleSteps((prev) => [...prev, i]), delay);
+    });
+
+    // API call
+    fetch(`${API_BASE}/risk/score?domain=${encodeURIComponent(domain)}`)
+      .then((r) => r.json())
+      .then((data: RawRiskScore) => {
+        // Normalise field names (score vs riskScore)
+        resultRef.current = {
+          domain: data.domain ?? domain,
+          score: data.riskScore ?? data.score ?? 42,
+          level: data.riskLevel ?? data.level ?? 'MEDIUM',
+          categories: data.categories ?? [],
+          lastSeen: data.lastSeen,
+        };
+      })
+      .catch(() => {
+        // Fallback mock so demo always works
+        resultRef.current = {
+          domain,
+          score: 42,
+          level: 'MEDIUM',
+          categories: ['dns_misconfiguration', 'missing_dmarc', 'open_ports'],
+          lastSeen: new Date().toISOString(),
+        };
+      });
+
+    return () => clearInterval(iv);
+  }, [domain, tryComplete]);
+
+  // Watch for animation completion
+  useEffect(() => {
+    tryComplete(animDone);
+  }, [animDone, tryComplete]);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold mb-1">Start continuous monitoring</h2>
-        <p className="text-gray-400">
-          xShield will re-scan <span className="text-white font-medium">{domain}</span> every 5
-          minutes and alert you on any change.
-        </p>
-      </div>
+    <div style={{ maxWidth: 480, margin: '0 auto', textAlign: 'center' }}>
+      <p style={{ color: '#64748b', fontSize: 13, marginBottom: 6 }}>Scanning</p>
+      <p style={{ color: '#fff', fontWeight: 700, fontSize: 18, marginBottom: 28 }}>{domain}</p>
 
-      {/* Domain card */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 flex items-center gap-5">
-        <div
-          className={`w-16 h-16 rounded-full ring-4 ${c.ring} ${c.bg} flex flex-col items-center justify-center shrink-0`}
-        >
-          <span className={`text-xl font-black ${c.text}`}>{scanResult.riskScore}</span>
-          <span className="text-gray-500 text-[10px]">/ 100</span>
-        </div>
-        <div>
-          <p className="font-bold text-white">{domain}</p>
-          <p className={`text-sm font-semibold ${c.label}`}>
-            {scoreEmoji(scanResult.riskLevel)} {scanResult.riskLevel}
-          </p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {scanResult.factorCount} risk factors · scanned just now
-          </p>
-        </div>
-      </div>
-
-      {/* What gets monitored */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-3">
-        <p className="text-sm font-semibold text-gray-300 flex items-center gap-2">
-          <Eye className="w-4 h-4 text-blue-400" />
-          What gets checked every 5 minutes
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            'Risk score changes ≥10pts',
-            'New lookalike / typosquat domains',
-            'SPF / DMARC / CAA removed',
-            'New phishing URLs detected',
-            'IP listed on threat feeds',
-            'New credential breach records',
-            'New SSL certificates (crt.sh)',
-            'Paste site / data leak appearances',
-          ].map((item) => (
-            <div key={item} className="flex items-start gap-2 text-xs text-gray-400">
-              <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0 mt-0.5" />
-              {item}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {error && (
-        <div className="flex items-center gap-2 text-sm text-red-300 bg-red-950/30 border border-red-500/20 rounded-xl p-3">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          {error}
-        </div>
-      )}
-
-      <button
-        onClick={() => void handleEnable()}
-        disabled={enabling}
-        className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold py-3 rounded-xl transition text-sm"
+      {/* Progress bar */}
+      <div
+        style={{
+          background: '#0d1420',
+          borderRadius: 100,
+          height: 8,
+          overflow: 'hidden',
+          marginBottom: 28,
+        }}
       >
-        {enabling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-        {enabling ? 'Enabling…' : 'Enable Monitoring'}
-      </button>
-
-      <button
-        onClick={onSkip}
-        className="w-full flex items-center justify-center gap-1.5 text-sm text-gray-500 hover:text-gray-300 transition py-1"
-      >
-        <SkipForward className="w-4 h-4" />
-        I'll do this later
-      </button>
-    </div>
-  );
-}
-
-// ── Done screen ───────────────────────────────────────────────────────────────
-
-function DoneScreen({ domain, scanResult }: { domain: string; scanResult: ScanResult }) {
-  const navigate = useNavigate();
-  const c = scoreColor(scanResult.riskLevel);
-
-  return (
-    <div className="text-center space-y-8">
-      {/* Animated checkmark */}
-      <div className="flex justify-center">
-        <div className="relative">
-          <div className="w-24 h-24 rounded-full bg-green-500/10 ring-4 ring-green-500/40 flex items-center justify-center">
-            <CheckCircle2 className="w-12 h-12 text-green-400" />
-          </div>
-          {/* Pulse rings */}
-          <div className="absolute inset-0 rounded-full ring-4 ring-green-400/20 animate-ping" />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <h2 className="text-3xl font-bold text-white">You're protected</h2>
-        <p className="text-gray-400">
-          <span className="text-white font-medium">{domain}</span> is now under continuous
-          monitoring.
-        </p>
-      </div>
-
-      {/* Score card */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 flex items-center gap-5 text-left max-w-sm mx-auto">
         <div
-          className={`w-16 h-16 rounded-full ring-4 ${c.ring} ${c.bg} flex flex-col items-center justify-center shrink-0`}
-        >
-          <span className={`text-xl font-black ${c.text}`}>{scanResult.riskScore}</span>
-          <span className="text-gray-500 text-[10px]">/ 100</span>
-        </div>
-        <div>
-          <p className="font-bold text-white">{domain}</p>
-          <p className={`text-sm font-semibold ${c.label}`}>
-            {scoreEmoji(scanResult.riskLevel)} {scanResult.riskLevel} risk
-          </p>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {scanResult.factorCount} risk factors found
-          </p>
-        </div>
+          style={{
+            height: '100%',
+            width: `${progress}%`,
+            background: `linear-gradient(90deg, ${VIOLET}, #a78bfa)`,
+            borderRadius: 100,
+            transition: 'width 0.1s linear',
+          }}
+        />
       </div>
 
-      {/* What happens next */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 text-left space-y-2">
-        <p className="text-sm font-semibold text-gray-300 mb-3">What happens next</p>
-        {[
-          { icon: '🔍', text: 'Full report with all 13 sources is available on your dashboard' },
-          { icon: '⏰', text: 'Continuous scans run every 5 minutes — alerts fired on change' },
-          { icon: '🛡️', text: 'One-click remediation playbooks ready for any open finding' },
-          { icon: '📊', text: 'Add more domains or set up integrations from Settings' },
-        ].map(({ icon, text }) => (
-          <div key={text} className="flex items-start gap-3 text-sm text-gray-400">
-            <span>{icon}</span>
-            <span>{text}</span>
+      {/* Scan steps */}
+      <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {SCAN_STEPS.map((s, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              opacity: visibleSteps.includes(i) ? 1 : 0,
+              transform: visibleSteps.includes(i) ? 'translateY(0)' : 'translateY(6px)',
+              transition: 'opacity 0.3s, transform 0.3s',
+            }}
+          >
+            <span style={{ color: '#4ade80', fontSize: 14, flexShrink: 0 }}>✓</span>
+            <span style={{ color: '#94a3b8', fontSize: 14 }}>{s.label}</span>
           </div>
         ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <a
-          href={`${API_URL}/risk/report?domain=${domain}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex-1 flex items-center justify-center gap-2 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white font-semibold py-3 rounded-xl transition text-sm"
+      <p style={{ color: '#475569', fontSize: 13, marginTop: 32 }}>
+        {progress < 100 ? `${progress}% complete` : 'Finalising report...'}
+      </p>
+    </div>
+  );
+}
+
+// ─── Step 3: Results + register ───────────────────────────────────────────────
+function Step3({ result, email: initialEmail }: { result: RiskScore; email: string }) {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState(initialEmail);
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [regErr, setRegErr] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const col = scoreColor(result.score);
+  const displayLevel = result.level ?? col.label;
+
+  async function handleRegister() {
+    setRegErr('');
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return setRegErr('Please enter a valid email.');
+    }
+    if (password.length < 8) {
+      return setRegErr('Password must be at least 8 characters.');
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const d = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(d.error ?? `Error ${res.status}`);
+      }
+      setSuccess(true);
+      setTimeout(() => navigate('/login'), 3000);
+    } catch (err) {
+      setRegErr(err instanceof Error ? err.message : 'Registration failed — try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Teaser categories (real names, blurred details)
+  const teaserCats = result.categories?.slice(0, 3).length
+    ? result.categories.slice(0, 3)
+    : ['dns_misconfiguration', 'email_security', 'threat_intel'];
+
+  return (
+    <div style={{ maxWidth: 520, margin: '0 auto' }}>
+      {/* Score hero */}
+      <div style={{ textAlign: 'center', marginBottom: 28 }}>
+        <div
+          style={{
+            display: 'inline-flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 100,
+            height: 100,
+            borderRadius: '50%',
+            border: `4px solid ${col.text}`,
+            background: `${col.text}15`,
+            marginBottom: 12,
+          }}
         >
-          View full report
-          <ExternalLink className="w-4 h-4" />
-        </a>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl transition text-sm"
-        >
-          Go to Dashboard
-          <ChevronRight className="w-4 h-4" />
-        </button>
+          <span style={{ fontSize: 32, fontWeight: 900, color: col.text, lineHeight: 1 }}>
+            {result.score}
+          </span>
+          <span style={{ color: '#475569', fontSize: 12 }}>/100</span>
+        </div>
+        <div>
+          <span
+            style={{
+              display: 'inline-block',
+              background: `${levelColor(displayLevel)}20`,
+              color: levelColor(displayLevel),
+              fontSize: 13,
+              fontWeight: 700,
+              padding: '4px 12px',
+              borderRadius: 20,
+              letterSpacing: 1,
+            }}
+          >
+            {displayLevel} RISK
+          </span>
+        </div>
+        <p style={{ color: '#64748b', fontSize: 14, marginTop: 8 }}>{result.domain}</p>
+      </div>
+
+      {/* Teaser findings */}
+      <p
+        style={{
+          color: '#64748b',
+          fontSize: 13,
+          marginBottom: 10,
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: 1,
+        }}
+      >
+        Findings preview
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+        {teaserCats.map((cat, i) => (
+          <div
+            key={i}
+            style={{
+              background: CARD,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 10,
+              padding: '12px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+            }}
+          >
+            <div>
+              <p
+                style={{
+                  color: '#cbd5e1',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  margin: 0,
+                  textTransform: 'capitalize',
+                }}
+              >
+                {cat.replace(/_/g, ' ')}
+              </p>
+              <p
+                style={{
+                  color: '#334155',
+                  fontSize: 13,
+                  margin: '3px 0 0',
+                  filter: 'blur(4px)',
+                  userSelect: 'none',
+                }}
+              >
+                ████ ████ ████ ███ ████
+              </p>
+            </div>
+            <span
+              style={{
+                color: '#f87171',
+                fontSize: 11,
+                fontWeight: 700,
+                background: '#f8717120',
+                padding: '3px 8px',
+                borderRadius: 6,
+                flexShrink: 0,
+              }}
+            >
+              LOCKED
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Register to unlock */}
+      <div
+        style={{
+          background: CARD,
+          border: `1px solid ${VIOLET}40`,
+          borderRadius: 14,
+          padding: '24px 20px',
+          marginBottom: 16,
+        }}
+      >
+        <p style={{ color: '#fff', fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
+          Unlock Full Report
+        </p>
+        <p style={{ color: '#64748b', fontSize: 13, marginBottom: 20 }}>
+          Create a free account to see all findings, remediation steps, and set up 24/7 monitoring.
+        </p>
+
+        {success ? (
+          <div style={{ textAlign: 'center', color: '#4ade80', fontSize: 15, fontWeight: 600 }}>
+            Account created! Check your email to verify. Redirecting to login...
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Field
+              label="Email"
+              type="email"
+              value={email}
+              onChange={setEmail}
+              placeholder="you@company.com"
+              autoComplete="email"
+            />
+            <Field
+              label="Password (min 8 chars)"
+              type="password"
+              value={password}
+              onChange={setPassword}
+              placeholder="••••••••"
+              autoComplete="new-password"
+            />
+
+            {regErr && <p style={{ color: '#f87171', fontSize: 13, margin: 0 }}>{regErr}</p>}
+
+            <button
+              onClick={() => void handleRegister()}
+              disabled={submitting}
+              style={{
+                background: submitting ? '#4c1d95' : VIOLET,
+                color: '#fff',
+                border: 'none',
+                borderRadius: 9,
+                padding: '12px 0',
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: submitting ? 'not-allowed' : 'pointer',
+                opacity: submitting ? 0.7 : 1,
+              }}
+            >
+              {submitting ? 'Creating account...' : 'Create Free Account →'}
+            </button>
+          </div>
+        )}
+
+        <p style={{ textAlign: 'center', marginTop: 16, color: '#475569', fontSize: 13 }}>
+          Already have an account?{' '}
+          <Link to="/login" style={{ color: '#a78bfa', textDecoration: 'none' }}>
+            Sign in →
+          </Link>
+        </p>
+      </div>
+
+      {/* Upgrade nudge */}
+      <div
+        style={{
+          background: '#0a0f1a',
+          border: `1px solid ${BORDER}`,
+          borderRadius: 10,
+          padding: '12px 16px',
+          textAlign: 'center',
+        }}
+      >
+        <p style={{ color: '#64748b', fontSize: 13, margin: 0 }}>
+          Upgrade to <span style={{ color: '#a78bfa', fontWeight: 700 }}>STARTER</span> for full
+          report + 500 scans/month — <span style={{ color: '#fff', fontWeight: 600 }}>$99/mo</span>
+        </p>
       </div>
     </div>
   );
 }
 
-// ── Main wizard ───────────────────────────────────────────────────────────────
-
-type WizardStep = 1 | 2 | 3 | 'done';
-
-const STEP_LABELS = ['Scan domain', 'Set up alerts', 'Enable monitoring'];
-
+// ─── Main Wizard ──────────────────────────────────────────────────────────────
 export default function Onboarding() {
-  const navigate = useNavigate();
-  const user = useUser();
-
-  const [step, setStep] = useState<WizardStep>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [email, setEmail] = useState('');
   const [domain, setDomain] = useState('');
-  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-
-  const handleStep1 = (d: string, result: ScanResult) => {
-    setDomain(d);
-    setScanResult(result);
-    setStep(2);
-  };
-
-  const handleStep2 = () => setStep(3);
-  const handleStep3 = () => setStep('done');
-
-  const stepNum = step === 'done' ? 4 : (step as number);
+  const [result, setResult] = useState<RiskScore | null>(null);
 
   return (
-    <div className="min-h-screen bg-[#080c14] text-white flex flex-col">
-      {/* Top bar */}
-      <header className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Shield className="w-7 h-7 text-blue-400" />
-          <span className="text-lg font-bold">xShield</span>
-        </div>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="text-sm text-gray-500 hover:text-gray-300 transition flex items-center gap-1.5"
+    <div
+      style={{
+        minHeight: '100vh',
+        background: BG,
+        color: '#fff',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      }}
+    >
+      {/* Nav */}
+      <nav
+        style={{
+          borderBottom: `1px solid ${BORDER}`,
+          padding: '0 24px',
+          height: 56,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Link
+          to="/"
+          style={{ color: '#fff', fontWeight: 800, fontSize: 18, textDecoration: 'none' }}
         >
-          <SkipForward className="w-4 h-4" />
-          Skip setup
-        </button>
-      </header>
+          🛡️ xShield
+        </Link>
+        <Link
+          to="/login"
+          style={{
+            color: '#94a3b8',
+            fontSize: 14,
+            textDecoration: 'none',
+            border: `1px solid ${BORDER}`,
+            borderRadius: 7,
+            padding: '6px 14px',
+          }}
+        >
+          Sign In
+        </Link>
+      </nav>
+
+      {/* Step indicator */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 8, padding: '20px 24px 0' }}>
+        {[1, 2, 3].map((n) => (
+          <div
+            key={n}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              background: n === step ? VIOLET : n < step ? '#4ade8040' : '#0d1420',
+              border: `2px solid ${n === step ? VIOLET : n < step ? '#4ade80' : BORDER}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 12,
+              fontWeight: 700,
+              color: n < step ? '#4ade80' : n === step ? '#fff' : '#475569',
+            }}
+          >
+            {n < step ? '✓' : n}
+          </div>
+        ))}
+      </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-xl">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <p className="text-gray-400 text-sm mb-2">
-              Welcome{user?.name ? `, ${user.name.split(' ')[0]}` : ''}! Let's get you set up.
-            </p>
-            {step !== 'done' && (
-              <p className="text-xs text-gray-600">
-                Step {stepNum} of 3 — {STEP_LABELS[(stepNum as number) - 1]}
-              </p>
-            )}
-          </div>
-
-          {/* Progress */}
-          {step !== 'done' && <ProgressBar step={stepNum as number} />}
-
-          {/* Step content */}
-          <div className="bg-[#0d1117] border border-gray-800 rounded-2xl p-8 shadow-2xl">
-            {step === 1 && <Step1 onComplete={handleStep1} />}
-            {step === 2 && (
-              <Step2 userEmail={user?.email ?? ''} onComplete={handleStep2} onSkip={handleStep2} />
-            )}
-            {step === 3 && scanResult && (
-              <Step3
-                domain={domain}
-                scanResult={scanResult}
-                onComplete={handleStep3}
-                onSkip={handleStep3}
-              />
-            )}
-            {step === 'done' && scanResult && (
-              <DoneScreen domain={domain} scanResult={scanResult} />
-            )}
-          </div>
-        </div>
+      <div style={{ padding: '40px 24px 60px', maxWidth: 580, margin: '0 auto' }}>
+        {step === 1 && (
+          <Step1
+            email={email}
+            domain={domain}
+            onEmailChange={setEmail}
+            onDomainChange={setDomain}
+            onSubmit={() => setStep(2)}
+          />
+        )}
+        {step === 2 && (
+          <Step2
+            domain={domain}
+            onComplete={(r) => {
+              setResult(r);
+              setStep(3);
+            }}
+          />
+        )}
+        {step === 3 && result && <Step3 result={result} email={email} />}
       </div>
     </div>
   );

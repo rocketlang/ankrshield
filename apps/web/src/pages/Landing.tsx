@@ -88,7 +88,7 @@ function Hero() {
           }}
         >
           <Link
-            to="/register"
+            to="/onboarding"
             style={{
               background: VIOLET,
               color: '#fff',
