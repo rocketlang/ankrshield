@@ -30,5 +30,17 @@ export {
 } from './analyzers/permission-analyzer.js';
 export type { HighRiskCombo, PermissionAnalysisResult } from './analyzers/permission-analyzer.js';
 
+// ── Consent validator ──────────────────────────────────────────────────────
+export {
+  validateConsent,
+  detectCategory,
+  APP_PURPOSE_PERMISSIONS,
+} from './analyzers/consent-validator.js';
+export type {
+  AppCategory,
+  ConsentValidation,
+  ExcessPermission,
+} from './analyzers/consent-validator.js';
+
 // ── Scanner ────────────────────────────────────────────────────────────────
 export { AndroidMonitor } from './scanner.js';
