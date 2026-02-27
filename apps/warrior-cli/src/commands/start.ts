@@ -51,7 +51,8 @@ export async function startServer(opts: { port: string; db?: string; banner: boo
   // Try to start the actual API server if it exists in the same installation
   // Otherwise provide setup instructions
   try {
-    const { createServer } = await import('@xshieldai/api');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { createServer } = await (Function('m', 'return import(m)') as any)('@xshieldai/api');
     const server = await createServer({ port, dbUrl });
     await server.listen({ port, host: '0.0.0.0' });
     spinner.succeed(chalk.green(`xShield warrior running on http://0.0.0.0:${port}`));

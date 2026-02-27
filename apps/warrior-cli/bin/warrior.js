@@ -1,3 +1,6 @@
 #!/usr/bin/env node
 /* eslint-env node */
-import('../src/index.js').catch(console.error); // eslint-disable-line no-console
+import('../dist/index.js').catch((e) => {
+  process.stderr.write(String(e) + '\n');
+  process.exit(1);
+}); // eslint-disable-line no-undef
