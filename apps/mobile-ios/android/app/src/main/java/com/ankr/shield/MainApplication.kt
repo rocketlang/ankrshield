@@ -31,6 +31,7 @@ class MainApplication : Application(), ReactApplication {
             packages.add(AppScannerPackage())
             packages.add(WhatsAppGuardPackage())
             packages.add(WidgetPackage())
+            packages.add(MdmStoragePackage())
             return packages
           }
 

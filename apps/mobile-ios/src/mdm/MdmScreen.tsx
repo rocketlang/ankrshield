@@ -1,12 +1,11 @@
 /**
  * MdmScreen — A7: Corporate Shield / MDM Lite
  *
- * Shows enrollment status.  If not enrolled, prompts with a text-input
- * fallback for QR JSON (no camera dependency required — checked at runtime).
+ * Shows enrollment status. If not enrolled, prompts with a text-input
+ * fallback for QR JSON (no camera dependency required).
  * If enrolled, shows org, policy rules, compliance badge, and management actions.
  *
- * Dark theme follows AndroidMonitorScreen patterns:
- *   bg #0a0a0a | card #111 | border #1e293b | primary #7c3aed | accent #06b6d4
+ * Dark theme: bg #0a0a0a | card #111 | border #1e293b | primary #7c3aed | accent #06b6d4
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import {
@@ -26,32 +25,21 @@ import type { ComplianceResult } from './policy-engine';
 import { MdmStorage } from './storage';
 import type { DeviceEnrollment, MdmRule, MdmPolicy } from './types';
 
-// ---------------------------------------------------------------------------
-// Compliance status helpers
-// ---------------------------------------------------------------------------
-
 const STATUS_COLOR: Record<string, string> = {
   compliant: '#22c55e',
   partial: '#eab308',
   non_compliant: '#ef4444',
 };
-
 const STATUS_BG: Record<string, string> = {
   compliant: '#052e16',
   partial: '#422006',
   non_compliant: '#450a0a',
 };
-
 const STATUS_LABEL: Record<string, string> = {
   compliant: 'Compliant',
   partial: 'Partially Compliant',
   non_compliant: 'Non-Compliant',
 };
-
-// ---------------------------------------------------------------------------
-// Rule type display labels
-// ---------------------------------------------------------------------------
-
 const RULE_TYPE_LABEL: Record<string, string> = {
   require_screen_lock: 'Screen Lock Required',
   min_pin_length: 'Minimum PIN Length',
@@ -61,16 +49,11 @@ const RULE_TYPE_LABEL: Record<string, string> = {
   block_sideloading: 'Block Sideloading',
   max_risk_score_allowed: 'Max Risk Score',
 };
-
 const SEVERITY_COLOR: Record<string, string> = {
   block: '#ef4444',
   warn: '#eab308',
   monitor: '#06b6d4',
 };
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
 
 function ComplianceBadge({ status }: { status: string }) {
   const color = STATUS_COLOR[status] ?? '#94a3b8';
@@ -105,47 +88,30 @@ function RuleRow({ rule }: { rule: MdmRule }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main screen
-// ---------------------------------------------------------------------------
-
 export function MdmScreen({ navigation: _navigation }: { navigation?: unknown }) {
   const [loading, setLoading] = useState(true);
   const [enrollment, setEnrollment] = useState<DeviceEnrollment | null>(null);
   const [compliance, setCompliance] = useState<ComplianceResult | null>(null);
   const [policy, setPolicy] = useState<MdmPolicy | null>(null);
-
-  // Enrollment QR fallback — text input
   const [qrText, setQrText] = useState('');
   const [enrolling, setEnrolling] = useState(false);
-
-  // Sync state
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
 
-  // ---------------------------------------------------------------------------
-  // Load data on mount
-  // ---------------------------------------------------------------------------
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const e = await mdmPolicyEngine.getEnrollment();
       setEnrollment(e);
-
       if (e) {
         const c = await mdmPolicyEngine.checkCompliance();
         setCompliance(c);
-
-        // Load raw policy for rules display
-        // eslint-disable-next-line import/no-unresolved
         const raw = await MdmStorage.getItem('mdm_policy');
         if (raw) setPolicy(JSON.parse(raw) as MdmPolicy);
       }
     } catch (err: unknown) {
-      Alert.alert(
-        'Error',
-        (err instanceof Error ? err.message : String(err)) ?? 'Failed to load MDM data.'
-      );
+      const msg = err instanceof Error ? err.message : String(err);
+      Alert.alert('Error', msg);
     } finally {
       setLoading(false);
     }
@@ -155,9 +121,6 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
     loadData();
   }, [loadData]);
 
-  // ---------------------------------------------------------------------------
-  // Enroll handler
-  // ---------------------------------------------------------------------------
   const handleEnroll = useCallback(async () => {
     const input = qrText.trim();
     if (!input) {
@@ -171,52 +134,39 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
       setEnrollment(e);
       const c = await mdmPolicyEngine.checkCompliance();
       setCompliance(c);
-      // eslint-disable-next-line import/no-unresolved
       const raw = await MdmStorage.getItem('mdm_policy');
       if (raw) setPolicy(JSON.parse(raw) as MdmPolicy);
       Alert.alert('Enrolled', `Successfully enrolled with ${e.orgName}.`);
     } catch (err: unknown) {
-      Alert.alert(
-        'Enrollment Failed',
-        (err instanceof Error ? err.message : String(err)) ?? 'Could not enroll device.'
-      );
+      const msg = err instanceof Error ? err.message : String(err);
+      Alert.alert('Enrollment Failed', msg);
     } finally {
       setEnrolling(false);
     }
   }, [qrText]);
 
-  // ---------------------------------------------------------------------------
-  // Sync blocklist handler
-  // ---------------------------------------------------------------------------
   const handleSync = useCallback(async () => {
-    if (!policy?.apiKey) {
+    const apiKey = policy?.apiKey;
+    if (!apiKey) {
       Alert.alert('No API Key', 'This policy does not include an xShield API key for sync.');
       return;
     }
     setSyncing(true);
     setSyncMsg('');
     try {
-      const domains = await mdmPolicyEngine.syncBlocklist(policy.apiKey);
+      const domains = await mdmPolicyEngine.syncBlocklist(apiKey);
       setSyncMsg(`Synced ${domains.length} blocked domains.`);
-      // Refresh compliance after sync
       const c = await mdmPolicyEngine.checkCompliance();
       setCompliance(c);
-      if (enrollment) {
-        setEnrollment({ ...enrollment, lastChecked: new Date().toISOString() });
-      }
+      if (enrollment) setEnrollment({ ...enrollment, lastChecked: new Date().toISOString() });
     } catch (err: unknown) {
-      Alert.alert(
-        'Sync Failed',
-        (err instanceof Error ? err.message : String(err)) ?? 'Could not sync blocklist.'
-      );
+      const msg = err instanceof Error ? err.message : String(err);
+      Alert.alert('Sync Failed', msg);
     } finally {
       setSyncing(false);
     }
   }, [policy, enrollment]);
 
-  // ---------------------------------------------------------------------------
-  // Unenroll handler
-  // ---------------------------------------------------------------------------
   const handleUnenroll = useCallback(() => {
     Alert.alert('Unenroll Device', 'This will remove all corporate security policies. Continue?', [
       { text: 'Cancel', style: 'cancel' },
@@ -231,19 +181,13 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
             setPolicy(null);
             setSyncMsg('');
           } catch (err: unknown) {
-            Alert.alert(
-              'Error',
-              (err instanceof Error ? err.message : String(err)) ?? 'Unenrollment failed.'
-            );
+            const msg = err instanceof Error ? err.message : String(err);
+            Alert.alert('Error', msg);
           }
         },
       },
     ]);
   }, []);
-
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
 
   if (loading) {
     return (
@@ -256,19 +200,13 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
 
   return (
     <View style={styles.root}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Corporate Shield</Text>
         <Text style={styles.headerSub}>Device Management (MDM Lite)</Text>
       </View>
-
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        {enrollment ? (
-          // ----------------------------------------------------------------
-          // ENROLLED VIEW
-          // ----------------------------------------------------------------
+        {enrollment != null ? (
           <>
-            {/* Enrollment card */}
             <View style={styles.card}>
               <View style={styles.enrolledRow}>
                 <View style={styles.enrolledDot} />
@@ -276,13 +214,15 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
               </View>
               <Text style={styles.orgName}>{enrollment.orgName}</Text>
               <Text style={styles.metaLine}>
-                Policy: <Text style={styles.metaValue}>{enrollment.policyId}</Text>
+                {'Policy: '}
+                <Text style={styles.metaValue}>{enrollment.policyId}</Text>
               </Text>
               <Text style={styles.metaLine}>
-                Device ID: <Text style={styles.metaValue}>{enrollment.deviceId.slice(0, 18)}…</Text>
+                {'Device ID: '}
+                <Text style={styles.metaValue}>{`${enrollment.deviceId.slice(0, 18)}...`}</Text>
               </Text>
               <Text style={styles.metaLine}>
-                Enrolled:{' '}
+                {'Enrolled: '}
                 <Text style={styles.metaValue}>
                   {new Date(enrollment.enrolledAt).toLocaleDateString('en-IN', {
                     day: 'numeric',
@@ -292,7 +232,7 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
                 </Text>
               </Text>
               <Text style={styles.metaLine}>
-                Last Checked:{' '}
+                {'Last Checked: '}
                 <Text style={styles.metaValue}>
                   {new Date(enrollment.lastChecked).toLocaleTimeString('en-IN', {
                     hour: '2-digit',
@@ -301,31 +241,27 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
                 </Text>
               </Text>
             </View>
-
-            {/* Compliance status */}
-            {compliance && (
+            {compliance != null && (
               <View style={styles.card}>
                 <Text style={styles.sectionTitle}>COMPLIANCE STATUS</Text>
                 <ComplianceBadge status={compliance.status} />
-
                 {compliance.violations.length > 0 && (
                   <View style={styles.violationsBox}>
                     <Text style={styles.violationsTitle}>Violations</Text>
                     {compliance.violations.map((v, i) => (
                       <View key={i} style={styles.itemRow}>
-                        <Text style={styles.bulletRed}>✗</Text>
+                        <Text style={styles.bulletRed}>{'\u2717'}</Text>
                         <Text style={styles.itemText}>{v}</Text>
                       </View>
                     ))}
                   </View>
                 )}
-
                 {compliance.recommendations.length > 0 && (
                   <View style={styles.recsBox}>
                     <Text style={styles.recsTitle}>Recommendations</Text>
                     {compliance.recommendations.map((r, i) => (
                       <View key={i} style={styles.itemRow}>
-                        <Text style={styles.bulletYellow}>→</Text>
+                        <Text style={styles.bulletYellow}>{'\u2192'}</Text>
                         <Text style={styles.itemText}>{r}</Text>
                       </View>
                     ))}
@@ -333,18 +269,16 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
                 )}
               </View>
             )}
-
-            {/* Policy rules */}
-            {policy && policy.rules && policy.rules.length > 0 && (
+            {policy != null && policy.rules.length > 0 && (
               <View style={styles.card}>
-                <Text style={styles.sectionTitle}>POLICY RULES — v{policy.version ?? 1}</Text>
+                <Text
+                  style={styles.sectionTitle}
+                >{`POLICY RULES \u2014 v${policy.version ?? 1}`}</Text>
                 {policy.rules.map((rule: MdmRule) => (
                   <RuleRow key={rule.ruleId} rule={rule} />
                 ))}
               </View>
             )}
-
-            {/* Actions */}
             <View style={styles.actionsCard}>
               <TouchableOpacity
                 style={[styles.actionBtn, styles.syncBtn, syncing && styles.btnDisabled]}
@@ -357,8 +291,7 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
                   <Text style={styles.syncBtnText}>Sync Security Policy</Text>
                 )}
               </TouchableOpacity>
-              {syncMsg ? <Text style={styles.syncMsg}>{syncMsg}</Text> : null}
-
+              {syncMsg.length > 0 ? <Text style={styles.syncMsg}>{syncMsg}</Text> : null}
               <TouchableOpacity
                 style={[styles.actionBtn, styles.unenrollBtn]}
                 onPress={handleUnenroll}
@@ -368,30 +301,23 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
             </View>
           </>
         ) : (
-          // ----------------------------------------------------------------
-          // NOT ENROLLED VIEW
-          // ----------------------------------------------------------------
           <>
             <View style={styles.notEnrolledCard}>
-              <Text style={styles.shieldIcon}>🛡️</Text>
               <Text style={styles.notEnrolledTitle}>Not Enrolled</Text>
               <Text style={styles.notEnrolledSub}>
-                This device is not enrolled in any organisation's security policy.
+                This device is not enrolled in an organisation security policy.
               </Text>
             </View>
-
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>ENROLL DEVICE</Text>
               <Text style={styles.enrollInstructions}>
-                Ask your IT administrator for the xShield enrollment QR code. Scan it with your
-                camera, then paste the JSON content below.
+                Ask your IT administrator for the xShield enrollment QR code. Paste the JSON below.
               </Text>
-
               <TextInput
                 style={styles.qrInput}
                 value={qrText}
                 onChangeText={setQrText}
-                placeholder={'Paste enrollment JSON here…'}
+                placeholder="Paste enrollment JSON here..."
                 placeholderTextColor="#475569"
                 multiline
                 numberOfLines={5}
@@ -399,7 +325,6 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-
               <TouchableOpacity
                 style={[styles.actionBtn, styles.enrollBtn, enrolling && styles.btnDisabled]}
                 onPress={handleEnroll}
@@ -412,36 +337,24 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
                 )}
               </TouchableOpacity>
             </View>
-
             <View style={styles.infoCard}>
               <Text style={styles.infoTitle}>WHAT IS CORPORATE SHIELD?</Text>
               <Text style={styles.infoText}>
-                Corporate Shield lets your IT team deploy security policies to your device —
-                blocking malicious domains, enforcing screen locks, and syncing threat intelligence
-                from xShield's IOC feed.
-                {'\n\n'}
-                No personal data is shared with your organisation.
+                Corporate Shield lets your IT team deploy security policies: blocking malicious
+                domains, enforcing screen locks, and syncing threat intelligence from the xShield
+                IOC feed. No personal data is shared with your organisation.
               </Text>
             </View>
           </>
         )}
-
-        {/* Bottom spacer */}
-        <View style={{ height: 40 }} />
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </View>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#0a0a0a',
-  },
+  root: { flex: 1, backgroundColor: '#0a0a0a' },
   centered: {
     flex: 1,
     backgroundColor: '#0a0a0a',
@@ -449,12 +362,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  loadingText: {
-    color: '#64748b',
-    fontSize: 14,
-  },
-
-  // Header
+  loadingText: { color: '#64748b', fontSize: 14 },
   header: {
     paddingTop: Platform.OS === 'android' ? 48 : 56,
     paddingBottom: 16,
@@ -462,23 +370,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#111',
   },
-  headerTitle: {
-    color: '#f1f5f9',
-    fontSize: 22,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  headerSub: {
-    color: '#475569',
-    fontSize: 13,
-    marginTop: 2,
-  },
-
-  // Scroll
+  headerTitle: { color: '#f1f5f9', fontSize: 22, fontWeight: '700', letterSpacing: -0.3 },
+  headerSub: { color: '#475569', fontSize: 13, marginTop: 2 },
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 12 },
-
-  // Cards
   card: {
     backgroundColor: '#111',
     borderRadius: 14,
@@ -495,43 +390,12 @@ const styles = StyleSheet.create({
     borderColor: '#1e293b',
     gap: 10,
   },
-
-  // Enrolled info
-  enrolledRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  enrolledDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#22c55e',
-  },
-  enrolledLabel: {
-    color: '#22c55e',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
-  orgName: {
-    color: '#f1f5f9',
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-  metaLine: {
-    color: '#475569',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  metaValue: {
-    color: '#94a3b8',
-    fontFamily: 'monospace',
-  },
-
-  // Compliance badge
+  enrolledRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  enrolledDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' },
+  enrolledLabel: { color: '#22c55e', fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  orgName: { color: '#f1f5f9', fontSize: 20, fontWeight: '700', marginBottom: 10 },
+  metaLine: { color: '#475569', fontSize: 12, marginBottom: 4 },
+  metaValue: { color: '#94a3b8', fontFamily: 'monospace' },
   badge: {
     alignSelf: 'flex-start',
     borderRadius: 6,
@@ -540,13 +404,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginBottom: 14,
   },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-
-  // Violations / Recommendations
+  badgeText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.8 },
   sectionTitle: {
     color: '#475569',
     fontSize: 11,
@@ -586,17 +444,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginBottom: 8,
   },
-  itemRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 6,
-    alignItems: 'flex-start',
-  },
+  itemRow: { flexDirection: 'row', gap: 8, marginBottom: 6, alignItems: 'flex-start' },
   bulletRed: { color: '#ef4444', fontSize: 13, width: 14, marginTop: 1 },
   bulletYellow: { color: '#eab308', fontSize: 13, width: 14, marginTop: 1 },
   itemText: { color: '#cbd5e1', fontSize: 12, flex: 1, lineHeight: 18 },
-
-  // Rule rows
   ruleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -608,44 +459,20 @@ const styles = StyleSheet.create({
   ruleLeft: { flex: 1, marginRight: 10 },
   ruleLabel: { color: '#e2e8f0', fontSize: 13, fontWeight: '500' },
   ruleValue: { color: '#64748b', fontSize: 11, marginTop: 2, fontFamily: 'monospace' },
-
-  // Severity pill
-  severityPill: {
-    borderRadius: 4,
-    borderWidth: 1,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
+  severityPill: { borderRadius: 4, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 3 },
   severityText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.4 },
-
-  // Action buttons
   actionBtn: {
     borderRadius: 10,
     paddingVertical: 13,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  syncBtn: {
-    backgroundColor: '#0c2a2e',
-    borderWidth: 1,
-    borderColor: '#06b6d4',
-  },
+  syncBtn: { backgroundColor: '#0c2a2e', borderWidth: 1, borderColor: '#06b6d4' },
   syncBtnText: { color: '#06b6d4', fontSize: 14, fontWeight: '700' },
-  syncMsg: {
-    color: '#4ade80',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: -4,
-  },
-  unenrollBtn: {
-    backgroundColor: '#1a0505',
-    borderWidth: 1,
-    borderColor: '#7f1d1d',
-  },
+  syncMsg: { color: '#4ade80', fontSize: 12, textAlign: 'center', marginTop: -4 },
+  unenrollBtn: { backgroundColor: '#1a0505', borderWidth: 1, borderColor: '#7f1d1d' },
   unenrollBtnText: { color: '#f87171', fontSize: 14, fontWeight: '700' },
   btnDisabled: { opacity: 0.5 },
-
-  // Not enrolled
   notEnrolledCard: {
     backgroundColor: '#0d0d1a',
     borderRadius: 14,
@@ -655,27 +482,9 @@ const styles = StyleSheet.create({
     borderColor: '#1e1b4b',
     marginBottom: 4,
   },
-  shieldIcon: { fontSize: 48, marginBottom: 10 },
-  notEnrolledTitle: {
-    color: '#a5b4fc',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  notEnrolledSub: {
-    color: '#475569',
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-
-  // Enroll form
-  enrollInstructions: {
-    color: '#64748b',
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 14,
-  },
+  notEnrolledTitle: { color: '#a5b4fc', fontSize: 18, fontWeight: '700', marginBottom: 6 },
+  notEnrolledSub: { color: '#475569', fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  enrollInstructions: { color: '#64748b', fontSize: 13, lineHeight: 20, marginBottom: 14 },
   qrInput: {
     backgroundColor: '#0a0f1e',
     borderRadius: 10,
@@ -688,14 +497,8 @@ const styles = StyleSheet.create({
     minHeight: 100,
     marginBottom: 12,
   },
-  enrollBtn: {
-    backgroundColor: '#4c1d95',
-    borderWidth: 1,
-    borderColor: '#7c3aed',
-  },
+  enrollBtn: { backgroundColor: '#4c1d95', borderWidth: 1, borderColor: '#7c3aed' },
   enrollBtnText: { color: '#c4b5fd', fontSize: 14, fontWeight: '700' },
-
-  // Info card
   infoCard: {
     backgroundColor: '#0a0f0a',
     borderRadius: 12,
@@ -711,9 +514,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 8,
   },
-  infoText: {
-    color: '#374151',
-    fontSize: 12,
-    lineHeight: 18,
-  },
+  infoText: { color: '#374151', fontSize: 12, lineHeight: 18 },
+  bottomSpacer: { height: 40 },
 });
