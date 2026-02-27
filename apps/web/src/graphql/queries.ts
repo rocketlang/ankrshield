@@ -304,6 +304,35 @@ export const WATCH_ALERTS_QUERY = gql`
       riskScore
       riskLevel
       triggeredAt
+      details
+      notified
+    }
+  }
+`;
+
+export const SCAN_HISTORY_QUERY = gql`
+  query ScanHistory($limit: Int, $domain: String) {
+    xshieldScanHistory(limit: $limit, domain: $domain) {
+      domain
+      riskScore
+      riskLevel
+      scannedAt
+      findingCount
+    }
+  }
+`;
+
+export const PLAYBOOK_QUERY = gql`
+  query Playbook($domain: String!) {
+    xshieldPlaybook(domain: $domain) {
+      domain
+      actions {
+        type
+        title
+        description
+        command
+        yaml
+      }
     }
   }
 `;

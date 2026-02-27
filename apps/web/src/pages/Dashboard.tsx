@@ -1,17 +1,18 @@
 /**
- * Dashboard Page — wired to real xShield GraphQL data
+ * Dashboard Page — xShield X4 enhanced dashboard
  *
  * Queries used:
- *   API_KEY_INFO_QUERY   → user info + quota
- *   XSHIELD_STATUS_QUERY → platform stats (totalScans, activeWatches, sources)
- *   WATCHES_QUERY        → watched domains list
- *   IOC_FEED_QUERY       → recent threat feed
+ *   API_KEY_INFO_QUERY    → user info + quota
+ *   XSHIELD_STATUS_QUERY  → platform stats (totalScans, activeWatches, sources)
+ *   WATCHES_QUERY         → watched domains list
+ *   IOC_FEED_QUERY        → recent threat feed
+ *   SCAN_HISTORY_QUERY    → 30-day risk posture history
  *
  * Auth: X-API-Key from localStorage('ankrshield_api_key') sent via Apollo link.
  * If no key is stored, an inline setup card is shown.
  */
 
-import { useQuery } from '@apollo/client';
+import { useQuery, useMutation } from '@apollo/client';
 import {
   Shield,
   Activity,
@@ -23,11 +24,21 @@ import {
   CheckCircle2,
   XCircle,
   RefreshCw,
+  Plus,
+  Pause,
+  Play,
+  Trash2,
+  Bell,
+  X,
+  Cpu,
 } from 'lucide-react';
 import { useState, useCallback } from 'react';
 
 import CertStreamWidget from '../components/CertStreamWidget';
 import DomainScanWidget from '../components/DomainScanWidget';
+import MitreHeatmap from '../components/MitreHeatmap';
+import RiskGauge from '../components/RiskGauge';
+import RiskTrendChart from '../components/RiskTrendChart';
 import ContentWrapper from '../components/layout/ContentWrapper';
 import Alert from '../components/ui/Alert';
 import Badge from '../components/ui/Badge';
@@ -37,14 +48,22 @@ import {
   XSHIELD_STATUS_QUERY,
   WATCHES_QUERY,
   IOC_FEED_QUERY,
+  SCAN_HISTORY_QUERY,
 } from '../graphql/queries';
+import {
+  ADD_WATCH_MUTATION,
+  PAUSE_WATCH_MUTATION,
+  RESUME_WATCH_MUTATION,
+  REMOVE_WATCH_MUTATION,
+} from '../graphql/mutations';
 
-// ─── Tier badge colours ────────────────────────────────────────────────────────
+// ─── Tier badge colours ───────────────────────────────────────────────────────
 function TierBadge({ tier }: { tier: string }) {
   const styles: Record<string, string> = {
-    FREE: 'bg-gray-700/60 text-gray-300 border-gray-600/40',
-    STARTER: 'bg-blue-900/50 text-blue-300 border-blue-500/30',
-    PRO: 'bg-violet-900/50 text-violet-300 border-violet-500/30',
+    FREE:       'bg-gray-700/60 text-gray-300 border-gray-600/40',
+    STARTER:    'bg-blue-900/50 text-blue-300 border-blue-500/30',
+    PRO:        'bg-violet-900/50 text-violet-300 border-violet-500/30',
+    ENTERPRISE: 'bg-amber-900/50 text-amber-300 border-amber-500/30',
   };
   const cls = styles[(tier ?? '').toUpperCase()] ?? styles.STARTER;
   return (
@@ -56,14 +75,14 @@ function TierBadge({ tier }: { tier: string }) {
   );
 }
 
-// ─── Risk level helpers ────────────────────────────────────────────────────────
+// ─── Risk level helpers ───────────────────────────────────────────────────────
 function getRiskLevelStyle(level: string) {
   const l = (level || '').toUpperCase();
   if (l === 'LOW' || l === 'MINIMAL')
     return 'bg-emerald-900/40 text-emerald-300 border-emerald-500/30';
   if (l === 'MODERATE') return 'bg-yellow-900/40 text-yellow-300 border-yellow-500/30';
   if (l === 'ELEVATED') return 'bg-orange-900/40 text-orange-300 border-orange-500/30';
-  if (l === 'HIGH') return 'bg-red-900/40 text-red-300 border-red-500/30';
+  if (l === 'HIGH')     return 'bg-red-900/40 text-red-300 border-red-500/30';
   if (l === 'CRITICAL') return 'bg-rose-900/40 text-rose-300 border-rose-500/30';
   return 'bg-gray-700/60 text-gray-400 border-gray-600/40';
 }
@@ -103,7 +122,7 @@ function SkeletonCard() {
   );
 }
 
-// ─── API Key Setup Card (Task 7) ───────────────────────────────────────────────
+// ─── API Key Setup Card ───────────────────────────────────────────────────────
 function ApiKeySetupCard({ onKeySet }: { onKeySet: () => void }) {
   const [inputKey, setInputKey] = useState('');
   const [testing, setTesting] = useState(false);
@@ -187,11 +206,121 @@ function ApiKeySetupCard({ onKeySet }: { onKeySet: () => void }) {
   );
 }
 
-// ─── Main Dashboard ────────────────────────────────────────────────────────────
+// ─── Add Watch inline form ────────────────────────────────────────────────────
+interface AddWatchFormProps {
+  onClose: () => void;
+  onAdded: () => void;
+}
+
+function AddWatchForm({ onClose, onAdded }: AddWatchFormProps) {
+  const [domain, setDomain] = useState('');
+  const [threshold, setThreshold] = useState(50);
+  const [webhookUrl, setWebhookUrl] = useState('');
+
+  const [addWatch, { loading, error }] = useMutation(ADD_WATCH_MUTATION, {
+    refetchQueries: [{ query: WATCHES_QUERY }],
+    onCompleted: () => {
+      onAdded();
+      onClose();
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const d = domain.trim();
+    if (!d) return;
+    void addWatch({
+      variables: {
+        domain: d,
+        alertThreshold: threshold,
+        webhookUrl: webhookUrl.trim() || undefined,
+      },
+    });
+  };
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      className="mt-4 p-4 bg-gray-800 rounded-xl border border-gray-700 space-y-3"
+    >
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-sm font-semibold text-white">Add Domain Watch</p>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-gray-500 hover:text-white transition"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Domain input */}
+      <div>
+        <label className="block text-xs text-gray-400 mb-1">Domain *</label>
+        <input
+          type="text"
+          value={domain}
+          onChange={(e) => setDomain(e.target.value)}
+          placeholder="example.com"
+          required
+          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 transition font-mono"
+        />
+      </div>
+
+      {/* Alert threshold slider */}
+      <div>
+        <label className="block text-xs text-gray-400 mb-1">
+          Alert threshold:{' '}
+          <span className="text-white font-semibold">{threshold}</span>
+        </label>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={threshold}
+          onChange={(e) => setThreshold(Number(e.target.value))}
+          className="w-full accent-violet-500"
+        />
+        <div className="flex justify-between text-[10px] text-gray-600 mt-0.5">
+          <span>0 (always)</span>
+          <span>100 (critical only)</span>
+        </div>
+      </div>
+
+      {/* Webhook URL (optional) */}
+      <div>
+        <label className="block text-xs text-gray-400 mb-1">Webhook URL (optional)</label>
+        <input
+          type="url"
+          value={webhookUrl}
+          onChange={(e) => setWebhookUrl(e.target.value)}
+          placeholder="https://hooks.slack.com/..."
+          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 transition"
+        />
+      </div>
+
+      {error && (
+        <p className="text-xs text-red-400">{error.message}</p>
+      )}
+
+      <button
+        type="submit"
+        disabled={loading || !domain.trim()}
+        className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold py-2 rounded-lg text-sm transition"
+      >
+        {loading ? 'Adding...' : 'Start Watching'}
+      </button>
+    </form>
+  );
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [apiKey, setApiKey] = useState<string | null>(() =>
     localStorage.getItem('ankrshield_api_key')
   );
+  const [showAddWatch, setShowAddWatch] = useState(false);
 
   const handleKeySet = useCallback(() => {
     setApiKey(localStorage.getItem('ankrshield_api_key'));
@@ -199,7 +328,7 @@ export default function Dashboard() {
 
   const skip = !apiKey;
 
-  // ── Queries ──────────────────────────────────────────────────────────────────
+  // ── Queries ───────────────────────────────────────────────────────────────
   const {
     data: keyData,
     loading: keyLoading,
@@ -208,14 +337,23 @@ export default function Dashboard() {
 
   const { data: statusData, loading: statusLoading } = useQuery(XSHIELD_STATUS_QUERY, { skip });
 
-  const { data: watchesData, loading: watchesLoading } = useQuery(WATCHES_QUERY, { skip });
+  const {
+    data: watchesData,
+    loading: watchesLoading,
+    refetch: refetchWatches,
+  } = useQuery(WATCHES_QUERY, { skip });
 
   const { data: iocData, loading: iocLoading } = useQuery(IOC_FEED_QUERY, {
     variables: { limit: 20 },
     skip,
   });
 
-  // ── Derived values ────────────────────────────────────────────────────────────
+  const { data: historyData } = useQuery(SCAN_HISTORY_QUERY, {
+    variables: { limit: 30 },
+    skip,
+  });
+
+  // ── Derived values ────────────────────────────────────────────────────────
   const keyInfo = keyData?.xshieldApiKeyInfo ?? null;
   const status = statusData?.xshieldStatus ?? null;
   const watches: Array<{
@@ -228,6 +366,20 @@ export default function Dashboard() {
   }> = watchesData?.xshieldWatches ?? [];
   const iocFeed: string[] = iocData?.xshieldIocFeed ?? [];
 
+  // Scan history — newest first from API, we reverse for the chart (oldest → newest)
+  const scanHistory: Array<{
+    domain: string;
+    riskScore: number;
+    riskLevel: string;
+    scannedAt: string;
+    findingCount: number;
+  }> = historyData?.xshieldScanHistory ?? [];
+  const latestScore = scanHistory[0]?.riskScore ?? 0;
+
+  const trendData = [...scanHistory]
+    .reverse()
+    .map((h) => ({ date: h.scannedAt, score: h.riskScore, domain: h.domain }));
+
   const quotaPercent =
     keyInfo && keyInfo.monthlyQuota > 0
       ? Math.min(100, Math.round((keyInfo.usedThisMonth / keyInfo.monthlyQuota) * 100))
@@ -239,7 +391,32 @@ export default function Dashboard() {
       ? `${apiKey.slice(0, 12)}••••••••`
       : null;
 
-  // ── Stats cards ───────────────────────────────────────────────────────────────
+  const tier = (keyInfo?.tier ?? 'FREE').toUpperCase();
+
+  // ── Watch mutations ───────────────────────────────────────────────────────
+  const [pauseWatch] = useMutation(PAUSE_WATCH_MUTATION, {
+    refetchQueries: [{ query: WATCHES_QUERY }],
+  });
+  const [resumeWatch] = useMutation(RESUME_WATCH_MUTATION, {
+    refetchQueries: [{ query: WATCHES_QUERY }],
+  });
+  const [removeWatch] = useMutation(REMOVE_WATCH_MUTATION, {
+    refetchQueries: [{ query: WATCHES_QUERY }],
+  });
+
+  const handlePause = (watchId: string) => {
+    void pauseWatch({ variables: { watchId } });
+  };
+  const handleResume = (watchId: string) => {
+    void resumeWatch({ variables: { watchId } });
+  };
+  const handleRemove = (watchId: string, domain: string) => {
+    if (window.confirm(`Remove watch for ${domain}? This cannot be undone.`)) {
+      void removeWatch({ variables: { watchId } });
+    }
+  };
+
+  // ── Stats cards ───────────────────────────────────────────────────────────
   const statsCards = [
     {
       label: 'Total Scans',
@@ -274,7 +451,8 @@ export default function Dashboard() {
   return (
     <ContentWrapper>
       <div className="space-y-8">
-        {/* Header */}
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-3xl font-bold mb-1">Dashboard</h1>
@@ -302,10 +480,10 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* API Key Setup — shown when no key is stored */}
+        {/* ── API Key Setup — shown when no key is stored ─────────────────── */}
         {!apiKey && <ApiKeySetupCard onKeySet={handleKeySet} />}
 
-        {/* API key error */}
+        {/* ── API key error ────────────────────────────────────────────────── */}
         {keyError && apiKey && (
           <Alert variant="error">
             <div className="flex items-center gap-2">
@@ -326,7 +504,39 @@ export default function Dashboard() {
           </Alert>
         )}
 
-        {/* Quota bar */}
+        {/* ── Risk Posture Section (X4) ─────────────────────────────────────── */}
+        {apiKey && (
+          <Card className="bg-gray-900">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Cpu className="w-5 h-5 text-violet-400" />
+                <h2 className="text-xl font-semibold">Risk Posture</h2>
+                {scanHistory.length > 0 && (
+                  <span className="ml-auto text-xs text-gray-500">
+                    {scanHistory.length} scan{scanHistory.length !== 1 ? 's' : ''} in history
+                  </span>
+                )}
+              </div>
+            </CardHeader>
+            <CardBody>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+                {/* Left: gauge */}
+                <div className="flex justify-center">
+                  <RiskGauge score={latestScore} label="Latest Scan Score" size={220} />
+                </div>
+                {/* Right: trend chart */}
+                <div>
+                  <p className="text-xs text-gray-500 mb-3 uppercase tracking-wide font-medium">
+                    30-day trend
+                  </p>
+                  <RiskTrendChart data={trendData} />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        )}
+
+        {/* ── Quota + Billing Card ──────────────────────────────────────────── */}
         {keyInfo && (
           <Card className="bg-gray-900">
             <CardBody>
@@ -357,11 +567,33 @@ export default function Dashboard() {
                 />
               </div>
               <p className="text-xs text-gray-500 mt-1">{quotaPercent}% used</p>
+
+              {/* Tier-specific CTA */}
+              {tier === 'FREE' ? (
+                <div className="mt-4 rounded-xl bg-violet-950/40 border border-violet-500/30 px-4 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <p className="text-sm text-violet-200 flex-1">
+                    You're on the <span className="font-bold">FREE</span> plan — 10 scans/month.
+                    Upgrade to <span className="font-bold">STARTER</span> for 500 scans, Domain
+                    Watch, and Playbooks.
+                  </p>
+                  <a
+                    href="/pricing"
+                    className="shrink-0 bg-violet-600 hover:bg-violet-500 text-white font-semibold text-sm px-4 py-2 rounded-lg transition whitespace-nowrap"
+                  >
+                    Upgrade — $99/mo
+                  </a>
+                </div>
+              ) : (
+                <div className="mt-3 flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs text-emerald-300 font-medium">Plan active</span>
+                </div>
+              )}
             </CardBody>
           </Card>
         )}
 
-        {/* Stats Grid */}
+        {/* ── Stats Grid ───────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {statsCards.map((stat) =>
             stat.value === null ? (
@@ -384,7 +616,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Domain Risk Scanner */}
+        {/* ── Domain Risk Scanner ──────────────────────────────────────────── */}
         <Card className="bg-gray-900">
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -401,61 +633,115 @@ export default function Dashboard() {
           </CardBody>
         </Card>
 
-        {/* Bottom grid: Watched Domains + Recent IOC Feed */}
+        {/* ── Bottom grid: Watched Domains + Recent IOC Feed ───────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Watched Domains */}
+
+          {/* Watched Domains — interactive */}
           <Card className="bg-gray-900">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Watched Domains</h2>
-                <Badge variant="info">{watches.length} active</Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="info">{watches.length} active</Badge>
+                  {apiKey && (
+                    <button
+                      onClick={() => setShowAddWatch((v) => !v)}
+                      title="Add domain to watch"
+                      className="flex items-center gap-1.5 text-xs bg-violet-700 hover:bg-violet-600 text-white px-3 py-1.5 rounded-lg transition font-medium"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Add Domain
+                    </button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardBody>
+              {/* Inline add-watch form */}
+              {showAddWatch && (
+                <AddWatchForm
+                  onClose={() => setShowAddWatch(false)}
+                  onAdded={() => void refetchWatches()}
+                />
+              )}
+
               {watchesLoading && watches.length === 0 ? (
-                <div className="space-y-3 animate-pulse">
+                <div className="space-y-3 animate-pulse mt-4">
                   {[...Array(3)].map((_, i) => (
                     <div key={i} className="h-12 bg-gray-800 rounded-lg" />
                   ))}
                 </div>
               ) : watches.length === 0 ? (
-                <div className="text-center py-6 text-gray-500 text-sm">
+                <div className="text-center py-6 text-gray-500 text-sm mt-2">
                   {apiKey ? (
                     <>
                       <Eye className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                      No domains watched yet.{' '}
-                      <a href="/onboarding" className="text-violet-400 hover:text-violet-300">
-                        Add one
-                      </a>
+                      No domains watched yet. Click "Add Domain" above to start.
                     </>
                   ) : (
                     'Connect an API key to see watches.'
                   )}
                 </div>
               ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-2.5 mt-2">
                   {watches.map((w) => (
                     <div
                       key={w.id}
-                      className="flex items-center justify-between p-3 bg-gray-800 rounded-lg gap-3"
+                      className="p-3 bg-gray-800 rounded-lg"
                     >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm text-white truncate">{w.domain}</p>
-                        <p className="text-xs text-gray-500">
-                          {w.lastScannedAt
-                            ? `Scanned ${new Date(w.lastScannedAt).toLocaleDateString()}`
-                            : 'Not yet scanned'}
-                        </p>
+                      {/* Top row: domain + score + status */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm text-white truncate">{w.domain}</p>
+                          <p className="text-xs text-gray-500">
+                            {w.lastScannedAt
+                              ? `Scanned ${new Date(w.lastScannedAt).toLocaleDateString()}`
+                              : 'Not yet scanned'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {w.lastRiskScore !== null && (
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-xs font-bold border ${getRiskLevelStyle(w.lastRiskLevel ?? '')}`}
+                            >
+                              {w.lastRiskScore}
+                            </span>
+                          )}
+                          <WatchStatusChip status={w.status} />
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {w.lastRiskScore !== null && (
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-xs font-bold border ${getRiskLevelStyle(w.lastRiskLevel ?? '')}`}
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {w.status.toUpperCase() === 'ACTIVE' ? (
+                          <button
+                            onClick={() => handlePause(w.id)}
+                            className="flex items-center gap-1 text-xs px-2.5 py-1 rounded bg-yellow-900/40 text-yellow-300 hover:bg-yellow-800/50 border border-yellow-700/40 transition"
                           >
-                            {w.lastRiskScore}
-                          </span>
+                            <Pause className="w-3 h-3" /> Pause
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleResume(w.id)}
+                            className="flex items-center gap-1 text-xs px-2.5 py-1 rounded bg-emerald-900/40 text-emerald-300 hover:bg-emerald-800/50 border border-emerald-700/40 transition"
+                          >
+                            <Play className="w-3 h-3" /> Resume
+                          </button>
                         )}
-                        <WatchStatusChip status={w.status} />
+
+                        <a
+                          href={`/watch/${w.id}`}
+                          className="flex items-center gap-1 text-xs px-2.5 py-1 rounded bg-blue-900/40 text-blue-300 hover:bg-blue-800/50 border border-blue-700/40 transition"
+                        >
+                          <Bell className="w-3 h-3" /> Alerts
+                        </a>
+
+                        <button
+                          onClick={() => handleRemove(w.id, w.domain)}
+                          className="flex items-center gap-1 text-xs px-2.5 py-1 rounded bg-red-900/30 text-red-400 hover:bg-red-800/40 border border-red-700/30 transition ml-auto"
+                        >
+                          <Trash2 className="w-3 h-3" /> Remove
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -513,12 +799,30 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Certificate Transparency Stream — shown when there are watched domains */}
+        {/* ── MITRE ATT&CK Coverage (X4) ──────────────────────────────────── */}
+        {apiKey && scanHistory.length > 0 && (
+          <Card className="bg-gray-900">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-red-400" />
+                <h2 className="text-lg font-semibold">MITRE ATT&amp;CK Coverage</h2>
+                <span className="ml-auto text-xs text-gray-500">
+                  Based on latest scan findings
+                </span>
+              </div>
+            </CardHeader>
+            <CardBody>
+              <MitreHeatmap findings={[]} />
+            </CardBody>
+          </Card>
+        )}
+
+        {/* ── Certificate Transparency Stream ────────────────────────────── */}
         {watches.length > 0 && watches[0]?.domain && (
           <CertStreamWidget domain={watches[0].domain} />
         )}
 
-        {/* Intelligence Sources */}
+        {/* ── Intelligence Sources ────────────────────────────────────────── */}
         {status?.sources && status.sources.length > 0 && (
           <Card className="bg-gray-900">
             <CardHeader>
@@ -546,6 +850,7 @@ export default function Dashboard() {
             </CardBody>
           </Card>
         )}
+
       </div>
     </ContentWrapper>
   );

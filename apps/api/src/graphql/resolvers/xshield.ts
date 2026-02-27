@@ -156,6 +156,34 @@ builder.queryField('xshieldWatches', (t) =>
   })
 );
 
+builder.queryField('xshieldScanHistory', (t) =>
+  t.field({
+    type: ['ScanHistoryPoint'],
+    args: {
+      limit: t.arg.int({ defaultValue: 30 }),
+      domain: t.arg.string({ required: false }),
+    },
+    resolve: async (_parent, { limit, domain }, context) => {
+      if (!context.apiKey) return [];
+      const where: any = { apiKeyId: context.apiKey.id };
+      if (domain) where.domain = domain;
+      const reports = await (prisma as any).xShieldRiskReport.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: Math.min(limit ?? 30, 100),
+        select: { domain: true, riskScore: true, riskLevel: true, createdAt: true, findings: true },
+      });
+      return reports.map((r: any) => ({
+        domain: r.domain,
+        riskScore: r.riskScore,
+        riskLevel: r.riskLevel,
+        scannedAt: r.createdAt.toISOString(),
+        findingCount: Array.isArray(r.findings) ? r.findings.length : 0,
+      }));
+    },
+  })
+);
+
 builder.queryField('xshieldWatchAlerts', (t) =>
   t.field({
     type: ['WatchAlert'],

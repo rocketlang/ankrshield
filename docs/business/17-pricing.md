@@ -677,3 +677,6 @@ Bootstrap to $500k ARR, then:
 
 *Privacy is a fundamental right. Let's make it accessible to everyone.*
 
+
+---
+*Co-authored by Capt Anil Kumar Sharma, Powerp Box IT Solutions Pvt Ltd*

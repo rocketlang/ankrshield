@@ -31,3 +31,6 @@ warrior scan example.com --key YOUR_API_KEY
 ```
 
 Apache 2.0 · Built by ANKR Labs, Gurgaon
+
+---
+*Co-authored by Capt Anil Kumar Sharma, Powerp Box IT Solutions Pvt Ltd*

@@ -25,6 +25,7 @@ import Register from './pages/Register';
 import Settings from './pages/Settings';
 import SupplyChain from './pages/SupplyChain';
 import VerifyMagicLink from './pages/VerifyMagicLink';
+import WatchDetail from './pages/WatchDetail';
 
 function AppRoutes() {
   useTokenRefresh();
@@ -111,6 +112,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <MdmAdmin />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/watch/:watchId"
+        element={
+          <ProtectedRoute>
+            <WatchDetail />
           </ProtectedRoute>
         }
       />

@@ -272,3 +272,6 @@ See [LICENSE](../LICENSE) for details.
 ---
 
 *Next: [Quick Start Guide →](./02-quick-start.md)*
+
+---
+*Co-authored by Capt Anil Kumar Sharma, Powerp Box IT Solutions Pvt Ltd*

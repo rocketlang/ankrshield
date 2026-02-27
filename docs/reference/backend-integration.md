@@ -460,3 +460,6 @@ The ankrshield desktop app now has fully functional backend services with intell
 *Total Integration Time: ~2 hours*
 *All 4 steps: 100% complete* ✅
 
+
+---
+*Co-authored by Capt Anil Kumar Sharma, Powerp Box IT Solutions Pvt Ltd*

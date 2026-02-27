@@ -380,6 +380,18 @@ builder.objectType('ThreatNarrative', {
   }),
 });
 
+// ── ScanHistoryPoint — lightweight summary for trend charts ───────────────────
+
+builder.objectType('ScanHistoryPoint', {
+  fields: (t) => ({
+    domain: t.string({ resolve: (r: any) => r.domain }),
+    riskScore: t.int({ resolve: (r: any) => r.riskScore }),
+    riskLevel: t.string({ resolve: (r: any) => r.riskLevel }),
+    scannedAt: t.string({ resolve: (r: any) => r.scannedAt }),
+    findingCount: t.int({ resolve: (r: any) => r.findingCount }),
+  }),
+});
+
 // ── TeamRole enum ─────────────────────────────────────────────────────────────
 
 builder.enumType('TeamRole', {
