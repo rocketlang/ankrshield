@@ -594,3 +594,132 @@ builder.queryField('xshieldNarrative', (t) =>
     },
   })
 );
+
+// ── Multi-tenant Team Accounts ────────────────────────────────────────────────
+// Auth: JWT via request.user (populated by authPlugin). These mutations require
+// a logged-in user (not just an API key) since teams are tied to user accounts.
+
+function requireUser(context: any): { userId: string } {
+  const userId = context.userId ?? context.user?.id ?? context.user?.userId;
+  if (!userId) throw new Error('Authentication required. Please sign in.');
+  return { userId };
+}
+
+// xshieldTeams — list teams the caller is a member of
+builder.queryField('xshieldTeams', (t) =>
+  t.field({
+    type: ['XShieldTeamWithMembers'],
+    description: 'List all xShield teams the authenticated user belongs to.',
+    resolve: async (_parent, _args, context) => {
+      const { userId } = requireUser(context);
+
+      const memberships = await (prisma as any).xShieldTeamMember.findMany({
+        where: { userId },
+        include: {
+          team: {
+            include: { _count: { select: { members: true } } },
+          },
+        },
+        orderBy: { joinedAt: 'asc' },
+      });
+
+      return memberships.map((m: any) => ({
+        ...m.team,
+        myRole: m.role,
+        memberCount: m.team._count?.members ?? 0,
+      }));
+    },
+  })
+);
+
+// xshieldCreateTeam — create a new team, add caller as OWNER
+builder.mutationField('xshieldCreateTeam', (t) =>
+  t.field({
+    type: 'XShieldTeam',
+    description: 'Create a new xShield team. The caller becomes the OWNER.',
+    args: {
+      name: t.arg.string({ required: true }),
+      slug: t.arg.string({ required: true }),
+    },
+    resolve: async (_parent, { name, slug }, context) => {
+      const { userId } = requireUser(context);
+
+      // Validate slug — lowercase alphanumeric + hyphens only
+      if (!/^[a-z0-9-]{2,40}$/.test(slug)) {
+        throw new Error('Slug must be 2-40 chars, lowercase letters, digits and hyphens only.');
+      }
+
+      // Check uniqueness
+      const existing = await (prisma as any).xShieldTeam.findUnique({ where: { slug } });
+      if (existing) throw new Error(`Team slug "${slug}" is already taken.`);
+
+      // Create team + owner membership in a transaction
+      const team = await (prisma as any).xShieldTeam.create({
+        data: {
+          name: name.trim(),
+          slug: slug.trim(),
+          ownerId: userId,
+          members: {
+            create: {
+              userId,
+              role: 'OWNER',
+            },
+          },
+        },
+      });
+
+      return team;
+    },
+  })
+);
+
+// xshieldInviteTeamMember — OWNER or ADMIN can invite a user by email
+builder.mutationField('xshieldInviteTeamMember', (t) =>
+  t.field({
+    type: 'XShieldTeamMember',
+    description: 'Invite a user to an xShield team by email. Requires OWNER or ADMIN role.',
+    args: {
+      teamId: t.arg.id({ required: true }),
+      email: t.arg.string({ required: true }),
+      role: t.arg({ type: 'TeamRole', required: true }),
+    },
+    resolve: async (_parent, { teamId, email, role }, context) => {
+      const { userId } = requireUser(context);
+
+      // Verify caller is OWNER or ADMIN of the team
+      const callerMembership = await (prisma as any).xShieldTeamMember.findUnique({
+        where: { teamId_userId: { teamId, userId } },
+      });
+      if (!callerMembership) throw new Error('You are not a member of this team.');
+      if (!['OWNER', 'ADMIN'].includes(callerMembership.role)) {
+        throw new Error('Only OWNER or ADMIN can invite team members.');
+      }
+
+      // Prevent inviting as OWNER (only one owner allowed via transfer)
+      if (role === 'OWNER') {
+        throw new Error('Cannot invite as OWNER. Use team ownership transfer instead.');
+      }
+
+      // Find the target user by email
+      const targetUser = await (prisma as any).user.findUnique({ where: { email } });
+      if (!targetUser) throw new Error(`No user found with email: ${email}`);
+
+      // Check if already a member
+      const existingMembership = await (prisma as any).xShieldTeamMember.findUnique({
+        where: { teamId_userId: { teamId, userId: targetUser.id } },
+      });
+      if (existingMembership) {
+        throw new Error(`${email} is already a member of this team.`);
+      }
+
+      // Add member
+      return (prisma as any).xShieldTeamMember.create({
+        data: {
+          teamId,
+          userId: targetUser.id,
+          role,
+        },
+      });
+    },
+  })
+);

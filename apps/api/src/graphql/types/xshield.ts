@@ -380,4 +380,76 @@ builder.objectType('ThreatNarrative', {
   }),
 });
 
-export { XShieldRiskReportRef, DomainWatchRef, WatchAlertRef, XShieldApiKeyRef };
+// ── TeamRole enum ─────────────────────────────────────────────────────────────
+
+builder.enumType('TeamRole', {
+  values: ['OWNER', 'ADMIN', 'ANALYST', 'VIEWER'] as const,
+});
+
+// ── XShieldTeam ───────────────────────────────────────────────────────────────
+
+const XShieldTeamRef = builder.objectRef<any>('XShieldTeam');
+
+XShieldTeamRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    name: t.exposeString('name'),
+    slug: t.exposeString('slug'),
+    ownerId: t.exposeString('ownerId'),
+    createdAt: t.expose('createdAt', { type: 'DateTime' }),
+  }),
+});
+
+// ── XShieldTeamMember ─────────────────────────────────────────────────────────
+
+const XShieldTeamMemberRef = builder.objectRef<any>('XShieldTeamMember');
+
+XShieldTeamMemberRef.implement({
+  fields: (t) => ({
+    id: t.exposeID('id'),
+    teamId: t.exposeString('teamId'),
+    userId: t.exposeString('userId'),
+    role: t.expose('role', { type: 'TeamRole' }),
+    joinedAt: t.expose('joinedAt', { type: 'DateTime' }),
+  }),
+});
+
+// ── XShieldTeamWithMembers (for xshieldTeams query) ───────────────────────────
+
+builder.objectType('XShieldTeamWithMembers', {
+  fields: (t) => ({
+    id: t.string({ resolve: (r: any) => r.id }),
+    name: t.string({ resolve: (r: any) => r.name }),
+    slug: t.string({ resolve: (r: any) => r.slug }),
+    ownerId: t.string({ resolve: (r: any) => r.ownerId }),
+    createdAt: t.expose('createdAt', { type: 'DateTime' }),
+    myRole: t.expose('myRole', { type: 'TeamRole' }),
+    memberCount: t.int({ resolve: (r: any) => r.memberCount ?? 0 }),
+  }),
+});
+
+// ── Input types for team mutations ────────────────────────────────────────────
+
+export const TeamCreateInput = builder.inputType('TeamCreateInput', {
+  fields: (t) => ({
+    name: t.string({ required: true }),
+    slug: t.string({ required: true }),
+  }),
+});
+
+export const TeamInviteInput = builder.inputType('TeamInviteInput', {
+  fields: (t) => ({
+    teamId: t.id({ required: true }),
+    email: t.string({ required: true }),
+    role: t.field({ type: 'TeamRole', required: true }),
+  }),
+});
+
+export {
+  XShieldRiskReportRef,
+  DomainWatchRef,
+  WatchAlertRef,
+  XShieldApiKeyRef,
+  XShieldTeamRef,
+  XShieldTeamMemberRef,
+};

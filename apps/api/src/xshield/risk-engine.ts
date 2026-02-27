@@ -40,34 +40,73 @@ export interface RiskReport {
 
 // ── MITRE ATT&CK v15 Technique Catalog (curated subset) ──────────────────────
 const MITRE_TECHNIQUES: Record<string, { name: string; tacticId: string; tacticName: string }> = {
-  'T1566': { name: 'Phishing', tacticId: 'TA0001', tacticName: 'Initial Access' },
-  'T1566.001': { name: 'Spearphishing Attachment', tacticId: 'TA0001', tacticName: 'Initial Access' },
+  T1566: { name: 'Phishing', tacticId: 'TA0001', tacticName: 'Initial Access' },
+  'T1566.001': {
+    name: 'Spearphishing Attachment',
+    tacticId: 'TA0001',
+    tacticName: 'Initial Access',
+  },
   'T1566.002': { name: 'Spearphishing Link', tacticId: 'TA0001', tacticName: 'Initial Access' },
-  'T1566.003': { name: 'Spearphishing via Service', tacticId: 'TA0001', tacticName: 'Initial Access' },
-  'T1078': { name: 'Valid Accounts', tacticId: 'TA0001', tacticName: 'Initial Access' },
-  'T1190': { name: 'Exploit Public-Facing Application', tacticId: 'TA0001', tacticName: 'Initial Access' },
-  'T1133': { name: 'External Remote Services', tacticId: 'TA0001', tacticName: 'Initial Access' },
-  'T1071': { name: 'Application Layer Protocol', tacticId: 'TA0011', tacticName: 'Command and Control' },
+  'T1566.003': {
+    name: 'Spearphishing via Service',
+    tacticId: 'TA0001',
+    tacticName: 'Initial Access',
+  },
+  T1078: { name: 'Valid Accounts', tacticId: 'TA0001', tacticName: 'Initial Access' },
+  T1190: {
+    name: 'Exploit Public-Facing Application',
+    tacticId: 'TA0001',
+    tacticName: 'Initial Access',
+  },
+  T1133: { name: 'External Remote Services', tacticId: 'TA0001', tacticName: 'Initial Access' },
+  T1071: {
+    name: 'Application Layer Protocol',
+    tacticId: 'TA0011',
+    tacticName: 'Command and Control',
+  },
   'T1071.001': { name: 'Web Protocols', tacticId: 'TA0011', tacticName: 'Command and Control' },
   'T1071.004': { name: 'DNS', tacticId: 'TA0011', tacticName: 'Command and Control' },
-  'T1041': { name: 'Exfiltration Over C2 Channel', tacticId: 'TA0010', tacticName: 'Exfiltration' },
-  'T1048': { name: 'Exfiltration Over Alternative Protocol', tacticId: 'TA0010', tacticName: 'Exfiltration' },
-  'T1496': { name: 'Resource Hijacking', tacticId: 'TA0040', tacticName: 'Impact' },
-  'T1486': { name: 'Data Encrypted for Impact', tacticId: 'TA0040', tacticName: 'Impact' },
-  'T1589': { name: 'Gather Victim Identity Information', tacticId: 'TA0043', tacticName: 'Reconnaissance' },
-  'T1592': { name: 'Gather Victim Host Information', tacticId: 'TA0043', tacticName: 'Reconnaissance' },
-  'T1595': { name: 'Active Scanning', tacticId: 'TA0043', tacticName: 'Reconnaissance' },
-  'T1114': { name: 'Email Collection', tacticId: 'TA0009', tacticName: 'Collection' },
-  'T1539': { name: 'Steal Web Session Cookie', tacticId: 'TA0006', tacticName: 'Credential Access' },
-  'T1110': { name: 'Brute Force', tacticId: 'TA0006', tacticName: 'Credential Access' },
-  'T1562': { name: 'Impair Defenses', tacticId: 'TA0005', tacticName: 'Defense Evasion' },
-  'T1036': { name: 'Masquerading', tacticId: 'TA0005', tacticName: 'Defense Evasion' },
+  T1041: { name: 'Exfiltration Over C2 Channel', tacticId: 'TA0010', tacticName: 'Exfiltration' },
+  T1048: {
+    name: 'Exfiltration Over Alternative Protocol',
+    tacticId: 'TA0010',
+    tacticName: 'Exfiltration',
+  },
+  T1496: { name: 'Resource Hijacking', tacticId: 'TA0040', tacticName: 'Impact' },
+  T1486: { name: 'Data Encrypted for Impact', tacticId: 'TA0040', tacticName: 'Impact' },
+  T1589: {
+    name: 'Gather Victim Identity Information',
+    tacticId: 'TA0043',
+    tacticName: 'Reconnaissance',
+  },
+  T1592: {
+    name: 'Gather Victim Host Information',
+    tacticId: 'TA0043',
+    tacticName: 'Reconnaissance',
+  },
+  T1595: { name: 'Active Scanning', tacticId: 'TA0043', tacticName: 'Reconnaissance' },
+  T1114: { name: 'Email Collection', tacticId: 'TA0009', tacticName: 'Collection' },
+  T1539: { name: 'Steal Web Session Cookie', tacticId: 'TA0006', tacticName: 'Credential Access' },
+  T1110: { name: 'Brute Force', tacticId: 'TA0006', tacticName: 'Credential Access' },
+  T1562: { name: 'Impair Defenses', tacticId: 'TA0005', tacticName: 'Defense Evasion' },
+  T1036: { name: 'Masquerading', tacticId: 'TA0005', tacticName: 'Defense Evasion' },
 };
 
-function toMitreMapping(techniqueId: string, confidence: 'low' | 'medium' | 'high', source: string): MitreMapping | null {
+function toMitreMapping(
+  techniqueId: string,
+  confidence: 'low' | 'medium' | 'high',
+  source: string
+): MitreMapping | null {
   const t = MITRE_TECHNIQUES[techniqueId];
   if (!t) return null;
-  return { techniqueId, techniqueName: t.name, tacticId: t.tacticId, tacticName: t.tacticName, confidence, source };
+  return {
+    techniqueId,
+    techniqueName: t.name,
+    tacticId: t.tacticId,
+    tacticName: t.tacticName,
+    confidence,
+    source,
+  };
 }
 
 function scoreToLevel(score: number): RiskLevel {
@@ -90,21 +129,42 @@ async function checkDns(domain: string): Promise<{ findings: RiskFinding[]; scor
     try {
       await dns.resolveMx(domain);
     } catch {
-      findings.push({ source: 'DNS', signal: 'no_mx', severity: 'low', detail: 'No MX records — domain may be for non-email use or recently registered' });
+      findings.push({
+        source: 'DNS',
+        signal: 'no_mx',
+        severity: 'low',
+        detail: 'No MX records — domain may be for non-email use or recently registered',
+      });
       score += 5;
     }
 
     // TXT/SPF check
     try {
       const txt = await dns.resolveTxt(domain);
-      const hasSPF = txt.flat().some(r => r.startsWith('v=spf'));
-      const hasDMARC = txt.flat().some(r => r.startsWith('v=DMARC'));
+      const hasSPF = txt.flat().some((r) => r.startsWith('v=spf'));
+      const hasDMARC = txt.flat().some((r) => r.startsWith('v=DMARC'));
       if (!hasSPF) {
-        findings.push({ source: 'DNS/SPF', signal: 'no_spf', severity: 'medium', detail: 'No SPF record — domain vulnerable to email spoofing', mitreId: 'T1566', mitreTactic: 'Initial Access', mitreTechnique: 'Phishing' });
+        findings.push({
+          source: 'DNS/SPF',
+          signal: 'no_spf',
+          severity: 'medium',
+          detail: 'No SPF record — domain vulnerable to email spoofing',
+          mitreId: 'T1566',
+          mitreTactic: 'Initial Access',
+          mitreTechnique: 'Phishing',
+        });
         score += 10;
       }
       if (!hasDMARC) {
-        findings.push({ source: 'DNS/DMARC', signal: 'no_dmarc', severity: 'medium', detail: 'No DMARC policy — email authentication not enforced', mitreId: 'T1566', mitreTactic: 'Initial Access', mitreTechnique: 'Phishing' });
+        findings.push({
+          source: 'DNS/DMARC',
+          signal: 'no_dmarc',
+          severity: 'medium',
+          detail: 'No DMARC policy — email authentication not enforced',
+          mitreId: 'T1566',
+          mitreTactic: 'Initial Access',
+          mitreTechnique: 'Phishing',
+        });
         score += 8;
       }
     } catch {
@@ -125,8 +185,14 @@ function generateTyposquats(domain: string): string[] {
 
   // Character substitution (visual similarity)
   const subs: Record<string, string[]> = {
-    'a': ['4', '@'], 'e': ['3'], 'i': ['1', 'l'], 'o': ['0'],
-    's': ['5', '$'], 'g': ['9'], 'l': ['1', 'I'], 'b': ['6'],
+    a: ['4', '@'],
+    e: ['3'],
+    i: ['1', 'l'],
+    o: ['0'],
+    s: ['5', '$'],
+    g: ['9'],
+    l: ['1', 'I'],
+    b: ['6'],
   };
   for (let i = 0; i < name.length; i++) {
     const ch = name[i]!.toLowerCase();
@@ -148,7 +214,7 @@ function generateTyposquats(domain: string): string[] {
   }
 
   // TLD variations
-  const altTlds = ['com', 'net', 'org', 'info', 'co', 'io', 'xyz'].filter(t => t !== tld);
+  const altTlds = ['com', 'net', 'org', 'info', 'co', 'io', 'xyz'].filter((t) => t !== tld);
   for (const altTld of altTlds.slice(0, 3)) {
     squats.push(`${name}.${altTld}`);
   }
@@ -162,7 +228,9 @@ function generateTyposquats(domain: string): string[] {
   return [...new Set(squats)].slice(0, 50);
 }
 
-async function checkTyposquats(domain: string): Promise<{ findings: RiskFinding[]; score: number; squats: string[] }> {
+async function checkTyposquats(
+  domain: string
+): Promise<{ findings: RiskFinding[]; score: number; squats: string[] }> {
   const findings: RiskFinding[] = [];
   let score = 0;
   const squats = generateTyposquats(domain);
@@ -216,8 +284,8 @@ async function checkCerts(domain: string): Promise<{ findings: RiskFinding[]; sc
       headers: { 'User-Agent': 'xShield/1.0 (+xshieldai.com)' },
     });
     if (r.ok) {
-      const certs = await r.json() as any[];
-      const lookalike = certs.filter(c => {
+      const certs = (await r.json()) as any[];
+      const lookalike = certs.filter((c) => {
         const cn = (c.common_name || '').toLowerCase();
         return cn !== domain.toLowerCase() && cn.includes(domain.split('.')[0]!.toLowerCase());
       });
@@ -256,12 +324,12 @@ async function checkGreyNoise(domain: string): Promise<{ findings: RiskFinding[]
       signal: AbortSignal.timeout(5000),
       headers: {
         'User-Agent': 'xShield/1.0',
-        ...(process.env.GREYNOISE_API_KEY ? { 'key': process.env.GREYNOISE_API_KEY } : {}),
+        ...(process.env.GREYNOISE_API_KEY ? { key: process.env.GREYNOISE_API_KEY } : {}),
       },
     });
 
     if (r.ok) {
-      const data = await r.json() as any;
+      const data = (await r.json()) as any;
       if (data.noise) {
         findings.push({
           source: 'GreyNoise',
@@ -283,7 +351,9 @@ async function checkGreyNoise(domain: string): Promise<{ findings: RiskFinding[]
 }
 
 // ── HIBP Breach Check ─────────────────────────────────────────────────────────
-async function checkBreaches(domain: string): Promise<{ findings: RiskFinding[]; score: number; breaches: any[] }> {
+async function checkBreaches(
+  domain: string
+): Promise<{ findings: RiskFinding[]; score: number; breaches: any[] }> {
   const findings: RiskFinding[] = [];
   let score = 0;
   const breaches: any[] = [];
@@ -298,9 +368,9 @@ async function checkBreaches(domain: string): Promise<{ findings: RiskFinding[];
     });
 
     if (r.ok) {
-      const allBreaches = await r.json() as any[];
-      const domainBreaches = allBreaches.filter(b =>
-        b.Domain?.toLowerCase() === domain.toLowerCase()
+      const allBreaches = (await r.json()) as any[];
+      const domainBreaches = allBreaches.filter(
+        (b) => b.Domain?.toLowerCase() === domain.toLowerCase()
       );
 
       if (domainBreaches.length > 0) {
@@ -331,18 +401,21 @@ async function checkUrlScan(domain: string): Promise<{ findings: RiskFinding[]; 
   let score = 0;
 
   try {
-    const r = await fetch(`https://urlscan.io/api/v1/search/?q=domain:${encodeURIComponent(domain)}&size=5`, {
-      signal: AbortSignal.timeout(5000),
-      headers: {
-        'User-Agent': 'xShield/1.0',
-        ...(process.env.URLSCAN_API_KEY ? { 'API-Key': process.env.URLSCAN_API_KEY } : {}),
-      },
-    });
+    const r = await fetch(
+      `https://urlscan.io/api/v1/search/?q=domain:${encodeURIComponent(domain)}&size=5`,
+      {
+        signal: AbortSignal.timeout(5000),
+        headers: {
+          'User-Agent': 'xShield/1.0',
+          ...(process.env.URLSCAN_API_KEY ? { 'API-Key': process.env.URLSCAN_API_KEY } : {}),
+        },
+      }
+    );
 
     if (r.ok) {
-      const data = await r.json() as any;
+      const data = (await r.json()) as any;
       const results: any[] = data.results || [];
-      const malicious = results.filter(res => res.verdicts?.overall?.malicious);
+      const malicious = results.filter((res) => res.verdicts?.overall?.malicious);
       if (malicious.length > 0) {
         findings.push({
           source: 'URLScan',
@@ -376,7 +449,7 @@ async function checkPhishing(domain: string): Promise<{ findings: RiskFinding[];
     });
     if (r.ok) {
       const text = await r.text();
-      const hits = text.split('\n').filter(line => {
+      const hits = text.split('\n').filter((line) => {
         try {
           return new URL(line.trim()).hostname.endsWith(domain);
         } catch {
@@ -409,7 +482,17 @@ async function checkGithub(domain: string): Promise<{ findings: RiskFinding[]; s
   let score = 0;
 
   if (!process.env.GITHUB_TOKEN) {
-    return { findings: [{ source: 'GitHub', signal: 'no_token', severity: 'info', detail: 'GitHub API token not configured — leak scan skipped' }], score: 0 };
+    return {
+      findings: [
+        {
+          source: 'GitHub',
+          signal: 'no_token',
+          severity: 'info',
+          detail: 'GitHub API token not configured — leak scan skipped',
+        },
+      ],
+      score: 0,
+    };
   }
 
   try {
@@ -428,17 +511,17 @@ async function checkGithub(domain: string): Promise<{ findings: RiskFinding[]; s
           signal: AbortSignal.timeout(4000),
           headers: {
             'User-Agent': 'xShield/1.0',
-            'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-            'Accept': 'application/vnd.github.v3+json',
+            Authorization: `token ${process.env.GITHUB_TOKEN}`,
+            Accept: 'application/vnd.github.v3+json',
           },
         }
       );
       if (r.ok) {
-        const data = await r.json() as any;
+        const data = (await r.json()) as any;
         leakCount += data.total_count || 0;
       }
       // Rate limiting — small delay between GitHub API calls
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 200));
     }
 
     if (leakCount > 0) {
@@ -477,7 +560,7 @@ async function checkOTX(domain: string): Promise<{ findings: RiskFinding[]; scor
       }
     );
     if (r.ok) {
-      const data = await r.json() as any;
+      const data = (await r.json()) as any;
       const pulseCount = data.pulse_info?.count || 0;
       if (pulseCount > 0) {
         findings.push({
@@ -520,9 +603,11 @@ async function checkShodan(domain: string): Promise<{ findings: RiskFinding[]; s
     );
 
     if (r.ok) {
-      const data = await r.json() as any;
-      const ports: number[] = (data.ports || []);
-      const dangerousPorts = ports.filter(p => [23, 25, 110, 143, 3306, 5432, 6379, 27017, 8080, 8443].includes(p));
+      const data = (await r.json()) as any;
+      const ports: number[] = data.ports || [];
+      const dangerousPorts = ports.filter((p) =>
+        [23, 25, 110, 143, 3306, 5432, 6379, 27017, 8080, 8443].includes(p)
+      );
       if (dangerousPorts.length > 0) {
         findings.push({
           source: 'Shodan',
@@ -550,11 +635,12 @@ function buildNavigatorLayer(mappings: MitreMapping[], domain: string): object {
     versions: { attack: '15', navigator: '4.9', layer: '4.5' },
     domain: 'enterprise-attack',
     description: `Risk assessment for ${domain} — generated by xShield`,
-    techniques: mappings.map(m => ({
+    techniques: mappings.map((m) => ({
       techniqueID: m.techniqueId,
       tactic: m.tacticName.toLowerCase().replace(/ /g, '-'),
       score: m.confidence === 'high' ? 100 : m.confidence === 'medium' ? 60 : 30,
-      color: m.confidence === 'high' ? '#ff0000' : m.confidence === 'medium' ? '#ff8800' : '#ffcc00',
+      color:
+        m.confidence === 'high' ? '#ff0000' : m.confidence === 'medium' ? '#ff8800' : '#ffcc00',
       comment: `Detected via ${m.source}`,
       enabled: true,
     })),
@@ -568,86 +654,135 @@ function buildNavigatorLayer(mappings: MitreMapping[], domain: string): object {
 }
 
 // ── Narrative summary generator ───────────────────────────────────────────────
-function buildSummary(domain: string, _score: number, level: RiskLevel, findings: RiskFinding[]): string {
-  const count = findings.filter(f => f.severity !== 'info').length;
-  if (count === 0) return `${domain} shows no significant threat signals across all monitored sources.`;
+function buildSummary(
+  domain: string,
+  _score: number,
+  level: RiskLevel,
+  findings: RiskFinding[]
+): string {
+  const count = findings.filter((f) => f.severity !== 'info').length;
+  if (count === 0)
+    return `${domain} shows no significant threat signals across all monitored sources.`;
 
-  const highSev = findings.filter(f => ['high', 'critical'].includes(f.severity));
-  const sources = [...new Set(findings.map(f => f.source))];
+  const highSev = findings.filter((f) => ['high', 'critical'].includes(f.severity));
+  const sources = [...new Set(findings.map((f) => f.source))];
 
   if (level === 'CRITICAL') {
-    return `CRITICAL RISK: ${domain} has been flagged by ${sources.length} intelligence sources. Active threats detected include: ${highSev.map(f => f.signal).join(', ')}. Immediate action recommended.`;
+    return `CRITICAL RISK: ${domain} has been flagged by ${sources.length} intelligence sources. Active threats detected include: ${highSev.map((f) => f.signal).join(', ')}. Immediate action recommended.`;
   }
   if (level === 'HIGH') {
-    return `HIGH RISK: ${domain} shows ${count} threat indicators across ${sources.length} sources. Key concerns: ${highSev.slice(0, 2).map(f => f.detail).join('; ')}.`;
+    return `HIGH RISK: ${domain} shows ${count} threat indicators across ${sources.length} sources. Key concerns: ${highSev
+      .slice(0, 2)
+      .map((f) => f.detail)
+      .join('; ')}.`;
   }
   return `MEDIUM RISK: ${domain} has ${count} security finding(s) requiring attention. Detected by: ${sources.join(', ')}.`;
 }
 
 function buildRecommendations(findings: RiskFinding[]): string[] {
   const recs: string[] = [];
-  const signals = new Set(findings.map(f => f.signal));
+  const signals = new Set(findings.map((f) => f.signal));
 
-  if (signals.has('no_spf')) recs.push('Add SPF record: "v=spf1 include:_spf.your-provider.com ~all"');
-  if (signals.has('no_dmarc')) recs.push('Add DMARC policy: "_dmarc TXT v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com"');
-  if (signals.has('typosquat_registered')) recs.push('Register common typosquat variants defensively and redirect to primary domain');
-  if (signals.has('lookalike_certs')) recs.push('Monitor Certificate Transparency logs via Certstream for new lookalike certificates');
-  if (signals.has('domain_breached')) recs.push('Enforce password reset for all affected accounts; enable MFA across all services');
-  if (signals.has('active_phishing')) recs.push('Submit takedown requests via ICANN UDRP and hosting provider abuse contacts immediately');
-  if (signals.has('github_secret_leak')) recs.push('Rotate all exposed API keys/credentials immediately; audit git history for secrets');
-  if (signals.has('exposed_services')) recs.push('Close or firewall unnecessary service ports; place sensitive services behind VPN');
-  if (signals.has('otx_threat_pulses')) recs.push('Review OTX pulse details and block known-bad IPs/domains at perimeter');
-  if (signals.has('ip_noisy')) recs.push('Consider rotating server IP; implement fail2ban and rate-limiting on exposed services');
+  if (signals.has('no_spf'))
+    recs.push('Add SPF record: "v=spf1 include:_spf.your-provider.com ~all"');
+  if (signals.has('no_dmarc'))
+    recs.push(
+      'Add DMARC policy: "_dmarc TXT v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com"'
+    );
+  if (signals.has('typosquat_registered'))
+    recs.push('Register common typosquat variants defensively and redirect to primary domain');
+  if (signals.has('lookalike_certs'))
+    recs.push(
+      'Monitor Certificate Transparency logs via Certstream for new lookalike certificates'
+    );
+  if (signals.has('domain_breached'))
+    recs.push('Enforce password reset for all affected accounts; enable MFA across all services');
+  if (signals.has('active_phishing'))
+    recs.push(
+      'Submit takedown requests via ICANN UDRP and hosting provider abuse contacts immediately'
+    );
+  if (signals.has('github_secret_leak'))
+    recs.push('Rotate all exposed API keys/credentials immediately; audit git history for secrets');
+  if (signals.has('exposed_services'))
+    recs.push('Close or firewall unnecessary service ports; place sensitive services behind VPN');
+  if (signals.has('otx_threat_pulses'))
+    recs.push('Review OTX pulse details and block known-bad IPs/domains at perimeter');
+  if (signals.has('ip_noisy'))
+    recs.push(
+      'Consider rotating server IP; implement fail2ban and rate-limiting on exposed services'
+    );
 
-  if (recs.length === 0) recs.push('Continue monitoring domain for new threat signals; review quarterly');
+  if (recs.length === 0)
+    recs.push('Continue monitoring domain for new threat signals; review quarterly');
   return recs;
 }
 
 // ── Main scan function ────────────────────────────────────────────────────────
 export async function scanDomain(domain: string): Promise<RiskReport> {
-  const cleanDomain = domain.toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  const cleanDomain = domain
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '');
 
   // Run all sources in parallel (with individual timeouts)
-  const [dns, typo, cert, greynoise, hibp, urlscan, phish, github, otx, shodan] = await Promise.all([
-    checkDns(cleanDomain),
-    checkTyposquats(cleanDomain),
-    checkCerts(cleanDomain),
-    checkGreyNoise(cleanDomain),
-    checkBreaches(cleanDomain),
-    checkUrlScan(cleanDomain),
-    checkPhishing(cleanDomain),
-    checkGithub(cleanDomain),
-    checkOTX(cleanDomain),
-    checkShodan(cleanDomain),
-  ]);
+  const [dns, typo, cert, greynoise, hibp, urlscan, phish, github, otx, shodan] = await Promise.all(
+    [
+      checkDns(cleanDomain),
+      checkTyposquats(cleanDomain),
+      checkCerts(cleanDomain),
+      checkGreyNoise(cleanDomain),
+      checkBreaches(cleanDomain),
+      checkUrlScan(cleanDomain),
+      checkPhishing(cleanDomain),
+      checkGithub(cleanDomain),
+      checkOTX(cleanDomain),
+      checkShodan(cleanDomain),
+    ]
+  );
 
   // Aggregate
   const allFindings: RiskFinding[] = [
-    ...dns.findings, ...typo.findings, ...cert.findings,
-    ...greynoise.findings, ...hibp.findings, ...urlscan.findings,
-    ...phish.findings, ...github.findings, ...otx.findings, ...shodan.findings,
+    ...dns.findings,
+    ...typo.findings,
+    ...cert.findings,
+    ...greynoise.findings,
+    ...hibp.findings,
+    ...urlscan.findings,
+    ...phish.findings,
+    ...github.findings,
+    ...otx.findings,
+    ...shodan.findings,
   ];
 
-  const rawScore = dns.score + typo.score + cert.score + greynoise.score +
-    hibp.score + urlscan.score + phish.score + github.score + otx.score + shodan.score;
+  const rawScore =
+    dns.score +
+    typo.score +
+    cert.score +
+    greynoise.score +
+    hibp.score +
+    urlscan.score +
+    phish.score +
+    github.score +
+    otx.score +
+    shodan.score;
 
   const riskScore = Math.min(rawScore, 100);
   const riskLevel = scoreToLevel(riskScore);
 
   // Build MITRE mappings
   const mitreRaw = allFindings
-    .filter(f => f.mitreId)
-    .map(f => toMitreMapping(
-      f.mitreId!,
-      f.severity === 'critical' ? 'high' : f.severity === 'high' ? 'medium' : 'low',
-      f.source
-    ))
+    .filter((f) => f.mitreId)
+    .map((f) =>
+      toMitreMapping(
+        f.mitreId!,
+        f.severity === 'critical' ? 'high' : f.severity === 'high' ? 'medium' : 'low',
+        f.source
+      )
+    )
     .filter((m): m is MitreMapping => m !== null);
 
   // Deduplicate MITRE by techniqueId
-  const mitreMapping = Object.values(
-    Object.fromEntries(mitreRaw.map(m => [m.techniqueId, m]))
-  );
+  const mitreMapping = Object.values(Object.fromEntries(mitreRaw.map((m) => [m.techniqueId, m])));
 
   const navigatorLayer = buildNavigatorLayer(mitreMapping, cleanDomain);
 
@@ -662,18 +797,164 @@ export async function scanDomain(domain: string): Promise<RiskReport> {
     summary: buildSummary(cleanDomain, riskScore, riskLevel, allFindings),
     recommendations: buildRecommendations(allFindings),
     sourceBreakdown: {
-      DNS:       { score: dns.score,       findings: dns.findings.length },
-      Typosquat: { score: typo.score,      findings: typo.findings.length },
+      DNS: { score: dns.score, findings: dns.findings.length },
+      Typosquat: { score: typo.score, findings: typo.findings.length },
       CertTransparency: { score: cert.score, findings: cert.findings.length },
       GreyNoise: { score: greynoise.score, findings: greynoise.findings.length },
-      HIBP:      { score: hibp.score,      findings: hibp.findings.length },
-      URLScan:   { score: urlscan.score,   findings: urlscan.findings.length },
-      OpenPhish: { score: phish.score,     findings: phish.findings.length },
-      GitHub:    { score: github.score,    findings: github.findings.length },
-      OTX:       { score: otx.score,       findings: otx.findings.length },
-      Shodan:    { score: shodan.score,    findings: shodan.findings.length },
+      HIBP: { score: hibp.score, findings: hibp.findings.length },
+      URLScan: { score: urlscan.score, findings: urlscan.findings.length },
+      OpenPhish: { score: phish.score, findings: phish.findings.length },
+      GitHub: { score: github.score, findings: github.findings.length },
+      OTX: { score: otx.score, findings: otx.findings.length },
+      Shodan: { score: shodan.score, findings: shodan.findings.length },
     },
   };
 }
 
 export { generateTyposquats, scoreToLevel };
+
+// ── Registrant Pivoting (WHOIS / RDAP correlation) ────────────────────────────
+
+export interface RegistrantPivotResult {
+  registrant?: string;
+  registrantEmail?: string;
+  relatedDomains: string[];
+  createdDate?: string;
+  registrar?: string;
+}
+
+/**
+ * Pivot on a domain's RDAP registrant data to find related domains.
+ * Uses free RDAP APIs (no API key needed).
+ * Falls back gracefully on any error.
+ */
+export async function pivotOnRegistrant(domain: string): Promise<RegistrantPivotResult> {
+  const cleanDomain = domain
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '');
+
+  try {
+    // Try verisign RDAP first (.com / .net), then fall back to rdap.org
+    let rdapData: any = null;
+
+    const rdapUrls = [
+      `https://rdap.verisign.com/com/v1/domain/${cleanDomain}`,
+      `https://rdap.org/domain/${cleanDomain}`,
+    ];
+
+    for (const url of rdapUrls) {
+      try {
+        const resp = await fetch(url, {
+          signal: AbortSignal.timeout(7000),
+          headers: { Accept: 'application/json' },
+        });
+        if (resp.ok) {
+          rdapData = await resp.json();
+          break;
+        }
+      } catch {
+        // Try next URL
+      }
+    }
+
+    if (!rdapData) {
+      return { relatedDomains: [] };
+    }
+
+    // Extract registrant info from entities array
+    let registrant: string | undefined;
+    let registrantEmail: string | undefined;
+
+    const entities: any[] = rdapData.entities ?? [];
+    for (const entity of entities) {
+      const roles: string[] = entity.roles ?? [];
+      if (!roles.includes('registrant')) continue;
+
+      // Parse vCard — vcardArray is [["version", {}, "text", "4.0"], ["fn", {}, "text", "Name"], ...]
+      const vcardArray: any[] = entity.vcardArray?.[1] ?? [];
+      for (const field of vcardArray) {
+        const fieldName = field[0];
+        const fieldValue = field[3];
+        if (fieldName === 'fn' && typeof fieldValue === 'string' && !registrant) {
+          registrant = fieldValue;
+        }
+        if (fieldName === 'email' && typeof fieldValue === 'string' && !registrantEmail) {
+          registrantEmail = fieldValue;
+        }
+      }
+      break; // Only use first registrant entity
+    }
+
+    // Extract registration date from events array
+    let createdDate: string | undefined;
+    const events: any[] = rdapData.events ?? [];
+    for (const event of events) {
+      if (event.eventAction === 'registration' && event.eventDate) {
+        createdDate = event.eventDate;
+        break;
+      }
+    }
+
+    // Extract registrar from entities with role "registrar"
+    let registrar: string | undefined;
+    for (const entity of entities) {
+      const roles: string[] = entity.roles ?? [];
+      if (roles.includes('registrar')) {
+        const vcardArray: any[] = entity.vcardArray?.[1] ?? [];
+        for (const field of vcardArray) {
+          if (field[0] === 'fn' && typeof field[3] === 'string') {
+            registrar = field[3];
+            break;
+          }
+        }
+        // Also try publicIds
+        if (!registrar && entity.publicIds) {
+          registrar = entity.publicIds[0]?.identifier ?? undefined;
+        }
+        if (!registrar && entity.handle) {
+          registrar = entity.handle;
+        }
+        break;
+      }
+    }
+
+    // Find related domains via crt.sh using registrant email (if found)
+    const relatedDomains: string[] = [];
+    if (registrantEmail) {
+      try {
+        const encodedEmail = encodeURIComponent(registrantEmail);
+        const crtResp = await fetch(`https://crt.sh/?q=${encodedEmail}&output=json`, {
+          signal: AbortSignal.timeout(8000),
+          headers: { Accept: 'application/json' },
+        });
+        if (crtResp.ok) {
+          const crtData = (await crtResp.json()) as any[];
+          const seen = new Set<string>();
+          for (const entry of crtData) {
+            const cn: string = entry.common_name ?? entry.name_value ?? '';
+            // Strip wildcard prefix and clean up
+            const cleaned = cn.replace(/^\*\./, '').toLowerCase().trim();
+            if (cleaned && cleaned !== cleanDomain && !seen.has(cleaned)) {
+              seen.add(cleaned);
+              relatedDomains.push(cleaned);
+              if (relatedDomains.length >= 10) break;
+            }
+          }
+        }
+      } catch {
+        // crt.sh lookup failed — return empty relatedDomains
+      }
+    }
+
+    return {
+      registrant,
+      registrantEmail,
+      relatedDomains,
+      createdDate,
+      registrar,
+    };
+  } catch {
+    return { relatedDomains: [] };
+  }
+}

@@ -140,6 +140,8 @@ model User {
   apiKeys           ApiKey[]
   integrations      UserIntegration[]
   emailVerifications EmailVerification[]
+  ownedTeams        XShieldTeam[]        @relation("TeamOwner")
+  teamMemberships   XShieldTeamMember[]  @relation("TeamMemberships")
 
   @@index([email])
   @@index([tier])
@@ -846,6 +848,10 @@ model XShieldApiKey {
   stripeCustomerId     String? @unique
   stripeSubscriptionId String?
 
+  // Team ownership (optional — keys can be personal or team-owned)
+  teamId      String?  @db.Uuid
+  team        XShieldTeam? @relation(fields: [teamId], references: [id])
+
   isActive    Boolean @default(true)
   lastUsedAt  DateTime?
 
@@ -859,6 +865,7 @@ model XShieldApiKey {
   @@index([email])
   @@index([tier])
   @@index([stripeCustomerId])
+  @@index([teamId])
   @@map("xshield_api_keys")
 }
 
@@ -925,4 +932,69 @@ model XShieldRiskReport {
   @@index([apiKeyId, createdAt(sort: Desc)])
   @@index([riskLevel])
   @@map("xshield_risk_reports")
+}
+
+// ============================================================================
+// XSHIELD — Multi-tenant Team Accounts
+// ============================================================================
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  ANALYST
+  VIEWER
+
+  @@map("team_role")
+}
+
+model XShieldTeam {
+  id        String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name      String
+  slug      String    @unique
+  ownerId   String    @db.Uuid
+  owner     User      @relation("TeamOwner", fields: [ownerId], references: [id])
+  members   XShieldTeamMember[]
+  apiKeys   XShieldApiKey[]
+
+  createdAt DateTime  @default(now())
+
+  @@index([ownerId])
+  @@index([slug])
+  @@map("xshield_teams")
+}
+
+model XShieldTeamMember {
+  id       String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  teamId   String   @db.Uuid
+  userId   String   @db.Uuid
+  role     TeamRole @default(VIEWER)
+
+  team     XShieldTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user     User        @relation("TeamMemberships", fields: [userId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime @default(now())
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+  @@map("xshield_team_members")
+}
+
+// ============================================================================
+// XSHIELD — Enterprise Onboarding / Lead Capture
+// ============================================================================
+
+model EnterpriseInquiry {
+  id               String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  companyName      String
+  contactEmail     String
+  useCase          String
+  estimatedDomains Int      @default(0)
+  status           String   @default("pending")
+  createdAt        DateTime @default(now())
+
+  @@index([contactEmail])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@map("enterprise_inquiries")
 }

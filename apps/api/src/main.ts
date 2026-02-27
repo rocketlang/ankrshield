@@ -40,6 +40,7 @@ import securityPlugin from './plugins/security';
 import { getWarrior, startWarrior, stopWarrior } from './warrior/warrior-service';
 import { startDomainWatcher, stopDomainWatcher } from './watch/domain-watcher.js';
 import { checkIndiaThreatIntel, fingerprintPhishingKit } from './xshield/india-threat-bridge.js';
+import { pivotOnRegistrant } from './xshield/risk-engine.js';
 import { startWatchPoller, stopWatchPoller } from './xshield/watch-poller';
 
 // ─── API Key helpers ──────────────────────────────────────────────────────────
@@ -3593,6 +3594,147 @@ If you did not request this, you can safely ignore this email.`;
     // ─── End SMS Shield / DPDP / DNS endpoints ────────────────────────────────
 
     // ─── End Session System ────────────────────────────────────────────────────
+
+    // ─── Registrant Pivot (WHOIS correlation) — STARTER+ ─────────────────────
+    // GET /risk/registrant?domain=example.com
+    // Requires valid X-API-Key with STARTER or above tier.
+    fastify.get<{ Querystring: { domain?: string } }>(
+      '/risk/registrant',
+      { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+      async (request, reply) => {
+        const domain = request.query.domain?.trim();
+        if (!domain) return reply.status(400).send({ error: 'domain query param required' });
+
+        // Validate API key — STARTER+ only
+        const rawKey = (request.headers['x-api-key'] as string) ?? null;
+        if (!rawKey) {
+          return reply.status(401).send({ error: 'X-API-Key header required' });
+        }
+        const keyHash = hashApiKey(rawKey);
+        const apiKey = await (prisma as any).xShieldApiKey.findUnique({ where: { keyHash } });
+        if (!apiKey || !apiKey.isActive) {
+          return reply.status(403).send({ error: 'Invalid or inactive API key' });
+        }
+        if (apiKey.tier === 'FREE') {
+          return reply.status(403).send({
+            error:
+              'Registrant pivot requires STARTER tier or above. Upgrade at xshieldai.com/pricing',
+          });
+        }
+
+        try {
+          const result = await pivotOnRegistrant(domain);
+          return result;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return reply.status(500).send({ error: msg });
+        }
+      }
+    );
+
+    // ─── Enterprise Onboarding / Lead Capture ─────────────────────────────────
+    // POST /enterprise/onboarding — no auth required (lead capture form)
+    // Rate limit: 3 per hour per IP to prevent spam.
+
+    // In-memory rate limiter map for enterprise onboarding (IP → { count, windowStart })
+    const enterpriseRateLimitMap = new Map<string, { count: number; windowStart: number }>();
+
+    fastify.post<{
+      Body: {
+        companyName?: string;
+        contactEmail?: string;
+        useCase?: string;
+        estimatedDomains?: number;
+      };
+    }>(
+      '/enterprise/onboarding',
+      {
+        schema: {
+          tags: ['enterprise'],
+          summary: 'Enterprise onboarding lead capture',
+          body: {
+            type: 'object',
+            required: ['companyName', 'contactEmail', 'useCase'],
+            properties: {
+              companyName: { type: 'string', minLength: 1, maxLength: 200 },
+              contactEmail: { type: 'string', format: 'email' },
+              useCase: { type: 'string', minLength: 1, maxLength: 1000 },
+              estimatedDomains: { type: 'integer', minimum: 0 },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        const { companyName, contactEmail, useCase, estimatedDomains } = request.body ?? {};
+
+        if (!companyName?.trim() || !contactEmail?.trim() || !useCase?.trim()) {
+          return reply
+            .status(400)
+            .send({ error: 'companyName, contactEmail and useCase are required' });
+        }
+
+        // Rate limit: 3 per hour per IP
+        const ip =
+          (request.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ??
+          request.socket?.remoteAddress ??
+          'unknown';
+        const now = Date.now();
+        const windowMs = 60 * 60 * 1000; // 1 hour
+
+        const bucket = enterpriseRateLimitMap.get(ip);
+        if (bucket && now - bucket.windowStart < windowMs) {
+          if (bucket.count >= 3) {
+            return reply.status(429).send({
+              error: 'Rate limit exceeded. Maximum 3 enterprise inquiries per hour per IP.',
+            });
+          }
+          bucket.count++;
+        } else {
+          enterpriseRateLimitMap.set(ip, { count: 1, windowStart: now });
+        }
+
+        try {
+          const inquiry = await (prisma as any).enterpriseInquiry.create({
+            data: {
+              companyName: companyName.trim(),
+              contactEmail: contactEmail.trim().toLowerCase(),
+              useCase: useCase.trim(),
+              estimatedDomains: Number(estimatedDomains ?? 0),
+              status: 'pending',
+            },
+          });
+
+          // Fire notification via ANKR Wire if configured
+          if (process.env.ANKR_WIRE_URL) {
+            try {
+              await fetch(`${process.env.ANKR_WIRE_URL}/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  to: 'sales@ankr.in',
+                  subject: `New Enterprise Inquiry: ${companyName}`,
+                  body: [
+                    `Company: ${companyName}`,
+                    `Contact: ${contactEmail}`,
+                    `Use Case: ${useCase}`,
+                    `Estimated Domains: ${estimatedDomains ?? 0}`,
+                    `Reference ID: ${inquiry.id}`,
+                  ].join('\n'),
+                }),
+                signal: AbortSignal.timeout(5000),
+              });
+            } catch {
+              // Wire notification is best-effort — do not fail the request
+            }
+          }
+
+          return { success: true, referenceId: inquiry.id };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return reply.status(500).send({ error: msg });
+        }
+      }
+    );
 
     // ─── Feature Requests ─────────────────────────────────────────────────────
     // Stored in Redis as a JSON list under key "feature_requests".
