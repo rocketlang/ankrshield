@@ -132,13 +132,14 @@ model User {
   lastLoginAt DateTime?
 
   // Relations
-  sessions     Session[]
-  devices      Device[]
-  policies     Policy[]
-  privacyScores PrivacyScore[]
-  alerts       Alert[]
-  apiKeys      ApiKey[]
-  integrations UserIntegration[]
+  sessions          Session[]
+  devices           Device[]
+  policies          Policy[]
+  privacyScores     PrivacyScore[]
+  alerts            Alert[]
+  apiKeys           ApiKey[]
+  integrations      UserIntegration[]
+  emailVerifications EmailVerification[]
 
   @@index([email])
   @@index([tier])
@@ -163,6 +164,33 @@ model Session {
   @@index([token])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+model MagicToken {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tokenHash  String   @unique             // SHA-256 of the raw token — never store raw
+  email      String
+  expiresAt  DateTime
+  usedAt     DateTime?                    // set on redemption (single-use)
+  createdAt  DateTime @default(now())
+
+  @@index([email])
+  @@index([expiresAt])
+  @@map("magic_tokens")
+}
+
+model EmailVerification {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId    String   @db.Uuid
+  tokenHash String   @unique
+  expiresAt DateTime
+  verifiedAt DateTime?
+  createdAt DateTime @default(now())
+
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verifications")
 }
 
 // ============================================================================

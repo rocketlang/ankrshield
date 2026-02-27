@@ -82,9 +82,6 @@ async function checkRateLimit(keyId: string, tier: string): Promise<boolean> {
   }
 }
 
-// ─── Magic Link token store (in-memory, 15-min TTL) ──────────────────────────
-const magicTokenStore = new Map<string, { email: string; expiresAt: number }>();
-
 const fastify = Fastify({
   logger: {
     level: process.env.LOG_LEVEL || 'info',
@@ -1986,6 +1983,40 @@ Date: ${now.toLocaleDateString('en-IN')}`;
     const signJwt = (userId: string, email: string, tier: string): string =>
       fastify.jwt.sign({ userId, email, tier });
 
+    // ─── Email verification helper ────────────────────────────────────────────
+    const sendEmailVerification = async (log: typeof fastify, userId: string, email: string) => {
+      try {
+        const token = randomBytes(32).toString('hex');
+        const tokenHash = createHash('sha256').update(token).digest('hex');
+        await (prisma as any).emailVerification.create({
+          data: {
+            userId,
+            tokenHash,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
+          },
+        });
+        const base = process.env.APP_URL ?? 'https://xshieldai.com';
+        const verifyUrl = `${base}/auth/verify-email?token=${token}`;
+        log.info(`[email-verify] ${email} → ${verifyUrl}`);
+        const wireUrl = process.env.ANKR_WIRE_URL ?? process.env.ANKR_WIRE_REST_URL;
+        if (wireUrl) {
+          void fetch(`${wireUrl}/notify/email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: email,
+              subject: 'Verify your xShield account',
+              text: `Welcome to xShield!\n\nVerify your email address:\n${verifyUrl}\n\nThis link expires in 24 hours.`,
+            }),
+          }).catch(() => {
+            /* best effort */
+          });
+        }
+      } catch {
+        /* never fail registration */
+      }
+    };
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const setCookieRefresh = (reply: any, refreshToken: string) => {
       void reply.setCookie(REFRESH_COOKIE, refreshToken, {
@@ -2026,22 +2057,13 @@ Date: ${now.toLocaleDateString('en-IN')}`;
           data: { email: email.toLowerCase(), password: hashed, name: name ?? null },
         });
 
-        const token = signJwt(user.id, user.email, user.tier);
-        const refreshToken = randomBytes(64).toString('hex');
-        await prisma.session.create({
-          data: {
-            userId: user.id,
-            token,
-            refreshToken,
-            expiresAt: new Date(Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000),
-          },
-        });
-
-        setCookieRefresh(reply as Parameters<typeof setCookieRefresh>[0], refreshToken);
+        // Send email verification (non-blocking)
+        void sendEmailVerification(fastify, user.id, user.email);
 
         return reply.status(201).send({
-          token,
-          user: { id: user.id, email: user.email, name: user.name, tier: user.tier },
+          success: true,
+          message: 'Account created — check your email to verify before logging in',
+          unverified: true,
         });
       }
     );
@@ -2071,6 +2093,14 @@ Date: ${now.toLocaleDateString('en-IN')}`;
 
         const valid = await comparePassword(password, user.password);
         if (!valid) return reply.status(401).send({ error: 'Invalid email or password' });
+
+        // Block unverified accounts
+        if (!user.emailVerified) {
+          return reply.status(403).send({
+            error: 'Please verify your email before logging in',
+            unverified: true,
+          });
+        }
 
         const token = signJwt(user.id, user.email, user.tier);
         const refreshToken = randomBytes(64).toString('hex');
@@ -2171,6 +2201,7 @@ Date: ${now.toLocaleDateString('en-IN')}`;
     fastify.post<{ Body: { email: string } }>(
       '/auth/magic-link',
       {
+        config: { rateLimit: { max: 5, timeWindow: '5 minutes' } },
         schema: {
           tags: ['auth'],
           summary: 'Request a magic link (passwordless login)',
@@ -2191,10 +2222,13 @@ Date: ${now.toLocaleDateString('en-IN')}`;
         const token = randomBytes(32).toString('hex');
         const tokenHash = createHash('sha256').update(token).digest('hex');
 
-        // Store with 15-minute expiry
-        magicTokenStore.set(tokenHash, {
-          email: normalizedEmail,
-          expiresAt: Date.now() + 15 * 60 * 1000,
+        // Store with 15-minute expiry (DB-backed, survives restarts)
+        await (prisma as any).magicToken.create({
+          data: {
+            tokenHash,
+            email: normalizedEmail,
+            expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+          },
         });
 
         const appUrl = process.env.APP_URL ?? 'https://xshieldai.com';
@@ -2252,15 +2286,19 @@ If you did not request this, you can safely ignore this email.`;
         if (!rawToken) return reply.status(400).send({ error: 'token required' });
 
         const tokenHash = createHash('sha256').update(rawToken).digest('hex');
-        const entry = magicTokenStore.get(tokenHash);
+        const entry = await (prisma as any).magicToken.findUnique({ where: { tokenHash } });
 
-        if (!entry || Date.now() > entry.expiresAt) {
-          magicTokenStore.delete(tokenHash);
+        if (!entry || entry.usedAt || entry.expiresAt < new Date()) {
           return reply.status(401).send({ error: 'Invalid or expired link' });
         }
 
-        // Single-use: delete immediately
-        magicTokenStore.delete(tokenHash);
+        // Single-use: mark as used
+        await (prisma as any).magicToken.update({
+          where: { tokenHash },
+          data: { usedAt: new Date() },
+        });
+        // Async cleanup of all expired tokens
+        void (prisma as any).magicToken.deleteMany({ where: { expiresAt: { lt: new Date() } } });
 
         const { email } = entry;
 
@@ -2299,6 +2337,63 @@ If you did not request this, you can safely ignore this email.`;
           success: true,
           token: jwtToken,
           email: user.email,
+          user: { id: user.id, email: user.email, name: user.name, tier: user.tier },
+        });
+      }
+    );
+
+    // GET /auth/verify-email?token= — verify email address after registration
+    fastify.get<{ Querystring: { token?: string } }>(
+      '/auth/verify-email',
+      {
+        schema: {
+          tags: ['auth'],
+          summary: 'Verify email address from registration link',
+          querystring: { type: 'object', properties: { token: { type: 'string' } } },
+        },
+      },
+      async (request, reply) => {
+        const rawToken = request.query.token;
+        if (!rawToken) return reply.status(400).send({ error: 'token required' });
+
+        const tokenHash = createHash('sha256').update(rawToken).digest('hex');
+        const record = await (prisma as any).emailVerification.findUnique({ where: { tokenHash } });
+
+        if (!record || record.verifiedAt || record.expiresAt < new Date()) {
+          return reply.status(401).send({ error: 'Invalid or expired verification link' });
+        }
+
+        // Mark verified in both tables atomically
+        await Promise.all([
+          (prisma as any).emailVerification.update({
+            where: { tokenHash },
+            data: { verifiedAt: new Date() },
+          }),
+          prisma.user.update({
+            where: { id: record.userId },
+            data: { emailVerified: new Date() },
+          }),
+        ]);
+
+        // Issue JWT session immediately so they land on dashboard
+        const user = await prisma.user.findUnique({ where: { id: record.userId } });
+        if (!user) return reply.status(404).send({ error: 'User not found' });
+
+        const jwtToken = signJwt(user.id, user.email, user.tier);
+        const refreshToken = randomBytes(64).toString('hex');
+        await prisma.session.create({
+          data: {
+            userId: user.id,
+            token: jwtToken,
+            refreshToken,
+            expiresAt: new Date(Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000),
+          },
+        });
+        setCookieRefresh(reply as Parameters<typeof setCookieRefresh>[0], refreshToken);
+
+        return reply.send({
+          success: true,
+          token: jwtToken,
           user: { id: user.id, email: user.email, name: user.name, tier: user.tier },
         });
       }
@@ -2772,6 +2867,7 @@ If you did not request this, you can safely ignore this email.`;
     fastify.get(
       '/brand/report',
       {
+        config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
         schema: {
           tags: ['brand'],
           summary: 'Brand impersonation check (heuristic, no auth required)',
@@ -2810,6 +2906,7 @@ If you did not request this, you can safely ignore this email.`;
     fastify.get(
       '/risk/narrative',
       {
+        config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
         schema: {
           tags: ['risk'],
           summary: 'AI threat narrative for a domain (uses ANKR AI Proxy)',
@@ -2859,6 +2956,7 @@ If you did not request this, you can safely ignore this email.`;
     // Server-Sent Events stream — polls crt.sh every 60s, emits new certs.
     fastify.get<{ Querystring: { domain?: string } }>(
       '/risk/cert-stream',
+      { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
       async (request, reply) => {
         const domain = request.query.domain?.trim();
         if (!domain) {
