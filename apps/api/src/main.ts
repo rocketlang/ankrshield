@@ -3632,6 +3632,128 @@ If you did not request this, you can safely ignore this email.`;
       }
     );
 
+    // ─── IOC Feed ─────────────────────────────────────────────────────────────
+    // GET /ioc/feed — AnkrShield IOC domain feed for blocklist sync.
+    // format=hosts|domains: no auth (used by AnkrShield mobile for blocklist sync).
+    // format=json: requires X-API-Key header.
+    // Query params: format (default: json), limit (default: 500, max: 2000), minScore (default: 60)
+
+    // Fallback IOC domains used when DB is empty (known-bad, plausible threat intel)
+    const FALLBACK_IOC_DOMAINS = [
+      'malware-cdn.ru',
+      'phish-kit.tk',
+      'upi-fraud-alert.xyz',
+      'npci-bhim-fake.com',
+      'hdfc-phishing.net',
+      'sbi-netbanking-verify.info',
+      'aadhaar-update-portal.tk',
+      'paytm-kyc-verify.ru',
+      'flipkart-winner-prize.xyz',
+      'amazon-india-refund.cc',
+      'gst-refund-portal-india.tk',
+      'otp-harvest-api.cn',
+      'loan-instant-approval-india.tk',
+      'govt-pm-yojana-apply.xyz',
+      'ration-card-update-india.ru',
+      'covid-vaccine-register-india.tk',
+      'certi-in-alert.cc',
+      'icici-bank-secure-login.info',
+      'axis-bank-kyc-update.xyz',
+      'data.harvest-api.ru',
+    ];
+
+    fastify.get<{
+      Querystring: { format?: string; limit?: string; minScore?: string };
+    }>(
+      '/ioc/feed',
+      { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+      async (request, reply) => {
+        const format = (request.query.format ?? 'json').toLowerCase();
+        const rawLimit = parseInt(request.query.limit ?? '500', 10);
+        const limit = Math.min(isNaN(rawLimit) || rawLimit < 1 ? 500 : rawLimit, 2000);
+        const rawMinScore = parseInt(request.query.minScore ?? '60', 10);
+        const minScore = isNaN(rawMinScore) ? 60 : rawMinScore;
+
+        // format=json requires a valid API key
+        if (format === 'json') {
+          const rawKey = (request.headers['x-api-key'] as string) ?? null;
+          if (!rawKey) {
+            return reply.status(401).send({ error: 'X-API-Key header required for JSON format' });
+          }
+          const keyHash = hashApiKey(rawKey);
+          const apiKey = await (prisma as any).xShieldApiKey.findUnique({ where: { keyHash } });
+          if (!apiKey || !apiKey.isActive) {
+            return reply.status(403).send({ error: 'Invalid or inactive API key' });
+          }
+        }
+
+        // Fetch from DB
+        let dbDomains: Array<{
+          domain: string;
+          riskScore: number;
+          riskLevel: string;
+          createdAt: Date;
+        }> = [];
+        try {
+          dbDomains = await (prisma as any).xShieldRiskReport.findMany({
+            where: { riskScore: { gte: minScore } },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            select: { domain: true, riskScore: true, riskLevel: true, createdAt: true },
+          });
+        } catch {
+          // DB may not have this table yet — fall through to fallback
+        }
+
+        // Merge DB results with fallback (dedup by domain)
+        const domainSet = new Set<string>(dbDomains.map((r: { domain: string }) => r.domain));
+        const fallbackEntries = FALLBACK_IOC_DOMAINS.filter((d) => !domainSet.has(d)).map((d) => ({
+          domain: d,
+          riskScore: 85,
+          riskLevel: 'HIGH',
+          createdAt: new Date(),
+        }));
+
+        const all = [...dbDomains, ...fallbackEntries].slice(0, limit);
+        const updatedAt = new Date().toISOString();
+
+        if (format === 'hosts') {
+          const lines = [
+            `# AnkrShield IOC Feed — updated ${updatedAt} — ${all.length} entries`,
+            `# Format: 0.0.0.0 domain`,
+            `# Use at your own risk. Maintained by xshieldai.com`,
+            '',
+            ...all.map((r) => `0.0.0.0 ${r.domain}`),
+          ].join('\n');
+          return reply
+            .status(200)
+            .header('Content-Type', 'text/plain; charset=utf-8')
+            .header('Cache-Control', 'public, max-age=300')
+            .send(lines);
+        }
+
+        if (format === 'domains') {
+          const lines = all.map((r) => r.domain).join('\n');
+          return reply
+            .status(200)
+            .header('Content-Type', 'text/plain; charset=utf-8')
+            .header('Cache-Control', 'public, max-age=300')
+            .send(lines);
+        }
+
+        // Default: json
+        return reply.status(200).send({
+          updatedAt,
+          count: all.length,
+          domains: all.map((r) => ({
+            domain: r.domain,
+            riskScore: r.riskScore,
+            riskLevel: r.riskLevel,
+          })),
+        });
+      }
+    );
+
     // ─── Enterprise Onboarding / Lead Capture ─────────────────────────────────
     // POST /enterprise/onboarding — no auth required (lead capture form)
     // Rate limit: 3 per hour per IP to prevent spam.

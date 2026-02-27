@@ -10,7 +10,8 @@ export * from './client/providers';
 
 // Blocklist management
 export * from './blocklist/manager';
-export * from './blocklist/lookup';
+// Note: DomainLookup is re-exported via blocklist/manager — do NOT re-export from lookup directly
+export * from './blocklist/app-allowlist';
 
 // Caching
 export * from './cache/dns-cache';

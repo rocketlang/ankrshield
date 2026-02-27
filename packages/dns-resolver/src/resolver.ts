@@ -11,6 +11,7 @@
  * Response: { Answer: [{data: '1.2.3.4', ...}] }
  */
 
+import { isAllowedForApp } from './blocklist/app-allowlist';
 import type { DomainLookup } from './blocklist/lookup';
 
 export interface DNSResolverOptions {
@@ -61,16 +62,25 @@ export class DNSResolver {
   /**
    * Resolve a domain via DNS-over-HTTPS.
    * Returns IP string if resolved and not blocked, null if blocked or not found.
+   *
+   * @param domain      - The domain to resolve
+   * @param queryingApp - Optional package name of the app making the query.
+   *                      If provided and the domain is on that app's consent allowlist,
+   *                      the blocklist check is bypassed (surgical inhibition — never
+   *                      block connections that belong to the app's stated purpose).
    */
-  async resolve(domain: string): Promise<string | null> {
+  async resolve(domain: string, queryingApp?: string): Promise<string | null> {
     const normalised = domain.toLowerCase().replace(/\.$/g, '');
 
-    // Step 1: Check blocklist
+    // Step 1: Check blocklist — but skip if domain is on app's consent allowlist
     if (this.blocklist) {
-      const blocked = await this.blocklist.isBlocked(normalised);
-      if (blocked) {
-        this.stats.blocked++;
-        return null;
+      const allowedByConsent = queryingApp ? isAllowedForApp(queryingApp, normalised) : false;
+      if (!allowedByConsent) {
+        const blocked = await this.blocklist.isBlocked(normalised);
+        if (blocked) {
+          this.stats.blocked++;
+          return null;
+        }
       }
     }
 
@@ -109,10 +119,20 @@ export class DNSResolver {
 
   /**
    * Check if a domain is blocked without resolving.
+   *
+   * @param domain      - The domain to check
+   * @param queryingApp - Optional package name of the app making the query.
+   *                      If provided and the domain is allowlisted for that app,
+   *                      returns false (not blocked) regardless of blocklist state.
    */
-  async isBlocked(domain: string): Promise<boolean> {
+  async isBlocked(domain: string, queryingApp?: string): Promise<boolean> {
     if (!this.blocklist) return false;
     const normalised = domain.toLowerCase().replace(/\.$/g, '');
+    // Consent-aware: never report a domain as blocked if the querying app is
+    // allowed to reach it (user installed the app and granted it permissions).
+    if (queryingApp && isAllowedForApp(queryingApp, normalised)) {
+      return false;
+    }
     return this.blocklist.isBlocked(normalised);
   }
 

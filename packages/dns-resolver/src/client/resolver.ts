@@ -8,11 +8,13 @@
  * - Query logging
  */
 
-import { DoHClient } from './doh-client';
-import { DNSResponse, DNSResolverConfig } from '../index';
-import { DNSCache } from '../cache/dns-cache';
+import { isAllowedForApp } from '../blocklist/app-allowlist';
 import { BlocklistManager } from '../blocklist/manager';
+import { DNSCache } from '../cache/dns-cache';
+import { DNSResponse, DNSResolverConfig } from '../index';
 import { DNSLogger } from '../logger/dns-logger';
+
+import { DoHClient } from './doh-client';
 
 export class DNSResolver {
   private dohClient: DoHClient;
@@ -27,7 +29,9 @@ export class DNSResolver {
 
     // Initialize cache if enabled
     if (config.cacheEnabled) {
-      this.cache = new DNSCache(config.redis ? `redis://${config.redis.host}:${config.redis.port}` : undefined);
+      this.cache = new DNSCache(
+        config.redis ? `redis://${config.redis.host}:${config.redis.port}` : undefined
+      );
     }
 
     // Initialize blocklist if enabled
@@ -37,7 +41,9 @@ export class DNSResolver {
 
     // Initialize logger if enabled
     if (config.loggingEnabled) {
-      this.logger = new DNSLogger(config.redis ? `redis://${config.redis.host}:${config.redis.port}` : undefined);
+      this.logger = new DNSLogger(
+        config.redis ? `redis://${config.redis.host}:${config.redis.port}` : undefined
+      );
     }
   }
 
@@ -53,16 +59,21 @@ export class DNSResolver {
   /**
    * Resolve a domain with full pipeline:
    * 1. Check cache
-   * 2. Check blocklist
+   * 2. Check blocklist (skipped for app-consented domains)
    * 3. Query DNS
    * 4. Update cache
    * 5. Log query
+   *
+   * @param queryingApp - Optional package name of the querying app. If provided,
+   *                      domains on that app's consent allowlist bypass the blocklist
+   *                      (surgical inhibition — never block expected app connections).
    */
   async resolve(
     domain: string,
     recordType: 'A' | 'AAAA' | 'CNAME' | 'MX' | 'TXT' = 'A',
     deviceId?: string,
-    userId?: string
+    userId?: string,
+    queryingApp?: string
   ): Promise<DNSResponse & { blocked?: boolean; blockedReason?: string; cached?: boolean }> {
     this.totalQueries++;
     const startTime = performance.now();
@@ -90,9 +101,10 @@ export class DNSResolver {
       }
     }
 
-    // Step 2: Check blocklist
+    // Step 2: Check blocklist — consent-aware: skip if domain is allowlisted for the querying app
     if (this.blocklist) {
-      const isBlocked = await this.blocklist.isBlocked(domain);
+      const allowedByConsent = queryingApp ? isAllowedForApp(queryingApp, domain) : false;
+      const isBlocked = allowedByConsent ? false : await this.blocklist.isBlocked(domain);
       if (isBlocked) {
         this.blockedQueries++;
         const info = await this.blocklist.getDomainInfo(domain);
@@ -150,10 +162,23 @@ export class DNSResolver {
   }
 
   /**
-   * Check if a domain is blocked
+   * Check if a domain is blocked.
+   *
+   * @param domain      - The domain to check
+   * @param queryingApp - Optional package name of the querying app.
+   *                      If provided and the domain is on the app's consent allowlist,
+   *                      returns { blocked: false } regardless of blocklist state.
    */
-  async isBlocked(domain: string): Promise<{ blocked: boolean; reason?: string }> {
+  async isBlocked(
+    domain: string,
+    queryingApp?: string
+  ): Promise<{ blocked: boolean; reason?: string }> {
     if (!this.blocklist) {
+      return { blocked: false };
+    }
+
+    // Consent-aware: domains that belong to the app's stated purpose are never blocked
+    if (queryingApp && isAllowedForApp(queryingApp, domain)) {
       return { blocked: false };
     }
 
