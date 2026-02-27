@@ -63,11 +63,13 @@ builder.objectType('SourceScore', {
 
 // ── XShieldRiskReport ─────────────────────────────────────────────────────────
 
-const XShieldRiskReportRef = builder.objectRef<XShieldRiskReport & {
-  parsedFindings?: any[];
-  parsedMitre?: any[];
-  parsedSourceBreakdown?: Record<string, any>;
-}>('XShieldRiskReport');
+const XShieldRiskReportRef = builder.objectRef<
+  XShieldRiskReport & {
+    parsedFindings?: any[];
+    parsedMitre?: any[];
+    parsedSourceBreakdown?: Record<string, any>;
+  }
+>('XShieldRiskReport');
 
 XShieldRiskReportRef.implement({
   fields: (t) => ({
@@ -80,7 +82,7 @@ XShieldRiskReportRef.implement({
     findings: t.field({
       type: ['RiskFinding'],
       resolve: (report) => {
-        const f = (report as any).parsedFindings ?? report.findings as any[];
+        const f = (report as any).parsedFindings ?? (report.findings as any[]);
         return Array.isArray(f) ? f : [];
       },
     }),
@@ -88,7 +90,7 @@ XShieldRiskReportRef.implement({
     mitreMapping: t.field({
       type: ['MitreMapping'],
       resolve: (report) => {
-        const m = (report as any).parsedMitre ?? report.mitreMapping as any;
+        const m = (report as any).parsedMitre ?? (report.mitreMapping as any);
         return Array.isArray(m) ? m : [];
       },
     }),
@@ -96,7 +98,7 @@ XShieldRiskReportRef.implement({
     sourceBreakdown: t.field({
       type: ['SourceScore'],
       resolve: (report) => {
-        const bd = (report as any).parsedSourceBreakdown ?? report.findings as any;
+        const bd = (report as any).parsedSourceBreakdown ?? (report.findings as any);
         if (!bd || typeof bd !== 'object') return [];
         // If it's already the findings array, skip — sourceBreakdown stored separately
         if (Array.isArray(bd)) return [];
@@ -206,9 +208,68 @@ builder.objectType('CreateApiKeyResult', {
   }),
 });
 
-export {
-  XShieldRiskReportRef,
-  DomainWatchRef,
-  WatchAlertRef,
-  XShieldApiKeyRef,
-};
+// ── Remediation Playbook Types ─────────────────────────────────────────────────
+
+// DNSRecord — exact record to add/update in DNS provider
+builder.objectType('XShieldDNSRecord', {
+  fields: (t) => ({
+    type: t.string({ resolve: (r: any) => r.type }),
+    name: t.string({ resolve: (r: any) => r.name }),
+    value: t.string({ resolve: (r: any) => r.value }),
+    ttl: t.int({ nullable: true, resolve: (r: any) => r.ttl ?? null }),
+  }),
+});
+
+// RemediationStep — one copy-pasteable action
+builder.objectType('RemediationStep', {
+  fields: (t) => ({
+    order: t.int({ resolve: (s: any) => s.order }),
+    instruction: t.string({ resolve: (s: any) => s.instruction }),
+    command: t.string({ nullable: true, resolve: (s: any) => s.command ?? null }),
+    url: t.string({ nullable: true, resolve: (s: any) => s.url ?? null }),
+    code: t.string({ nullable: true, resolve: (s: any) => s.code ?? null }),
+    record: t.field({
+      type: 'XShieldDNSRecord',
+      nullable: true,
+      resolve: (s: any) => s.record ?? null,
+    }),
+  }),
+});
+
+// RemediationAction — one actionable fix with steps
+builder.objectType('RemediationAction', {
+  fields: (t) => ({
+    id: t.string({ resolve: (a: any) => a.id }),
+    category: t.string({ resolve: (a: any) => a.category }),
+    priority: t.string({ resolve: (a: any) => a.priority }),
+    title: t.string({ resolve: (a: any) => a.title }),
+    description: t.string({ resolve: (a: any) => a.description }),
+    estimatedMinutes: t.int({ resolve: (a: any) => a.estimatedMinutes }),
+    automatable: t.boolean({ resolve: (a: any) => a.automatable }),
+    steps: t.field({
+      type: ['RemediationStep'],
+      resolve: (a: any) => a.steps ?? [],
+    }),
+  }),
+});
+
+// XShieldPlaybook — full remediation playbook for a domain
+builder.objectType('XShieldPlaybook', {
+  fields: (t) => ({
+    domain: t.string({ resolve: (p: any) => p.domain }),
+    reportId: t.string({ resolve: (p: any) => p.reportId }),
+    generatedAt: t.string({ resolve: (p: any) => p.generatedAt }),
+    riskScore: t.int({ resolve: (p: any) => p.riskScore }),
+    riskLevel: t.string({ resolve: (p: any) => p.riskLevel }),
+    totalActions: t.int({ resolve: (p: any) => p.totalActions }),
+    estimatedTotalMinutes: t.int({ resolve: (p: any) => p.estimatedTotalMinutes }),
+    summary: t.string({ resolve: (p: any) => p.summary }),
+    cicdYaml: t.string({ resolve: (p: any) => p.cicdYaml }),
+    actions: t.field({
+      type: ['RemediationAction'],
+      resolve: (p: any) => p.actions ?? [],
+    }),
+  }),
+});
+
+export { XShieldRiskReportRef, DomainWatchRef, WatchAlertRef, XShieldApiKeyRef };

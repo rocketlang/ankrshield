@@ -329,7 +329,7 @@ function phishingTakedownPlaybook(threat: DomainThreat): RemediationAction {
         instruction: 'If you have screenshotUrl evidence, preserve it:',
         url: threat.screenshotUrl ?? undefined,
       },
-    ].filter((s) => s.url || s.command),
+    ].filter((s) => s.url || (s as any).command),
   };
 }
 
@@ -393,14 +393,15 @@ function breachResponsePlaybook(breach: BreachRecord, domain: string): Remediati
 // ─── GitHub secret rotation generators ───────────────────────────────────────
 
 function secretRotationPlaybook(leak: GithubLeakHit): RemediationAction {
-  const tokenType = leak.secretType ?? 'API key';
+  const tokenType = leak.leakType ?? 'API key';
   const isGitHubToken = tokenType.toLowerCase().includes('github');
+  const repoId = leak.repository?.replace(/\//g, '_') ?? 'unknown';
 
   return {
-    id: `secret_${leak.repoFullName?.replace(/\//g, '_') ?? 'unknown'}`,
+    id: `secret_${repoId}`,
     category: 'secret_rotation',
     priority: 'critical',
-    title: `Rotate Exposed ${tokenType} in ${leak.repoFullName ?? 'GitHub repo'}`,
+    title: `Rotate Exposed ${tokenType} in ${leak.repository ?? 'GitHub repo'}`,
     description: `A ${tokenType} was found in public GitHub code. Assume it is already compromised — rotate immediately.`,
     estimatedMinutes: 15,
     automatable: false,
@@ -408,7 +409,7 @@ function secretRotationPlaybook(leak: GithubLeakHit): RemediationAction {
       {
         order: 1,
         instruction: 'View the exposed secret:',
-        url: leak.htmlUrl,
+        url: leak.url,
       },
       ...(isGitHubToken
         ? [
@@ -598,4 +599,4 @@ export function buildRemediationPlaybook(report: RiskReport): RemediationPlayboo
   };
 }
 
-export type { RemediationPlaybook, RemediationAction, RemediationStep, DNSRecord };
+// Types are exported inline above — no re-export needed

@@ -15,7 +15,10 @@
       "@ankrshield/policy-engine": ["../../packages/policy-engine/src"],
       "@ankrshield/ai-governance": ["../../packages/ai-governance/src"],
       "@ankrshield/tracker-db": ["../../packages/tracker-db/src"],
-      "@ankrshield/crypto": ["../../packages/crypto/src"]
+      "@ankrshield/crypto": ["../../packages/crypto/src"],
+      "@ankrshield/risk-intelligence": ["../../packages/risk-intelligence/src"],
+      "@ankrshield/spyware-detector": ["../../packages/spyware-detector/src"],
+      "@ankrshield/ai-warrior": ["../../packages/ai-warrior/src"]
     }
   },
   "include": ["src/**/*"],
@@ -28,6 +31,9 @@
     { "path": "../../packages/policy-engine" },
     { "path": "../../packages/ai-governance" },
     { "path": "../../packages/tracker-db" },
-    { "path": "../../packages/crypto" }
+    { "path": "../../packages/crypto" },
+    { "path": "../../packages/risk-intelligence" },
+    { "path": "../../packages/spyware-detector" },
+    { "path": "../../packages/ai-warrior" }
   ]
 }

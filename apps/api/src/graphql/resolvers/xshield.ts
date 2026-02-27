@@ -3,6 +3,7 @@
  *
  * Queries:
  *   xshieldScan(domain)           — full risk report (no auth, quota enforced)
+ *   xshieldPlaybook(domain)       — remediation playbook from risk scan (API key required)
  *   xshieldApiKey(keyPrefix)      — info about a key (auth: the key itself via header)
  *   xshieldWatches                — list watches for authenticated API key
  *   xshieldWatchAlerts(watchId)   — alerts for a specific watch
@@ -19,12 +20,12 @@
  */
 
 import crypto from 'crypto';
-import { builder, prisma } from '../builder';
+
+import { runRiskEngine, buildRemediationPlaybook } from '@ankrshield/risk-intelligence';
+
 import { scanDomain, generateTyposquats } from '../../xshield/risk-engine';
-import {
-  XShieldApiKeyCreateInput,
-  WatchCreateInput,
-} from '../types/xshield';
+import { builder, prisma } from '../builder';
+import { XShieldApiKeyCreateInput, WatchCreateInput } from '../types/xshield';
 
 // ── API Key helpers ───────────────────────────────────────────────────────────
 
@@ -68,7 +69,9 @@ async function checkAndDecrementQuota(apiKeyId: string): Promise<void> {
   }
 
   if (key.tier === 'FREE' && key.usedThisMonth >= key.monthlyQuota) {
-    throw new Error(`Monthly quota exceeded (${key.monthlyQuota} reports/month on Free tier). Upgrade at xshieldai.com/pricing`);
+    throw new Error(
+      `Monthly quota exceeded (${key.monthlyQuota} reports/month on Free tier). Upgrade at xshieldai.com/pricing`
+    );
   }
 
   await (prisma as any).xShieldApiKey.update({
@@ -194,7 +197,7 @@ builder.queryField('xshieldIocFeed', (t) =>
         select: { domain: true, riskScore: true, riskLevel: true },
       });
 
-      return reports.map(r => `${r.domain} (score:${r.riskScore} level:${r.riskLevel})`);
+      return reports.map((r) => `${r.domain} (score:${r.riskScore} level:${r.riskLevel})`);
     },
   })
 );
@@ -215,9 +218,19 @@ builder.queryField('xshieldStatus', (t) =>
         activeWatches,
         totalApiKeys,
         sources: [
-          'DNS/SPF/DMARC', 'GreyNoise', 'HIBP', 'Shodan', 'crt.sh',
-          'PhishTank/OpenPhish', 'VirusTotal', 'MXToolbox', 'URLScan',
-          'OTX/AlienVault', 'PasteMonitor', 'GitHub', 'Typosquat',
+          'DNS/SPF/DMARC',
+          'GreyNoise',
+          'HIBP',
+          'Shodan',
+          'crt.sh',
+          'PhishTank/OpenPhish',
+          'VirusTotal',
+          'MXToolbox',
+          'URLScan',
+          'OTX/AlienVault',
+          'PasteMonitor',
+          'GitHub',
+          'Typosquat',
         ],
         version: '1.0.0',
         timestamp: new Date().toISOString(),
@@ -298,7 +311,9 @@ builder.mutationField('xshieldAddWatch', (t) =>
 
       // STARTER+ only
       if (apiKey.tier === 'FREE') {
-        throw new Error('Domain Watch requires Starter tier or above. Upgrade at xshieldai.com/pricing');
+        throw new Error(
+          'Domain Watch requires Starter tier or above. Upgrade at xshieldai.com/pricing'
+        );
       }
 
       // Check for existing watch
@@ -388,6 +403,56 @@ builder.mutationField('xshieldResumeWatch', (t) =>
         where: { id: watchId },
         data: { status: 'ACTIVE' },
       });
+    },
+  })
+);
+
+// ── Remediation Playbook ───────────────────────────────────────────────────────
+
+builder.queryField('xshieldPlaybook', (t) =>
+  t.field({
+    type: 'XShieldPlaybook',
+    description:
+      'Generate a concrete remediation playbook for a domain. Runs full 12-source risk scan and produces copy-pasteable fix actions for every finding.',
+    args: {
+      domain: t.arg.string({ required: true }),
+    },
+    resolve: async (_parent, { domain }, context) => {
+      // Require API key — playbook is a premium feature (STARTER+)
+      const apiKey = await requireApiKey(context);
+      if (apiKey.tier === 'FREE') {
+        throw new Error(
+          'Remediation playbooks require STARTER tier or above. Upgrade at xshieldai.com/pricing'
+        );
+      }
+
+      await checkAndDecrementQuota(apiKey.id);
+
+      // Run the full risk-intelligence engine (12 sources, richer than xshieldScan)
+      const report = await runRiskEngine({
+        domain,
+        shodanApiKey: process.env.SHODAN_API_KEY,
+        otxApiKey: process.env.OTX_API_KEY,
+        githubToken: process.env.GITHUB_TOKEN,
+        enableGithubDork: !!process.env.GITHUB_TOKEN,
+      });
+
+      // Generate the playbook — exact DNS records, ufw commands, takedown templates, etc.
+      const playbook = buildRemediationPlaybook(report);
+
+      // Persist the report for audit trail
+      await (prisma as any).xShieldRiskReport.create({
+        data: {
+          apiKeyId: apiKey.id,
+          domain,
+          riskScore: report.riskScore,
+          riskLevel: report.riskLevel.toUpperCase(),
+          findings: report.factors as any,
+          mitreMapping: { playbook, summary: playbook.summary } as any,
+        },
+      });
+
+      return playbook;
     },
   })
 );
