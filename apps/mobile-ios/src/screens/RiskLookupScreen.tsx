@@ -14,9 +14,17 @@ import {
   Alert,
 } from 'react-native';
 
+import { API_BASE } from '../config';
 import { WarriorService, RiskScore, RiskPlaybook } from '../services/WarriorService';
 
 const svc = new WarriorService();
+
+interface AiNarrative {
+  domain: string;
+  narrative: string;
+  model: string;
+  generatedAt: string;
+}
 
 function levelColor(level: string): string {
   switch (level?.toLowerCase()) {
@@ -38,6 +46,9 @@ export function RiskLookupScreen() {
   const [loading, setLoading] = useState(false);
   const [score, setScore] = useState<RiskScore | null>(null);
   const [playbook, setPlaybook] = useState<RiskPlaybook | null>(null);
+  const [narrative, setNarrative] = useState<AiNarrative | null>(null);
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
+  const [narrativeError, setNarrativeError] = useState(false);
 
   async function lookup() {
     const d = domain
@@ -48,6 +59,8 @@ export function RiskLookupScreen() {
     setLoading(true);
     setScore(null);
     setPlaybook(null);
+    setNarrative(null);
+    setNarrativeError(false);
     try {
       const [s, p] = await Promise.all([svc.getRiskScore(d), svc.getRiskPlaybook(d)]);
       setScore(s);
@@ -57,6 +70,27 @@ export function RiskLookupScreen() {
       Alert.alert('Error', e.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchNarrative() {
+    const d = domain
+      .trim()
+      .replace(/^https?:\/\//, '')
+      .split('/')[0];
+    if (!d) return;
+    setNarrativeLoading(true);
+    setNarrative(null);
+    setNarrativeError(false);
+    try {
+      const res = await fetch(`${API_BASE}/risk/narrative?domain=${encodeURIComponent(d)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data: AiNarrative = await res.json();
+      setNarrative(data);
+    } catch {
+      setNarrativeError(true);
+    } finally {
+      setNarrativeLoading(false);
     }
   }
 
@@ -110,6 +144,38 @@ export function RiskLookupScreen() {
             </View>
           )}
           {score.lastSeen && <Text style={styles.lastSeen}>Last seen: {score.lastSeen}</Text>}
+        </View>
+      )}
+
+      {/* AI Threat Brief */}
+      {score && (
+        <View style={styles.narrativeSection}>
+          {!narrative && !narrativeLoading && !narrativeError && (
+            <TouchableOpacity style={styles.narrativeBtn} onPress={fetchNarrative}>
+              <Text style={styles.narrativeBtnText}>Get AI Brief</Text>
+            </TouchableOpacity>
+          )}
+          {narrativeLoading && (
+            <View style={styles.narrativeCard}>
+              <ActivityIndicator color="#7c3aed" size="small" />
+            </View>
+          )}
+          {narrativeError && !narrativeLoading && (
+            <View style={styles.narrativeCard}>
+              <Text style={styles.narrativeErrorText}>AI Brief unavailable</Text>
+            </View>
+          )}
+          {narrative && !narrativeLoading && (
+            <View style={styles.narrativeCard}>
+              <View style={styles.narrativeBadge}>
+                <Text style={styles.narrativeBadgeText}>AI BRIEF</Text>
+              </View>
+              <Text style={styles.narrativeText}>{narrative.narrative}</Text>
+              <Text style={styles.narrativeTimestamp}>
+                {new Date(narrative.generatedAt).toLocaleString()} · {narrative.model}
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -240,4 +306,48 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   hintExample: { color: '#374151', fontSize: 12, textAlign: 'center' },
+  narrativeSection: { marginHorizontal: 16, marginBottom: 16 },
+  narrativeBtn: {
+    backgroundColor: '#4c1d95',
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  narrativeBtnText: { color: '#e9d5ff', fontWeight: '700', fontSize: 14 },
+  narrativeCard: {
+    backgroundColor: '#1a1f2e',
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  narrativeBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#7c3aed',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 10,
+  },
+  narrativeBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  narrativeText: {
+    color: '#ffffff',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  narrativeTimestamp: {
+    color: '#6b7280',
+    fontSize: 11,
+    marginTop: 10,
+  },
+  narrativeErrorText: {
+    color: '#6b7280',
+    fontSize: 13,
+    textAlign: 'center',
+  },
 });

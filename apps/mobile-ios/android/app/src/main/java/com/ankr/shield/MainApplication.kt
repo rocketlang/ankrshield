@@ -32,6 +32,7 @@ class MainApplication : Application(), ReactApplication {
             packages.add(WhatsAppGuardPackage())
             packages.add(WidgetPackage())
             packages.add(MdmStoragePackage())
+            packages.add(QuickTilePackage())
             return packages
           }
 
