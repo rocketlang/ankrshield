@@ -8,8 +8,11 @@
   "exports": {
     ".": {
       "import": "./dist/index.js",
+      "require": "./src/index.ts",
       "types": "./dist/index.d.ts"
-    }
+    },
+    "./src": "./src/index.ts",
+    "./src/*": "./src/*.ts"
   },
   "scripts": {
     "build": "tsc",

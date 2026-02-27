@@ -27,5 +27,8 @@ export * from './integration/tracker-enricher';
 export * from './integration/privacy-scorer';
 export * from './integration/network-privacy-monitor';
 
-// Legacy exports
-export { NetworkMonitor, NetworkFlow } from './monitor';
+// Legacy exports (NetworkFlow is already exported via ./types)
+export { NetworkMonitor } from './monitor';
+
+// WiFi / mobile threat detection
+export * from './threat-detector';
