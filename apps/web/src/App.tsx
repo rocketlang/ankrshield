@@ -23,6 +23,7 @@ import Pricing from './pages/Pricing';
 import Register from './pages/Register';
 import Settings from './pages/Settings';
 import SupplyChain from './pages/SupplyChain';
+import VerifyMagicLink from './pages/VerifyMagicLink';
 
 function AppRoutes() {
   useTokenRefresh();
@@ -34,6 +35,7 @@ function AppRoutes() {
       <Route path="/evidence" element={<EvidenceReport />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/auth/verify" element={<VerifyMagicLink />} />
       <Route path="/pricing" element={<Pricing />} />
       <Route path="/developers" element={<Developers />} />
 

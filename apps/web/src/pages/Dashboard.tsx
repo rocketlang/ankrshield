@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useState, useCallback } from 'react';
 
+import CertStreamWidget from '../components/CertStreamWidget';
 import DomainScanWidget from '../components/DomainScanWidget';
 import ContentWrapper from '../components/layout/ContentWrapper';
 import Alert from '../components/ui/Alert';
@@ -511,6 +512,11 @@ export default function Dashboard() {
             </CardBody>
           </Card>
         </div>
+
+        {/* Certificate Transparency Stream — shown when there are watched domains */}
+        {watches.length > 0 && watches[0]?.domain && (
+          <CertStreamWidget domain={watches[0].domain} />
+        )}
 
         {/* Intelligence Sources */}
         {status?.sources && status.sources.length > 0 && (
