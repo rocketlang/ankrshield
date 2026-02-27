@@ -4,6 +4,7 @@
 
 import { execSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 
 import { DNSResolver } from '@ankrshield/dns-resolver';
@@ -809,6 +810,37 @@ const start = async () => {
           database: 'disconnected',
         };
       }
+    });
+
+    // ─── APK download endpoints ───────────────────────────────────────────────
+    // GET /download/ankrshield.apk — serve APK directly if present, else redirect to GitHub release
+    fastify.get('/download/ankrshield.apk', async (request, reply) => {
+      const apkPath = process.env.APK_PATH ?? '/root/ankrshield.apk';
+      if (existsSync(apkPath)) {
+        const { createReadStream } = await import('node:fs');
+        reply.header('Content-Type', 'application/vnd.android.package-archive');
+        reply.header('Content-Disposition', 'attachment; filename="ankrshield.apk"');
+        return reply.send(createReadStream(apkPath));
+      }
+      const releaseUrl =
+        process.env.APK_RELEASE_URL ??
+        'https://github.com/rocketlang/ankrshield/releases/latest/download/ankrshield.apk';
+      return reply.redirect(302, releaseUrl);
+    });
+
+    // GET /download/ankrshield-debug.apk — serve debug APK directly if present, else redirect
+    fastify.get('/download/ankrshield-debug.apk', async (request, reply) => {
+      const apkPath = process.env.DEBUG_APK_PATH ?? '/root/ankrshield-debug.apk';
+      if (existsSync(apkPath)) {
+        const { createReadStream } = await import('node:fs');
+        reply.header('Content-Type', 'application/vnd.android.package-archive');
+        reply.header('Content-Disposition', 'attachment; filename="ankrshield-debug.apk"');
+        return reply.send(createReadStream(apkPath));
+      }
+      const releaseUrl =
+        process.env.DEBUG_APK_RELEASE_URL ??
+        'https://github.com/rocketlang/ankrshield/releases/latest/download/ankrshield-debug.apk';
+      return reply.redirect(302, releaseUrl);
     });
 
     // Spyware scan endpoint (POST /warrior/spyware-scan)

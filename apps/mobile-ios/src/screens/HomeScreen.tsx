@@ -15,6 +15,7 @@ import {
 
 import { PrivacyScoreCircle } from '../components/PrivacyScoreCircle';
 import { StatsCard } from '../components/StatsCard';
+import { startBlocklistSync, getBlocklistStats } from '../services/ioc-sync';
 import { PrivacyService } from '../services/PrivacyService';
 import { startReporting } from '../services/StatsReporter';
 import { vpnService, VpnStats } from '../services/VpnService';
@@ -34,6 +35,7 @@ export function HomeScreen({ navigation }: any) {
   const [vpnStats, setVpnStats] = useState<VpnStats>(DEFAULT_VPN);
   const [dnsPaused, setDnsPaused] = useState(false);
   const [pauseUntilMs, setPauseUntilMs] = useState(0);
+  const [iocStats, setIocStats] = useState(getBlocklistStats());
 
   async function syncPauseState() {
     try {
@@ -77,10 +79,18 @@ export function HomeScreen({ navigation }: any) {
     // Report stats to server every 30 s (counters only, no domain names)
     const stopReporting = startReporting(() => vpnService.getStats().catch(() => DEFAULT_VPN));
 
+    // Start IOC blocklist sync (6-hour poll, offline-first)
+    const stopIocSync = startBlocklistSync();
+
+    // Refresh IOC stats display every 30s
+    const iocInterval = setInterval(() => setIocStats(getBlocklistStats()), 30000);
+
     return () => {
       clearInterval(serverInterval);
       clearInterval(vpnInterval);
+      clearInterval(iocInterval);
       stopReporting();
+      stopIocSync();
     };
   }, []);
 
@@ -158,6 +168,24 @@ export function HomeScreen({ navigation }: any) {
         <View style={styles.pill}>
           <Text style={styles.pillTxt}>📵 Blocks ads</Text>
         </View>
+      </View>
+
+      {/* IOC Blocklist sync status */}
+      <View style={styles.iocBanner}>
+        <Text style={styles.iocText}>
+          {iocStats.count > 0
+            ? `IOC Blocklist: ${iocStats.count.toLocaleString()} threats\u2002\u00b7\u2002Last sync: ${
+                iocStats.lastSyncAt
+                  ? iocStats.lastSyncAt.toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })
+                  : 'pending'
+              }`
+            : iocStats.syncInProgress
+              ? 'Syncing IOC blocklist...'
+              : 'IOC Blocklist: not yet synced'}
+        </Text>
       </View>
 
       {score && (
@@ -556,5 +584,22 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  iocBanner: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 4,
+    backgroundColor: '#0c1120',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1e3a5f',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  iocText: {
+    color: '#60a5fa',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
 });

@@ -89,6 +89,12 @@
       </intent-filter>
     </service>
 
+    <!-- xShield persistent foreground notification — plain FGS, NO foregroundServiceType -->
+    <service
+      android:name=".ShieldNotificationService"
+      android:exported="false">
+    </service>
+
     <!-- Shield Status home screen widget -->
     <receiver
       android:name=".ShieldStatusWidget"

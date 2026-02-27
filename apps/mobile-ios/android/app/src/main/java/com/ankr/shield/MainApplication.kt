@@ -33,6 +33,7 @@ class MainApplication : Application(), ReactApplication {
             packages.add(WidgetPackage())
             packages.add(MdmStoragePackage())
             packages.add(QuickTilePackage())
+            packages.add(ShieldNotificationPackage())
             return packages
           }
 
