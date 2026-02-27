@@ -19,6 +19,8 @@ import {
   ExternalLink,
   AlertTriangle,
   RefreshCw,
+  CreditCard,
+  ArrowUpRight,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -208,6 +210,133 @@ function CurrentKeyPanel() {
   );
 }
 
+// ─── Team Billing Section (self-contained — runs its own GraphQL query) ──────
+function TeamBillingSection() {
+  const apiKey = localStorage.getItem('ankrshield_api_key');
+  const { data } = useQuery(API_KEY_INFO_QUERY, { skip: !apiKey });
+  const keyInfo = data?.xshieldApiKeyInfo ?? null;
+  const tier = keyInfo?.tier ?? null;
+  if (!apiKey) return null;
+  return <TeamBillingPanel tier={tier} keyInfo={keyInfo} />;
+}
+
+// ─── Team Billing Panel ───────────────────────────────────────────────────────
+function TeamBillingPanel({ tier, keyInfo }: { tier: string | null; keyInfo: any }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleUpgrade = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: 'STARTER',
+          email: keyInfo?.email ?? '',
+          apiKeyId: keyInfo?.id ?? '',
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as { url?: string; checkoutUrl?: string };
+      const url = data.url ?? data.checkoutUrl;
+      if (url) window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start checkout');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleManageBilling = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const apiKeyId = keyInfo?.id ?? '';
+      const res = await fetch(`/api/billing/portal?apiKeyId=${encodeURIComponent(apiKeyId)}`);
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+      const data = (await res.json()) as { portalUrl?: string; url?: string };
+      const url = data.portalUrl ?? data.url;
+      if (url) window.location.href = url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to open billing portal');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const normalizedTier = (tier ?? 'FREE').toUpperCase();
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <CreditCard className="w-5 h-5 text-violet-400" />
+        <h2 className="text-lg font-semibold">Team Plan</h2>
+      </div>
+
+      {error && (
+        <div className="mb-4 text-sm text-red-400 bg-red-950/30 border border-red-500/20 rounded-lg px-4 py-2">
+          {error}
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          {normalizedTier === 'FREE' && (
+            <>
+              <p className="text-sm text-gray-300 font-medium">You are on the Free plan</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                10 scans / month · No team sharing · No watch alerts
+              </p>
+            </>
+          )}
+          {normalizedTier === 'STARTER' && (
+            <>
+              <p className="text-sm text-gray-300 font-medium">Starter plan · 500 scans / month</p>
+              <p className="text-xs text-gray-500 mt-0.5">Team sharing · Watch alerts enabled</p>
+            </>
+          )}
+          {normalizedTier === 'PRO' && (
+            <>
+              <p className="text-sm text-gray-300 font-medium">Pro plan · Unlimited scans</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Full team access · Priority support · TAXII feed
+              </p>
+            </>
+          )}
+        </div>
+
+        {normalizedTier === 'FREE' ? (
+          <button
+            onClick={() => void handleUpgrade()}
+            disabled={loading || !keyInfo}
+            className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition whitespace-nowrap"
+          >
+            <ArrowUpRight className="w-4 h-4" />
+            {loading ? 'Redirecting...' : 'Upgrade to STARTER — $99/mo for your whole team'}
+          </button>
+        ) : (
+          <button
+            onClick={() => void handleManageBilling()}
+            disabled={loading || !keyInfo}
+            className="flex items-center gap-2 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white font-medium px-5 py-2.5 rounded-lg text-sm transition whitespace-nowrap"
+          >
+            <ExternalLink className="w-4 h-4" />
+            {loading ? 'Opening...' : 'Manage Billing'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function ApiKeys() {
   const [keys, setKeys] = useState<ApiKeyRecord[]>([]);
@@ -346,6 +475,9 @@ export default function ApiKeys() {
         <h2 className="text-base font-semibold text-gray-300 mb-3">Active Key</h2>
         <CurrentKeyPanel />
       </div>
+
+      {/* Team billing upgrade / manage */}
+      <TeamBillingSection />
 
       {/* Newly-created key banner */}
       {createdKey && (

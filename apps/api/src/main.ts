@@ -3077,6 +3077,186 @@ xShield by ANKR Labs, Gurgaon
       }
     );
 
+    // ─── SBOM Ingestion — CycloneDX / SPDX supply-chain scan ────────────────
+    // POST /supply-chain/sbom
+    // Body: { format: 'cyclonedx' | 'spdx', sbom: object }
+    // Auth: X-API-Key required (FREE tier ok)
+    fastify.post<{
+      Body: { format?: string; sbom?: Record<string, unknown> };
+    }>(
+      '/supply-chain/sbom',
+      {
+        config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+        schema: {
+          tags: ['risk'],
+          summary: 'Ingest a CycloneDX or SPDX SBOM and scan for supply-chain risks',
+          body: {
+            type: 'object',
+            required: ['format', 'sbom'],
+            properties: {
+              format: { type: 'string', enum: ['cyclonedx', 'spdx'] },
+              sbom: { type: 'object' },
+            },
+          },
+        },
+      },
+      async (request, reply) => {
+        // ── Auth: X-API-Key required (any active tier including FREE) ──────
+        const rawKey = (request.headers['x-api-key'] as string) ?? null;
+        if (!rawKey) {
+          return reply.status(401).send({ error: 'X-API-Key header required' });
+        }
+        const keyHash = hashApiKey(rawKey);
+        const apiKey = await (prisma as any).xShieldApiKey.findUnique({ where: { keyHash } });
+        if (!apiKey || !apiKey.isActive) {
+          return reply.status(403).send({ error: 'Invalid or inactive API key' });
+        }
+
+        const { format, sbom } = request.body ?? {};
+        if (!format || !sbom) {
+          return reply.status(400).send({ error: 'format and sbom are required' });
+        }
+
+        // ── 1. Parse SBOM → component list ────────────────────────────────
+        interface SbomComponent {
+          name: string;
+          version: string;
+          purl: string;
+          registry: string;
+        }
+        const components: SbomComponent[] = [];
+
+        if (format === 'cyclonedx') {
+          // CycloneDX: components[] array
+          const raw = (sbom as any).components ?? [];
+          for (const c of Array.isArray(raw) ? raw : []) {
+            const purl: string = c.purl ?? '';
+            const name: string = c.name ?? '';
+            const version: string = c.version ?? '';
+            // Extract registry from purl: pkg:{type}/...
+            const typeMatch = purl.match(/^pkg:([^/]+)\//);
+            const registry = typeMatch ? typeMatch[1] : 'unknown';
+            components.push({ name, version, purl, registry });
+          }
+        } else if (format === 'spdx') {
+          // SPDX: packages[] array with externalRefs
+          const raw = (sbom as any).packages ?? [];
+          for (const pkg of Array.isArray(raw) ? raw : []) {
+            const name: string = pkg.name ?? '';
+            const version: string = pkg.versionInfo ?? '';
+            let purl = '';
+            const refs: any[] = Array.isArray(pkg.externalRefs) ? pkg.externalRefs : [];
+            for (const ref of refs) {
+              if (ref.referenceCategory === 'PACKAGE-MANAGER') {
+                purl = ref.referenceLocator ?? '';
+                break;
+              }
+            }
+            const typeMatch = purl.match(/^pkg:([^/]+)\//);
+            const registry = typeMatch ? typeMatch[1] : 'unknown';
+            components.push({ name, version, purl, registry });
+          }
+        } else {
+          return reply.status(400).send({ error: 'format must be "cyclonedx" or "spdx"' });
+        }
+
+        const totalComponents = components.length;
+        const scanned = Math.min(totalComponents, 50);
+        const batch = components.slice(0, 50);
+
+        // ── 2. Check each package ──────────────────────────────────────────
+        interface Finding {
+          package: string;
+          version: string;
+          registry: string;
+          risk: 'low' | 'medium' | 'high';
+          reason: string;
+        }
+        const findings: Finding[] = [];
+        const dependencyConfusion: string[] = [];
+        const highRisk: Finding[] = [];
+
+        await Promise.allSettled(
+          batch.map(async (comp) => {
+            const registry = comp.registry.toLowerCase();
+            const name = comp.name;
+            const version = comp.version;
+            let risk: 'low' | 'medium' | 'high' = 'low';
+            let reason = 'Package exists on public registry';
+            let notFound = false;
+            let suspiciousMaintainer = false;
+
+            try {
+              if (registry === 'npm') {
+                const encoded = encodeURIComponent(name).replace('%40', '@');
+                const resp = await fetch(`https://registry.npmjs.org/${encoded}`, {
+                  signal: AbortSignal.timeout(8000),
+                });
+                if (resp.status === 404) {
+                  notFound = true;
+                } else if (resp.ok) {
+                  const data = (await resp.json()) as any;
+                  const maintainers: any[] = Array.isArray(data.maintainers)
+                    ? data.maintainers
+                    : [];
+                  if (maintainers.length > 0) {
+                    const email: string = maintainers[0].email ?? '';
+                    const domain = email.split('@')[1] ?? '';
+                    // Flag disposable / suspicious domains
+                    const suspicious = [
+                      'mailinator.com',
+                      'guerrillamail.com',
+                      'tempmail.com',
+                      'yopmail.com',
+                      'throwam.com',
+                      'sharklasers.com',
+                      'guerrillamailblock.com',
+                    ];
+                    if (domain && suspicious.includes(domain.toLowerCase())) {
+                      suspiciousMaintainer = true;
+                      reason = `Maintainer email uses suspicious domain: ${domain}`;
+                    }
+                  }
+                }
+              } else if (registry === 'pypi') {
+                const resp = await fetch(`https://pypi.org/pypi/${encodeURIComponent(name)}/json`, {
+                  signal: AbortSignal.timeout(8000),
+                });
+                if (resp.status === 404) {
+                  notFound = true;
+                }
+              }
+              // For maven/other registries — we accept as-is (low risk, not found unknown)
+            } catch {
+              reason = 'Registry check timed out — treat as unverified';
+              risk = 'medium';
+            }
+
+            if (notFound && (registry === 'npm' || registry === 'pypi')) {
+              risk = 'high';
+              reason =
+                'Package not found on public registry — possible dependency confusion attack';
+              dependencyConfusion.push(name);
+            } else if (suspiciousMaintainer) {
+              risk = 'high';
+            }
+
+            const finding: Finding = { package: name, version, registry, risk, reason };
+            findings.push(finding);
+            if (risk === 'high') highRisk.push(finding);
+          })
+        );
+
+        return reply.send({
+          totalComponents,
+          scanned,
+          findings,
+          dependencyConfusion,
+          highRisk,
+        });
+      }
+    );
+
     // ─── India Threat Intelligence endpoint (X10) ────────────────────────────
     fastify.get<{ Querystring: { domain?: string; ip?: string } }>(
       '/risk/india-threat',

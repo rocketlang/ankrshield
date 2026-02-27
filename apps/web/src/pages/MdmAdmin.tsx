@@ -97,8 +97,28 @@ function Toggle({ value }: { value: boolean }) {
   );
 }
 
+// ─── Build QR payload ─────────────────────────────────────────────────────────
+function buildQrPayload(policy: typeof MOCK_POLICY) {
+  const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  return {
+    version: 1,
+    server: 'https://xshieldai.com',
+    policy: {
+      requireScreenLock: policy.requireScreenLock,
+      minPinLength: policy.minPinLength,
+      blockSideloading: policy.blockSideloading,
+      enforceVpn: policy.enforceVpn,
+    },
+    expires,
+  };
+}
+
 // ─── QR Modal ────────────────────────────────────────────────────────────────
 function QrModal({ policy, onClose }: { policy: typeof MOCK_POLICY; onClose: () => void }) {
+  const qrPayload = buildQrPayload(policy);
+  const qrData = encodeURIComponent(JSON.stringify(qrPayload));
+  const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`;
+
   return (
     <div
       style={{
@@ -132,24 +152,27 @@ function QrModal({ policy, onClose }: { policy: typeof MOCK_POLICY; onClose: () 
           Scan with AnkrShield app to enroll this device
         </p>
 
-        {/* QR placeholder */}
+        {/* Real QR Code */}
         <div
           style={{
             width: 200,
             height: 200,
-            background: '#1e2a3a',
-            border: `2px dashed #334155`,
+            background: '#fff',
             borderRadius: 12,
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
             margin: '0 auto 24px',
-            color: '#475569',
+            overflow: 'hidden',
           }}
         >
-          <div style={{ fontSize: 40, marginBottom: 8 }}>📱</div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>QR Code</div>
+          <img
+            src={qrSrc}
+            alt="Device enrollment QR code"
+            width={200}
+            height={200}
+            style={{ display: 'block' }}
+          />
         </div>
 
         {/* Policy summary */}
