@@ -2485,6 +2485,47 @@ If you did not request this, you can safely ignore this email.`;
           });
         }
 
+        // Send welcome email with API key info if this is a new user (first login)
+        const isNewUser = !user.createdAt || Date.now() - user.createdAt.getTime() < 60_000;
+        if (isNewUser) {
+          const wireUrl = process.env.ANKR_WIRE_URL ?? process.env.ANKR_WIRE_REST_URL;
+          if (wireUrl) {
+            void fetch(`${wireUrl}/notify/email`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: user.email,
+                subject: 'Welcome to xShield — your API key is ready',
+                text: `Welcome to xShield!
+
+Your account is ready. Here's how to get started:
+
+1. Create your API key:
+   POST https://xshieldai.com/api/keys
+   Headers: Authorization: Bearer <your-jwt>
+
+2. Scan a domain:
+   curl -H "X-API-Key: YOUR_KEY" https://xshieldai.com/risk/score?domain=example.com
+
+3. Self-host xShield:
+   npx @xshieldai/warrior start
+
+4. Download AnkrShield (Android):
+   https://xshieldai.com/download/ankrshield.apk
+
+Documentation: https://xshieldai.com/docs
+GitHub: https://github.com/xshieldai/warrior
+
+—
+xShield by ANKR Labs, Gurgaon
+`,
+              }),
+            }).catch(() => {
+              /* best effort */
+            });
+          }
+        }
+
         // Issue JWT + refresh session
         const jwtToken = signJwt(user.id, user.email, user.tier);
         const refreshToken = randomBytes(64).toString('hex');
