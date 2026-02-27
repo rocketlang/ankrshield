@@ -304,3 +304,66 @@ export interface Recommendation {
   actionable: boolean;
   estimatedImpact: number; // 0-100 (score improvement)
 }
+
+// ── AnkrShield Seamless Mode Alert Hierarchy ──────────────────────────────────
+// 5 levels — only CRITICAL plays sound/shows full-screen overlay
+// All levels below CRITICAL are invisible or barely visible
+
+/**
+ * Alert level in the AnkrShield 5-level hierarchy.
+ * Determines how the UI responds to a threat event.
+ */
+export type AlertLevel = 'SILENT' | 'SUBTLE' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+/**
+ * A classified alert event from the AnkrShield protection stack.
+ */
+export interface ShieldAlert {
+  id: string;
+  level: AlertLevel;
+  domain: string;
+  category: TrackerCategory;
+
+  // What triggered this alert
+  signal: string;         // e.g. "tracker_ping", "phishing_domain", "c2_endpoint"
+  riskScore: number;      // 0-100
+
+  // Display properties (populated by alertClassifier)
+  title: string;          // e.g. "Phishing link blocked"
+  body: string;           // e.g. "xshieldai.com blocked access to phish.example.com"
+  emoji: string;          // Status bar icon hint
+
+  // Behaviour flags
+  shouldNotify: boolean;  // false for SILENT
+  shouldVibrate: boolean; // true for HIGH+
+  shouldPlaySound: boolean; // true for CRITICAL only
+  isFullScreen: boolean;  // true for CRITICAL only
+  requiresAck: boolean;   // true for CRITICAL — user must tap "I understand"
+  autoDismissMs: number;  // 0 = no auto-dismiss; MEDIUM = 5000ms
+
+  // iOS/Android metadata
+  channelId: string;      // Android notification channel
+  priority: 'min' | 'low' | 'default' | 'high' | 'max';
+
+  // Timing
+  detectedAt: Date;
+  source: ProtectionLayer;  // which protection layer detected this
+}
+
+/**
+ * Onboarding scan state — replaces the hardcoded "YOU ARE BEING TRACKED" screen.
+ */
+export type ScanState =
+  | { phase: 'scanning' }                              // spinner, "Checking your network..."
+  | { phase: 'clean'; blockedToday: number }           // shield GREEN, "You're protected"
+  | { phase: 'monitoring'; trackerCount: number }      // shield AMBER, subtle tracker count
+  | { phase: 'threat'; domain: string; level: AlertLevel }; // shield RED → CRITICAL alert
+
+/**
+ * Protection layer assignment for a domain event.
+ * Determines how aggressively AnkrShield responds.
+ */
+export type ProtectionLayer =
+  | 'dns_only'    // Layer 1: DNS interception only (always on, zero app disruption)
+  | 'passive'     // Layer 2: Passive read, no blocking
+  | 'active';     // Layer 3: Full packet inspection + block (per-app opt-in)

@@ -26,3 +26,6 @@ export * from './reports/report-generator';
 
 // Real-time
 export * from './realtime/score-updater';
+
+// Alert hierarchy (AnkrShield seamless mode — 5-level: SILENT/SUBTLE/MEDIUM/HIGH/CRITICAL)
+export * from './alert-classifier';
