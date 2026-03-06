@@ -25,6 +25,7 @@ import Policies from './pages/Policies';
 import Pricing from './pages/Pricing';
 import Register from './pages/Register';
 import Settings from './pages/Settings';
+import Setup from './pages/Setup';
 import SupplyChain from './pages/SupplyChain';
 import VerifyMagicLink from './pages/VerifyMagicLink';
 import WatchDetail from './pages/WatchDetail';
@@ -45,6 +46,14 @@ function AppRoutes() {
       <Route path="/developers" element={<Developers />} />
       <Route path="/docs" element={<Docs />} />
       <Route path="/onboarding" element={<Onboarding />} />
+      <Route
+        path="/setup"
+        element={
+          <ProtectedRoute>
+            <Setup />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Protected Routes */}
       <Route

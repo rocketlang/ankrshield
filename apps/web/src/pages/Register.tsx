@@ -148,7 +148,7 @@ export default function Register() {
       tier: user.tier,
       role: user.role,
     });
-    navigate('/onboarding'); // new users go through the setup wizard
+    navigate('/setup'); // new users go through the post-auth setup wizard
   }
 
   const handleRegister = async (e: FormEvent) => {

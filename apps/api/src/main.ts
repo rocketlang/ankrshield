@@ -2647,6 +2647,24 @@ xShield by ANKR Labs, Gurgaon
       }
     );
 
+    // ─── Integration helper ───────────────────────────────────────────────────
+    // DRY JWT extraction used by all /integrations/* routes
+    const getUserIdFromJwt = async (request: any, reply: any): Promise<string | null> => {
+      try {
+        await request.jwtVerify();
+      } catch {
+        reply.status(401).send({ error: 'JWT authentication required' });
+        return null;
+      }
+      const user = request.user as { id?: string; userId?: string };
+      const userId = user?.id ?? user?.userId;
+      if (!userId) {
+        reply.status(401).send({ error: 'could not determine user' });
+        return null;
+      }
+      return userId;
+    };
+
     // ─── Integrations — Slack ─────────────────────────────────────────────────
 
     // POST /integrations/slack — save or update Slack incoming webhook URL
@@ -2781,6 +2799,152 @@ xShield by ANKR Labs, Gurgaon
         return reply
           .status(502)
           .send({ error: 'Slack returned an error — check your webhook URL' });
+      }
+    );
+
+    // ─── X5b Telegram Integration ────────────────────────────────────────────
+
+    fastify.post<{ Body: { botToken: string; chatId: string } }>(
+      '/integrations/telegram',
+      { schema: { tags: ['integrations'], summary: 'Save Telegram bot integration' } },
+      async (request, reply) => {
+        const userId = await getUserIdFromJwt(request, reply);
+        if (!userId) return;
+        const { botToken, chatId } = request.body ?? {};
+        if (!botToken || !chatId)
+          return reply.status(400).send({ error: 'botToken + chatId required' });
+        await prisma.userIntegration.upsert({
+          where: { userId_provider: { userId, provider: 'telegram' } },
+          create: { userId, provider: 'telegram', isActive: true, config: { botToken, chatId } },
+          update: { isActive: true, config: { botToken, chatId } },
+        });
+        return { saved: true };
+      }
+    );
+
+    fastify.get(
+      '/integrations/telegram',
+      { schema: { tags: ['integrations'], summary: 'Get Telegram integration status' } },
+      async (request, reply) => {
+        const userId = await getUserIdFromJwt(request, reply);
+        if (!userId) return;
+        const integration = await prisma.userIntegration.findUnique({
+          where: { userId_provider: { userId, provider: 'telegram' } },
+        });
+        if (!integration || !integration.isActive) return { active: false };
+        const cfg = integration.config as { chatId?: string };
+        return { active: true, chatId: cfg?.chatId ? `****${String(cfg.chatId).slice(-4)}` : null };
+      }
+    );
+
+    fastify.delete(
+      '/integrations/telegram',
+      { schema: { tags: ['integrations'], summary: 'Remove Telegram integration' } },
+      async (request, reply) => {
+        const userId = await getUserIdFromJwt(request, reply);
+        if (!userId) return;
+        await prisma.userIntegration.updateMany({
+          where: { userId, provider: 'telegram' },
+          data: { isActive: false },
+        });
+        return { removed: true };
+      }
+    );
+
+    // ─── X5b Email Alert Integration ─────────────────────────────────────────
+
+    fastify.post<{ Body: { email: string } }>(
+      '/integrations/email',
+      { schema: { tags: ['integrations'], summary: 'Save email alert integration' } },
+      async (request, reply) => {
+        const userId = await getUserIdFromJwt(request, reply);
+        if (!userId) return;
+        const { email } = request.body ?? {};
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          return reply.status(400).send({ error: 'valid email required' });
+        }
+        await prisma.userIntegration.upsert({
+          where: { userId_provider: { userId, provider: 'email' } },
+          create: { userId, provider: 'email', isActive: true, config: { email } },
+          update: { isActive: true, config: { email } },
+        });
+        return { saved: true, email };
+      }
+    );
+
+    fastify.get(
+      '/integrations/email',
+      { schema: { tags: ['integrations'], summary: 'Get email integration status' } },
+      async (request, reply) => {
+        const userId = await getUserIdFromJwt(request, reply);
+        if (!userId) return;
+        const integration = await prisma.userIntegration.findUnique({
+          where: { userId_provider: { userId, provider: 'email' } },
+        });
+        if (!integration || !integration.isActive) return { active: false };
+        const cfg = integration.config as { email?: string };
+        return { active: true, email: cfg?.email ?? null };
+      }
+    );
+
+    fastify.delete(
+      '/integrations/email',
+      { schema: { tags: ['integrations'], summary: 'Remove email integration' } },
+      async (request, reply) => {
+        const userId = await getUserIdFromJwt(request, reply);
+        if (!userId) return;
+        await prisma.userIntegration.updateMany({
+          where: { userId, provider: 'email' },
+          data: { isActive: false },
+        });
+        return { removed: true };
+      }
+    );
+
+    // ─── X5b PagerDuty Integration ────────────────────────────────────────────
+
+    fastify.post<{ Body: { integrationKey: string } }>(
+      '/integrations/pagerduty',
+      { schema: { tags: ['integrations'], summary: 'Save PagerDuty integration' } },
+      async (request, reply) => {
+        const userId = await getUserIdFromJwt(request, reply);
+        if (!userId) return;
+        const { integrationKey } = request.body ?? {};
+        if (!integrationKey) return reply.status(400).send({ error: 'integrationKey required' });
+        await prisma.userIntegration.upsert({
+          where: { userId_provider: { userId, provider: 'pagerduty' } },
+          create: { userId, provider: 'pagerduty', isActive: true, config: { integrationKey } },
+          update: { isActive: true, config: { integrationKey } },
+        });
+        return { saved: true };
+      }
+    );
+
+    fastify.get(
+      '/integrations/pagerduty',
+      { schema: { tags: ['integrations'], summary: 'Get PagerDuty integration status' } },
+      async (request, reply) => {
+        const userId = await getUserIdFromJwt(request, reply);
+        if (!userId) return;
+        const integration = await prisma.userIntegration.findUnique({
+          where: { userId_provider: { userId, provider: 'pagerduty' } },
+        });
+        if (!integration || !integration.isActive) return { active: false };
+        return { active: true };
+      }
+    );
+
+    fastify.delete(
+      '/integrations/pagerduty',
+      { schema: { tags: ['integrations'], summary: 'Remove PagerDuty integration' } },
+      async (request, reply) => {
+        const userId = await getUserIdFromJwt(request, reply);
+        if (!userId) return;
+        await prisma.userIntegration.updateMany({
+          where: { userId, provider: 'pagerduty' },
+          data: { isActive: false },
+        });
+        return { removed: true };
       }
     );
 

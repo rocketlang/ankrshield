@@ -23,7 +23,7 @@ import { runRiskEngine } from '@ankrshield/risk-intelligence';
 import type { RiskReport } from '@ankrshield/risk-intelligence';
 import type { PrismaClient } from '@prisma/client';
 
-import { sendDomainWatchAlert } from '../integrations/slack.js';
+import { dispatchToAllChannels } from '../integrations/alert-dispatcher.js';
 
 const POLL_INTERVAL_MS = parseInt(process.env.DOMAIN_WATCH_INTERVAL_MS ?? '300000', 10); // 5 min
 
@@ -118,36 +118,6 @@ function detectChanges(
   return alerts;
 }
 
-// ─── Webhook dispatch ─────────────────────────────────────────────────────────
-
-async function dispatchWebhook(
-  webhookUrl: string,
-  domain: string,
-  alert: AlertCandidate,
-  riskScore: number
-): Promise<'sent' | 'failed'> {
-  try {
-    const payload = {
-      source: 'xshield-domain-watch',
-      domain,
-      alertType: alert.alertType,
-      previousValue: alert.previousValue,
-      newValue: alert.newValue,
-      riskScore,
-      triggeredAt: new Date().toISOString(),
-    };
-    const res = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(8000),
-    });
-    return res.ok ? 'sent' : 'failed';
-  } catch {
-    return 'failed';
-  }
-}
-
 // ─── Per-domain scan ──────────────────────────────────────────────────────────
 
 async function scanWatch(
@@ -156,7 +126,7 @@ async function scanWatch(
   domain: string,
   webhookUrl: string | null,
   prev: { riskScore: number | null; riskLevel: string | null },
-  slackWebhookUrl: string | null
+  userId: string | null
 ) {
   let report: RiskReport;
   try {
@@ -171,31 +141,26 @@ async function scanWatch(
 
   // Persist alert rows + dispatch webhooks
   for (const alert of changes) {
-    let webhookStatus: string | null = null;
-    if (webhookUrl) {
-      webhookStatus = await dispatchWebhook(webhookUrl, domain, alert, report.riskScore);
-    }
+    // Persist alert row
     await db.alertHistory.create({
       data: {
         watchId,
         alertType: alert.alertType,
         previousValue: alert.previousValue,
         newValue: alert.newValue,
-        webhookStatus: webhookStatus ?? 'skipped',
+        webhookStatus: 'dispatched',
       },
     });
 
-    // Fire Slack alert (fire-and-forget)
-    if (slackWebhookUrl) {
-      sendDomainWatchAlert(slackWebhookUrl, {
-        domain,
-        alertType: alert.alertType,
-        previousValue: alert.previousValue,
-        newValue: alert.newValue,
-        riskScore: report.riskScore,
-        triggeredAt,
-      }).catch(() => {});
-    }
+    // Fire all configured channels (Slack, Telegram, Email, PagerDuty, generic webhook)
+    dispatchToAllChannels(db, userId, webhookUrl, {
+      domain,
+      alertType: alert.alertType,
+      previousValue: alert.previousValue,
+      newValue: alert.newValue,
+      riskScore: report.riskScore,
+      triggeredAt,
+    }).catch(() => {});
   }
 
   // Update snapshot
@@ -215,27 +180,9 @@ async function scanWatch(
 async function pollAll(db: PrismaClient) {
   const watches = await db.domainWatch.findMany({ where: { isActive: true } });
 
-  // Pre-fetch Slack integrations for all users who own a watch (one query, not N).
-  const userIds = [
-    ...new Set(watches.map((w) => w.userId).filter((id): id is string => id != null)),
-  ];
-
-  const slackMap = new Map<string, string>(); // userId → Slack webhook URL
-  if (userIds.length > 0) {
-    const integrations = await db.userIntegration.findMany({
-      where: { provider: 'slack', isActive: true, userId: { in: userIds } },
-      select: { userId: true, config: true },
-    });
-    for (const i of integrations) {
-      const cfg = i.config as { webhookUrl?: string };
-      if (cfg?.webhookUrl) slackMap.set(i.userId, cfg.webhookUrl);
-    }
-  }
-
   for (const w of watches) {
-    const slackWebhookUrl = w.userId ? (slackMap.get(w.userId) ?? null) : null;
-
     // Fire and forget — don't await all in serial
+    // dispatchToAllChannels inside scanWatch will fetch all channels for this userId
     scanWatch(
       db,
       w.id,
@@ -245,7 +192,7 @@ async function pollAll(db: PrismaClient) {
         riskScore: w.lastRiskScore,
         riskLevel: w.lastRiskLevel,
       },
-      slackWebhookUrl
+      w.userId ?? null
     ).catch(() => {
       /* swallow per-domain errors */
     });
