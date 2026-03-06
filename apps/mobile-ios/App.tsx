@@ -34,6 +34,7 @@ import { AppTrustScreen } from './src/screens/AppTrustScreen';
 import { AvScannerScreen } from './src/screens/AvScannerScreen';
 import { CallProtectionScreen } from './src/screens/CallProtectionScreen';
 import { ConferenceScreen } from './src/screens/ConferenceScreen';
+import ContactRiskScreen from './src/screens/ContactRiskScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { DeviceHealthScreen } from './src/screens/DeviceHealthScreen';
 import { DpdpScanScreen } from './src/screens/DpdpScanScreen';
@@ -644,6 +645,17 @@ function App(): React.JSX.Element {
             component={eb(SplitTunnelScreen, 'SplitTunnel')}
             options={{
               title: '🔀 App Bypass',
+              headerStyle: { backgroundColor: '#0f172a' },
+              headerTintColor: '#3b82f6',
+            }}
+          />
+
+          {/* XS-SATOI — Contact Risk (phone hijack check + report) */}
+          <Stack.Screen
+            name="ContactRisk"
+            component={eb(ContactRiskScreen, 'ContactRisk')}
+            options={{
+              title: '📱 Contact Risk Check',
               headerStyle: { backgroundColor: '#0f172a' },
               headerTintColor: '#3b82f6',
             }}

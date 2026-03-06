@@ -998,3 +998,48 @@ model EnterpriseInquiry {
   @@index([createdAt(sort: Desc)])
   @@map("enterprise_inquiries")
 }
+
+// ============================================================================
+// XSHIELD — Social Account Takeover Intelligence (XS-SATOI)
+// ============================================================================
+
+model SocialAccountReport {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  // Phone number stored as SHA-256 hash — never raw
+  phoneHash     String
+  // Last 4 digits for display only (no full number stored)
+  lastFour      String   @default("")
+  // Country code (+91, +1, etc.)
+  countryCode   String   @default("+91")
+  platform      String   // "whatsapp" | "telegram" | "instagram" | "facebook" | "gmail"
+  reportedAt    DateTime @default(now())
+  reporterCount Int      @default(1)
+  verified      Boolean  @default(false)
+  // Source: "sanchar_saathi" | "cybercrime_gov" | "crowdsourced" | "manual"
+  source        String   @default("crowdsourced")
+  // Confidence: 0–100
+  confidence    Int      @default(50)
+  // Extra detail
+  notes         String?
+
+  @@unique([phoneHash, platform])
+  @@index([phoneHash])
+  @@index([platform])
+  @@index([reportedAt(sort: Desc)])
+  @@index([verified])
+  @@map("social_account_reports")
+}
+
+// Rate limiting for phone risk API (free tier: 50/day, pro: 5000/day)
+model PhoneRiskQuota {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  // Keyed by userId or IP hash for unauthenticated requests
+  keyHash   String
+  dateStr   String   // YYYY-MM-DD
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([keyHash, dateStr])
+  @@index([keyHash, dateStr])
+  @@map("phone_risk_quotas")
+}

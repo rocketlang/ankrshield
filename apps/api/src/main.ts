@@ -41,6 +41,13 @@ import securityPlugin from './plugins/security';
 import { getWarrior, startWarrior, stopWarrior } from './warrior/warrior-service';
 import { startDomainWatcher, stopDomainWatcher } from './watch/domain-watcher.js';
 import { checkIndiaThreatIntel, fingerprintPhishingKit } from './xshield/india-threat-bridge.js';
+import {
+  runPhoneRiskEngine,
+  submitPhoneReport,
+  checkPhoneRiskQuota,
+  incrementPhoneRiskQuota,
+  hashPhone,
+} from './xshield/phone-risk.js';
 import { pivotOnRegistrant } from './xshield/risk-engine.js';
 import { startWatchPoller, stopWatchPoller } from './xshield/watch-poller';
 
@@ -3447,6 +3454,103 @@ xShield by ANKR Labs, Gurgaon
         try {
           const result = await fingerprintPhishingKit(domain);
           return result;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return reply.status(500).send({ error: msg });
+        }
+      }
+    );
+
+    // ─── Phone Risk API (XS-SATOI) ────────────────────────────────────────────
+    // GET /api/v1/risk/phone?number=+91XXXXXXXXXX
+    fastify.get<{ Querystring: { number?: string } }>(
+      '/risk/phone',
+      {
+        config: { rateLimit: { max: 100, timeWindow: '1 minute' } },
+        schema: {
+          tags: ['phone-risk'],
+          summary: 'Check if a phone number has been reported as hijacked/spoofed',
+          description: 'Rate limit: FREE 50/day, STARTER 500/day, PRO 5000/day',
+        },
+      },
+      async (request, reply) => {
+        const rawNumber = request.query.number?.trim();
+        if (!rawNumber) {
+          return reply
+            .status(400)
+            .send({ error: 'number query param required (E.164 or 10-digit Indian)' });
+        }
+
+        // Rate limiting: use API key userId or IP hash as quota key
+        const ipHash = hashPhone(request.ip ?? 'unknown'); // reuse SHA-256 helper
+        let tier = 'FREE';
+        const apiKey = request.headers['x-api-key'] as string | undefined;
+        if (apiKey) {
+          // Try to resolve tier from XShieldApiKey
+          try {
+            const keyHash = hashPhone(apiKey); // same SHA-256
+            const keyRow = await (prisma as any).xShieldApiKey.findFirst({
+              where: { keyHash },
+              select: { tier: true, userId: true },
+            });
+            if (keyRow) tier = keyRow.tier ?? 'FREE';
+          } catch {
+            /* ignore — tier defaults to FREE */
+          }
+        }
+
+        const quotaKey = apiKey ? hashPhone(apiKey) : ipHash;
+        const quota = await checkPhoneRiskQuota(prisma, quotaKey, tier);
+        reply.header('X-RateLimit-Limit', String(quota.limit));
+        reply.header('X-RateLimit-Remaining', String(quota.remaining));
+        reply.header('X-RateLimit-Reset', quota.resetAt);
+
+        if (!quota.allowed) {
+          return reply.status(429).send({
+            error: 'Daily phone risk quota exceeded',
+            resetAt: quota.resetAt,
+            upgrade: 'https://xshieldai.com/pricing',
+          });
+        }
+
+        try {
+          const result = await runPhoneRiskEngine(prisma, rawNumber);
+          await incrementPhoneRiskQuota(prisma, quotaKey);
+          return result;
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return reply.status(500).send({ error: msg });
+        }
+      }
+    );
+
+    // POST /risk/phone/report — crowd-source a hijacking report from AnkrShield app
+    fastify.post<{ Body: { number: string; platform: string; notes?: string } }>(
+      '/risk/phone/report',
+      {
+        config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+        schema: {
+          tags: ['phone-risk'],
+          summary: 'Submit a crowd-sourced phone hijacking report',
+        },
+      },
+      async (request, reply) => {
+        const { number, platform, notes } = request.body ?? {};
+        if (!number || !platform) {
+          return reply.status(400).send({ error: 'number and platform are required' });
+        }
+        const validPlatforms = ['whatsapp', 'telegram', 'instagram', 'facebook', 'gmail', 'other'];
+        if (!validPlatforms.includes(platform)) {
+          return reply
+            .status(400)
+            .send({ error: `platform must be one of: ${validPlatforms.join(', ')}` });
+        }
+        try {
+          await submitPhoneReport(prisma, number, platform, notes);
+          return {
+            ok: true,
+            message: 'Report received — thank you for keeping the community safe',
+          };
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
           return reply.status(500).send({ error: msg });

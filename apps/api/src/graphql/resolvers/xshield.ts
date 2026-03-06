@@ -19,6 +19,7 @@
  *   xshieldResumeWatch(watchId)   — resume watch
  */
 
+// eslint-disable-next-line import/order
 import crypto from 'crypto';
 
 import {
@@ -33,6 +34,13 @@ import {
   checkIndiaThreatIntel,
   fingerprintPhishingKit,
 } from '../../xshield/india-threat-bridge.js';
+import {
+  checkPhoneRiskQuota,
+  hashPhone,
+  incrementPhoneRiskQuota,
+  runPhoneRiskEngine,
+  submitPhoneReport,
+} from '../../xshield/phone-risk.js';
 import { scanDomain, generateTyposquats } from '../../xshield/risk-engine';
 import { builder, prisma } from '../builder';
 import { XShieldApiKeyCreateInput, WatchCreateInput } from '../types/xshield';
@@ -748,6 +756,46 @@ builder.mutationField('xshieldInviteTeamMember', (t) =>
           role,
         },
       });
+    },
+  })
+);
+
+// ── xshieldPhoneRisk (XS-SATOI) ───────────────────────────────────────────────
+
+builder.queryField('xshieldPhoneRisk', (t) =>
+  t.field({
+    type: 'PhoneRiskResult',
+    args: { number: t.arg.string({ required: true }) },
+    description:
+      'Check if a phone number has been reported as hijacked/spoofed (XS-SATOI). Rate-limited per tier.',
+    resolve: async (_root, args, ctx) => {
+      const quotaKey = ctx?.userId ? hashPhone(ctx.userId) : hashPhone((ctx as any)?.ip ?? 'anon');
+      const quota = await checkPhoneRiskQuota(prisma, quotaKey, ctx?.tier ?? 'FREE');
+      if (!quota.allowed) {
+        throw new Error(
+          `Daily phone risk quota exceeded. Resets at ${quota.resetAt}. Upgrade at xshieldai.com/pricing`
+        );
+      }
+      const result = await runPhoneRiskEngine(prisma, args.number);
+      await incrementPhoneRiskQuota(prisma, quotaKey);
+      return result;
+    },
+  })
+);
+
+// ── xshieldSubmitPhoneReport (crowd-source) ───────────────────────────────────
+
+builder.mutationField('xshieldSubmitPhoneReport', (t) =>
+  t.boolean({
+    args: {
+      number: t.arg.string({ required: true }),
+      platform: t.arg.string({ required: true }),
+      notes: t.arg.string(),
+    },
+    description: 'Submit a crowd-sourced report of a hijacked phone account.',
+    resolve: async (_root, args) => {
+      await submitPhoneReport(prisma, args.number, args.platform, args.notes ?? undefined);
+      return true;
     },
   })
 );

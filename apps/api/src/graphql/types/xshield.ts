@@ -465,3 +465,21 @@ export {
   XShieldTeamRef,
   XShieldTeamMemberRef,
 };
+
+// ── Phone Risk (XS-SATOI) ─────────────────────────────────────────────────────
+
+export const PhoneRiskResultRef = builder.objectType('PhoneRiskResult', {
+  fields: (t) => ({
+    number: t.string({ resolve: (r: any) => r.number }),
+    numberDisplay: t.string({ resolve: (r: any) => r.numberDisplay }),
+    hijacked: t.boolean({ resolve: (r: any) => r.hijacked }),
+    platforms: t.stringList({ resolve: (r: any) => r.platforms }),
+    reportCount: t.int({ resolve: (r: any) => r.reportCount }),
+    confidence: t.int({ resolve: (r: any) => r.confidence }),
+    sources: t.stringList({ resolve: (r: any) => r.sources }),
+    firstReportedAt: t.string({ nullable: true, resolve: (r: any) => r.firstReportedAt }),
+    lastReportedAt: t.string({ nullable: true, resolve: (r: any) => r.lastReportedAt }),
+    advisories: t.stringList({ resolve: (r: any) => r.advisories }),
+    riskScore: t.int({ resolve: (r: any) => r.riskScore }),
+  }),
+});
