@@ -8,6 +8,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { useTokenRefresh } from './hooks/useTokenRefresh';
 // Pages
 import Analytics from './pages/Analytics';
+import AnkrShieldLanding from './pages/AnkrShieldLanding';
 import ApiKeys from './pages/ApiKeys';
 import CommandCenter from './pages/CommandCenter';
 import Dashboard from './pages/Dashboard';
@@ -34,6 +35,7 @@ function AppRoutes() {
     <Routes>
       {/* Public Routes */}
       <Route path="/" element={<Landing />} />
+      <Route path="/personal" element={<AnkrShieldLanding />} />
       <Route path="/live" element={<LiveThreats />} />
       <Route path="/evidence" element={<EvidenceReport />} />
       <Route path="/login" element={<Login />} />
