@@ -23,6 +23,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -90,15 +91,17 @@ public class WhatsAppGuardService extends Service {
         public final String reason;
         public final long ts;
         public final long fileSizeBytes;
+        public final String sha256;    // hex SHA-256 of file content, or "" if unreadable
 
         public ScanEntry(String fileName, String filePath, String verdict,
-                         String reason, long fileSizeBytes) {
+                         String reason, long fileSizeBytes, String sha256) {
             this.fileName = fileName;
             this.filePath = filePath;
             this.verdict = verdict;
             this.reason = reason;
             this.ts = System.currentTimeMillis();
             this.fileSizeBytes = fileSizeBytes;
+            this.sha256 = sha256 != null ? sha256 : "";
         }
 
         public JSONObject toJson() {
@@ -110,6 +113,7 @@ public class WhatsAppGuardService extends Service {
                 o.put("reason", reason);
                 o.put("ts", ts);
                 o.put("fileSizeBytes", fileSizeBytes);
+                o.put("sha256", sha256);
                 return o;
             } catch (Exception e) {
                 return new JSONObject();
@@ -219,11 +223,12 @@ public class WhatsAppGuardService extends Service {
         String name = f.getName();
         String ext = extension(name).toLowerCase();
         long size = f.length();
+        String sha256 = computeSha256(f); // computed once, included in every entry
 
         // 1. Outright dangerous extension
         if (DANGEROUS_EXTENSIONS.contains(ext)) {
             emit(new ScanEntry(name, f.getAbsolutePath(), "dangerous",
-                "Dangerous file type received: ." + ext + " files can install malware", size));
+                "Dangerous file type received: ." + ext + " files can install malware", size, sha256));
             return;
         }
 
@@ -235,35 +240,35 @@ public class WhatsAppGuardService extends Service {
         if (startsWith(magic, MAGIC_APK)) {
             String mimeExt = ext.isEmpty() ? "unknown" : ext;
             emit(new ScanEntry(name, f.getAbsolutePath(), "dangerous",
-                "File appears to be an APK/ZIP but has ." + mimeExt + " extension — possible malware", size));
+                "File appears to be an APK/ZIP but has ." + mimeExt + " extension — possible malware", size, sha256));
             return;
         }
 
         // 4. DEX bytecode (raw Android executable)
         if (startsWith(magic, MAGIC_DEX)) {
             emit(new ScanEntry(name, f.getAbsolutePath(), "dangerous",
-                "File contains Dalvik bytecode (.dex) — executable code disguised as attachment", size));
+                "File contains Dalvik bytecode (.dex) — executable code disguised as attachment", size, sha256));
             return;
         }
 
         // 5. ELF binary (.so native library)
         if (startsWith(magic, MAGIC_ELF)) {
             emit(new ScanEntry(name, f.getAbsolutePath(), "suspicious",
-                "File is a native Linux binary (.so/ELF) sent as attachment — unusual", size));
+                "File is a native Linux binary (.so/ELF) sent as attachment — unusual", size, sha256));
             return;
         }
 
         // 6. Windows PE executable
         if (startsWith(magic, MAGIC_PE)) {
             emit(new ScanEntry(name, f.getAbsolutePath(), "suspicious",
-                "File is a Windows executable (.exe) sent as attachment", size));
+                "File is a Windows executable (.exe) sent as attachment", size, sha256));
             return;
         }
 
         // 7. Shell script
         if (startsWith(magic, MAGIC_SH)) {
             emit(new ScanEntry(name, f.getAbsolutePath(), "suspicious",
-                "File appears to be a shell script sent as attachment", size));
+                "File appears to be a shell script sent as attachment", size, sha256));
             return;
         }
 
@@ -271,14 +276,37 @@ public class WhatsAppGuardService extends Service {
         if ((ext.equals("jpg") || ext.equals("jpeg") || ext.equals("png") || ext.equals("webp"))
                 && size > 12 * 1024 * 1024) {
             emit(new ScanEntry(name, f.getAbsolutePath(), "suspicious",
-                "Image file is unusually large (" + (size / 1024 / 1024) + " MB) — possible exploit payload", size));
+                "Image file is unusually large (" + (size / 1024 / 1024) + " MB) — possible exploit payload", size, sha256));
             return;
         }
 
         // Clean — record but don't alert
-        ScanEntry entry = new ScanEntry(name, f.getAbsolutePath(), "clean", "", size);
+        ScanEntry entry = new ScanEntry(name, f.getAbsolutePath(), "clean", "", size, sha256);
         addToHistory(entry);
         if (listener != null) listener.onFileScanned(entry);
+    }
+
+    /**
+     * Compute SHA-256 hex digest of a file. Returns "" on error or if file > 50 MB.
+     * Used for VirusTotal hash lookup — avoids uploading file content.
+     */
+    @Nullable
+    private static String computeSha256(File f) {
+        if (f.length() > 50 * 1024 * 1024L) return ""; // skip very large files
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (FileInputStream fis = new FileInputStream(f)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = fis.read(buf)) != -1) digest.update(buf, 0, n);
+            }
+            byte[] hash = digest.digest();
+            StringBuilder sb = new StringBuilder(64);
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     private void emit(ScanEntry entry) {

@@ -178,7 +178,7 @@ export function HelpScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.intro}>AnkrShield v1.2.6 — tap any topic to expand.</Text>
+      <Text style={styles.intro}>AnkrShield v1.3.3 — tap any topic to expand.</Text>
 
       {SECTIONS.map((s) => {
         const open = expanded === s.id;

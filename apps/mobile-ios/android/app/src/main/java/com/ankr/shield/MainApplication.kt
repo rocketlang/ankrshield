@@ -34,6 +34,14 @@ class MainApplication : Application(), ReactApplication {
             packages.add(MdmStoragePackage())
             packages.add(QuickTilePackage())
             packages.add(ShieldNotificationPackage())
+            packages.add(RansomwareWatcherPackage())
+            packages.add(PermissionWatcherPackage())
+            packages.add(DeviceHealthPackage())
+            packages.add(UpiGuardPackage())
+            packages.add(AvScannerPackage())
+            packages.add(AntiTheftPackage())
+            packages.add(BitwardenBridgePackage())
+            packages.add(CallGuardMLPackage())
             return packages
           }
 
@@ -51,6 +59,7 @@ class MainApplication : Application(), ReactApplication {
 
   override fun onCreate() {
     super.onCreate()
+    NotificationChannels.register(this)
     SoLoader.init(this, false)
     if (!BuildConfig.REACT_NATIVE_UNSTABLE_USE_RUNTIME_SCHEDULER_ALWAYS) {
       ReactFeatureFlags.unstable_useRuntimeSchedulerAlways = false

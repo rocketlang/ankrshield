@@ -1,5 +1,7 @@
 package com.ankr.shield
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 
@@ -17,6 +19,28 @@ class MainActivity : ReactActivity() {
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
+    handleShareIntent(intent)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    handleShareIntent(intent)
+  }
+
+  /**
+   * Convert ACTION_SEND text/plain intents into an ankrshield://share?text= VIEW intent.
+   * React Native's Linking module can then observe this via getInitialURL /
+   * addEventListener, and the JS layer routes it to the LinkScanner screen.
+   */
+  private fun handleShareIntent(intent: Intent?) {
+    if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+      val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
+      val encoded = Uri.encode(sharedText)
+      val newIntent = Intent(Intent.ACTION_VIEW, Uri.parse("ankrshield://share?text=$encoded"))
+      newIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+      setIntent(newIntent)
+    }
   }
 
   /**

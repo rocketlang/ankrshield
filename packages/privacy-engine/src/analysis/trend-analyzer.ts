@@ -4,15 +4,9 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import type {
-  Trend,
-  TrendDirection,
-  Anomaly,
-  ScoreHistory,
-  TimeRange,
-  Comparison,
-} from '../types';
+
 import { PrivacyCalculator } from '../scoring/privacy-calculator';
+import type { Trend, TrendDirection, Anomaly, ScoreHistory, TimeRange, Comparison } from '../types';
 
 /**
  * Trend Analyzer
@@ -83,9 +77,7 @@ export class TrendAnalyzer {
 
     const change = currentScore.totalScore - previousScore.totalScore;
     const percentageChange =
-      previousScore.totalScore > 0
-        ? (change / previousScore.totalScore) * 100
-        : 0;
+      previousScore.totalScore > 0 ? (change / previousScore.totalScore) * 100 : 0;
 
     let direction: TrendDirection = 'stable';
     if (Math.abs(change) >= 5) {
@@ -105,10 +97,7 @@ export class TrendAnalyzer {
   /**
    * Detect anomalies in privacy score
    */
-  async detectAnomalies(
-    userId: string,
-    days: number = 30
-  ): Promise<Anomaly[]> {
+  async detectAnomalies(userId: string, days: number = 30): Promise<Anomaly[]> {
     const history = await this.getScoreHistory(userId, days);
 
     if (history.length < 7) {
@@ -118,8 +107,7 @@ export class TrendAnalyzer {
     // Calculate average and standard deviation
     const scores = history.map((h) => h.score);
     const avg = scores.reduce((sum, s) => sum + s, 0) / scores.length;
-    const variance =
-      scores.reduce((sum, s) => sum + Math.pow(s - avg, 2), 0) / scores.length;
+    const variance = scores.reduce((sum, s) => sum + Math.pow(s - avg, 2), 0) / scores.length;
     const stdDev = Math.sqrt(variance);
 
     // Find anomalies (scores more than 2 standard deviations from mean)
@@ -147,10 +135,7 @@ export class TrendAnalyzer {
   /**
    * Get score history
    */
-  async getScoreHistory(
-    userId: string,
-    days: number = 30
-  ): Promise<ScoreHistory[]> {
+  async getScoreHistory(userId: string, days: number = 30): Promise<ScoreHistory[]> {
     const history: ScoreHistory[] = [];
     const now = new Date();
 
@@ -243,8 +228,7 @@ export class TrendAnalyzer {
     for (let i = 0; i < data.length; i++) {
       const start = Math.max(0, i - window + 1);
       const windowData = data.slice(start, i + 1);
-      const average =
-        windowData.reduce((sum, d) => sum + d.score, 0) / windowData.length;
+      const average = windowData.reduce((sum, d) => sum + d.score, 0) / windowData.length;
 
       result.push({
         date: data[i].date,

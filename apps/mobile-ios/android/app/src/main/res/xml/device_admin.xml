@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AnkrShield Device Admin capabilities declaration.
+  Required by DevicePolicyManager for lock + wipe + password enforcement.
+-->
+<device-admin>
+  <uses-policies>
+    <limit-password/>
+    <wipe-data/>
+    <force-lock/>
+    <watch-login/>
+  </uses-policies>
+</device-admin>

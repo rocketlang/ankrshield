@@ -20,6 +20,8 @@ import {
   Platform,
 } from 'react-native';
 
+import { t } from '../i18n';
+
 import { mdmPolicyEngine } from './policy-engine';
 import type { ComplianceResult } from './policy-engine';
 import { MdmStorage } from './storage';
@@ -89,6 +91,7 @@ function RuleRow({ rule }: { rule: MdmRule }) {
 }
 
 export function MdmScreen({ navigation: _navigation }: { navigation?: unknown }) {
+  const m = t().mdm;
   const [loading, setLoading] = useState(true);
   const [enrollment, setEnrollment] = useState<DeviceEnrollment | null>(null);
   const [compliance, setCompliance] = useState<ComplianceResult | null>(null);
@@ -168,7 +171,7 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
   }, [policy, enrollment]);
 
   const handleUnenroll = useCallback(() => {
-    Alert.alert('Unenroll Device', 'This will remove all corporate security policies. Continue?', [
+    Alert.alert(m.unenroll, m.unenrollConfirm, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Unenroll',
@@ -193,7 +196,7 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color="#7c3aed" />
-        <Text style={styles.loadingText}>Loading corporate shield...</Text>
+        <Text style={styles.loadingText}>{t().loading}</Text>
       </View>
     );
   }
@@ -201,8 +204,8 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Corporate Shield</Text>
-        <Text style={styles.headerSub}>Device Management (MDM Lite)</Text>
+        <Text style={styles.headerTitle}>{m.title}</Text>
+        <Text style={styles.headerSub}>{m.subtitle}</Text>
       </View>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
         {enrollment != null ? (
@@ -210,7 +213,7 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
             <View style={styles.card}>
               <View style={styles.enrolledRow}>
                 <View style={styles.enrolledDot} />
-                <Text style={styles.enrolledLabel}>ENROLLED</Text>
+                <Text style={styles.enrolledLabel}>{m.enrolled.toUpperCase()}</Text>
               </View>
               <Text style={styles.orgName}>{enrollment.orgName}</Text>
               <Text style={styles.metaLine}>
@@ -243,7 +246,7 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
             </View>
             {compliance != null && (
               <View style={styles.card}>
-                <Text style={styles.sectionTitle}>COMPLIANCE STATUS</Text>
+                <Text style={styles.sectionTitle}>{m.compliance.toUpperCase()}</Text>
                 <ComplianceBadge status={compliance.status} />
                 {compliance.violations.length > 0 && (
                   <View style={styles.violationsBox}>
@@ -288,7 +291,7 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
                 {syncing ? (
                   <ActivityIndicator size="small" color="#06b6d4" />
                 ) : (
-                  <Text style={styles.syncBtnText}>Sync Security Policy</Text>
+                  <Text style={styles.syncBtnText}>{m.syncBlocklist}</Text>
                 )}
               </TouchableOpacity>
               {syncMsg.length > 0 ? <Text style={styles.syncMsg}>{syncMsg}</Text> : null}
@@ -296,7 +299,7 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
                 style={[styles.actionBtn, styles.unenrollBtn]}
                 onPress={handleUnenroll}
               >
-                <Text style={styles.unenrollBtnText}>Unenroll Device</Text>
+                <Text style={styles.unenrollBtnText}>{m.unenroll}</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -304,9 +307,7 @@ export function MdmScreen({ navigation: _navigation }: { navigation?: unknown })
           <>
             <View style={styles.notEnrolledCard}>
               <Text style={styles.notEnrolledTitle}>Not Enrolled</Text>
-              <Text style={styles.notEnrolledSub}>
-                This device is not enrolled in an organisation security policy.
-              </Text>
+              <Text style={styles.notEnrolledSub}>{m.notEnrolled}</Text>
             </View>
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>ENROLL DEVICE</Text>

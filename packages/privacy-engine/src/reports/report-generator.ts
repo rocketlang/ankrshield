@@ -4,6 +4,9 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+
+import { TrendAnalyzer } from '../analysis/trend-analyzer';
+import { PrivacyCalculator } from '../scoring/privacy-calculator';
 import type {
   DailyReport,
   WeeklyReport,
@@ -13,8 +16,6 @@ import type {
   AppStats,
   TimeRange,
 } from '../types';
-import { PrivacyCalculator } from '../scoring/privacy-calculator';
-import { TrendAnalyzer } from '../analysis/trend-analyzer';
 
 /**
  * Report Generator
@@ -55,9 +56,17 @@ export class ReportGenerator {
     });
 
     const trend = {
-      direction: todayScore.totalScore > yesterdayScore.totalScore ? 'worsening' as const : todayScore.totalScore < yesterdayScore.totalScore ? 'improving' as const : 'stable' as const,
+      direction:
+        todayScore.totalScore > yesterdayScore.totalScore
+          ? ('worsening' as const)
+          : todayScore.totalScore < yesterdayScore.totalScore
+            ? ('improving' as const)
+            : ('stable' as const),
       change: todayScore.totalScore - yesterdayScore.totalScore,
-      percentageChange: yesterdayScore.totalScore > 0 ? ((todayScore.totalScore - yesterdayScore.totalScore) / yesterdayScore.totalScore) * 100 : 0,
+      percentageChange:
+        yesterdayScore.totalScore > 0
+          ? ((todayScore.totalScore - yesterdayScore.totalScore) / yesterdayScore.totalScore) * 100
+          : 0,
       comparisonPeriod: 'vs. yesterday',
     };
 
@@ -79,10 +88,7 @@ export class ReportGenerator {
   /**
    * Generate weekly summary
    */
-  async generateWeeklySummary(
-    userId: string,
-    startDate: Date
-  ): Promise<WeeklyReport> {
+  async generateWeeklySummary(_userId: string, startDate: Date): Promise<WeeklyReport> {
     const endDate = new Date(startDate.getTime() + 7 * 24 * 60 * 60 * 1000);
     const timeRange: TimeRange = { start: startDate, end: endDate };
 
@@ -123,7 +129,7 @@ export class ReportGenerator {
    * Generate monthly report
    */
   async generateMonthlyReport(
-    userId: string,
+    _userId: string,
     month: number,
     year: number
   ): Promise<MonthlyReport> {
@@ -151,7 +157,11 @@ export class ReportGenerator {
     const monthOverMonth = await this.trendAnalyzer.getMonthlyTrend(userId);
 
     // Generate summary and recommendations
-    const summary = this.generateMonthlySummary(monthScore.totalScore, totalTrackers, totalDataToTrackers);
+    const summary = this.generateMonthlySummary(
+      monthScore.totalScore,
+      totalTrackers,
+      totalDataToTrackers
+    );
     const recommendations = await this.getRecommendations(userId, monthScore.totalScore);
 
     return {
@@ -180,7 +190,8 @@ export class ReportGenerator {
         priority: 'high',
         category: 'critical',
         title: 'Enable Tracker Blocking',
-        description: 'Your privacy score is critical. Enable comprehensive tracker blocking immediately.',
+        description:
+          'Your privacy score is critical. Enable comprehensive tracker blocking immediately.',
         actionable: true,
         estimatedImpact: 40,
       });
@@ -200,7 +211,8 @@ export class ReportGenerator {
         priority: 'medium',
         category: 'dns',
         title: 'Enable DNS Filtering',
-        description: 'Enable DNS-level filtering to block tracking domains before they are contacted.',
+        description:
+          'Enable DNS-level filtering to block tracking domains before they are contacted.',
         actionable: true,
         estimatedImpact: 20,
       });
@@ -211,7 +223,8 @@ export class ReportGenerator {
         priority: 'medium',
         category: 'apps',
         title: 'Review App Permissions',
-        description: 'Review which apps have network access and consider privacy-friendly alternatives.',
+        description:
+          'Review which apps have network access and consider privacy-friendly alternatives.',
         actionable: true,
         estimatedImpact: 15,
       });
@@ -233,9 +246,9 @@ export class ReportGenerator {
    * Get top trackers for time range
    */
   private async getTopTrackers(
-    userId: string,
-    timeRange: TimeRange,
-    limit: number
+    _userId: string,
+    _timeRange: TimeRange,
+    _limit: number
   ): Promise<TrackerStats[]> {
     // Simplified implementation
     // Real implementation would query NetworkEvent with tracker info
@@ -246,9 +259,9 @@ export class ReportGenerator {
    * Get top apps for time range
    */
   private async getTopApps(
-    userId: string,
-    timeRange: TimeRange,
-    limit: number
+    _userId: string,
+    _timeRange: TimeRange,
+    _limit: number
   ): Promise<AppStats[]> {
     // Simplified implementation
     return [];
@@ -258,8 +271,8 @@ export class ReportGenerator {
    * Get connection statistics
    */
   private async getConnectionStats(
-    userId: string,
-    timeRange: TimeRange
+    _userId: string,
+    _timeRange: TimeRange
   ): Promise<{ total: number; blocked: number }> {
     const stats = await this.prisma.networkEvent.aggregate({
       where: {
@@ -281,10 +294,7 @@ export class ReportGenerator {
   /**
    * Get notable events
    */
-  private async getNotableEvents(
-    userId: string,
-    timeRange: TimeRange
-  ): Promise<string[]> {
+  private async getNotableEvents(_userId: string, _timeRange: TimeRange): Promise<string[]> {
     const anomalies = await this.trendAnalyzer.detectAnomalies(userId, 7);
     return anomalies.map((a) => a.description);
   }
@@ -292,10 +302,7 @@ export class ReportGenerator {
   /**
    * Get total trackers contacted
    */
-  private async getTotalTrackers(
-    userId: string,
-    timeRange: TimeRange
-  ): Promise<number> {
+  private async getTotalTrackers(_userId: string, _timeRange: TimeRange): Promise<number> {
     // Simplified implementation
     return 0;
   }
@@ -303,10 +310,7 @@ export class ReportGenerator {
   /**
    * Get total data transferred to trackers
    */
-  private async getTotalDataToTrackers(
-    userId: string,
-    timeRange: TimeRange
-  ): Promise<number> {
+  private async getTotalDataToTrackers(_userId: string, _timeRange: TimeRange): Promise<number> {
     // Simplified implementation
     return 0;
   }
@@ -315,9 +319,9 @@ export class ReportGenerator {
    * Get top vendors
    */
   private async getTopVendors(
-    userId: string,
-    timeRange: TimeRange,
-    limit: number
+    _userId: string,
+    _timeRange: TimeRange,
+    _limit: number
   ): Promise<any[]> {
     // Simplified implementation
     return [];
@@ -348,11 +352,7 @@ export class ReportGenerator {
   /**
    * Generate weekly summary text
    */
-  private generateMonthlySummary(
-    score: number,
-    totalTrackers: number,
-    totalData: number
-  ): string {
+  private generateMonthlySummary(score: number, totalTrackers: number, totalData: number): string {
     let summary = `Average Privacy Score: ${score}/100 this month. `;
 
     if (totalTrackers > 0) {

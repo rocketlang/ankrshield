@@ -105,6 +105,7 @@ public class WhatsAppGuardModule extends ReactContextBaseJavaModule {
                 m.putString("reason", entry.reason);
                 m.putDouble("ts", entry.ts);
                 m.putDouble("fileSizeBytes", entry.fileSizeBytes);
+                m.putString("sha256", entry.sha256);
                 arr.pushMap(m);
             }
             promise.resolve(arr);
@@ -238,6 +239,27 @@ public class WhatsAppGuardModule extends ReactContextBaseJavaModule {
         }
     }
 
+    /** Returns phishing alert history from the accessibility service URL-bar monitor. */
+    @ReactMethod
+    public void getPhishingAlerts(Promise promise) {
+        try {
+            WritableArray arr = Arguments.createArray();
+            for (AnkrShieldAccessibilityService.PhishingAlert a
+                    : AnkrShieldAccessibilityService.phishingHistory) {
+                WritableMap m = Arguments.createMap();
+                m.putString("suspectUrl", a.suspectUrl);
+                m.putString("suspectDomain", a.suspectDomain);
+                m.putString("spoofingTarget", a.spoofingTarget);
+                m.putInt("similarityPct", a.similarityPct);
+                m.putDouble("ts", a.ts);
+                arr.pushMap(m);
+            }
+            promise.resolve(arr);
+        } catch (Exception e) {
+            promise.reject("ALERTS_ERROR", e.getMessage(), e);
+        }
+    }
+
     /** Returns locally persisted threat action log (survives app kill/reboot). */
     @ReactMethod
     public void getThreatLog(Promise promise) {
@@ -260,6 +282,7 @@ public class WhatsAppGuardModule extends ReactContextBaseJavaModule {
             m.putString("reason", entry.reason);
             m.putDouble("ts", entry.ts);
             m.putDouble("fileSizeBytes", entry.fileSizeBytes);
+            m.putString("sha256", entry.sha256);
             ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                .emit("WhatsAppFileEvent", m);
         } catch (Exception ignored) {}

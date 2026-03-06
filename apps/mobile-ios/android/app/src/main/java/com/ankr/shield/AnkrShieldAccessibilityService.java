@@ -5,13 +5,19 @@ import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.ClipboardManager;
+import android.content.ClipData;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.database.Cursor;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.ContactsContract;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
 
 import androidx.core.app.NotificationCompat;
 
@@ -118,7 +124,12 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
         "linkedin.com",
     };
 
-    private static final String PHISHING_CHANNEL = "phishing_guard";
+    private static final String PHISHING_CHANNEL  = "phishing_guard";
+    private static final String OVERLAY_CHANNEL   = "overlay_attack";
+
+    // UPI VPA pattern: something@provider (e.g. user@upi, user@paytm, user@ybl)
+    private static final java.util.regex.Pattern UPI_VPA_PATTERN =
+        java.util.regex.Pattern.compile("^[\\w.\\-]{2,64}@[\\w]{2,20}$");
 
     // Similarity thresholds
     private static final double IMPERSONATION_THRESHOLD = 0.80;
@@ -140,6 +151,15 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
     // Phishing dedup — avoid re-alerting same domain within 60 s
     private String lastAlertedDomain = "";
     private long lastAlertedTs = 0;
+
+    // Clipboard monitoring
+    private ClipboardManager clipboardManager;
+    private String lastCheckedClip = "";
+    private long lastClipAlertTs = 0;
+
+    // Overlay attack tracking — foreground app at time of suspicious overlay
+    private String lastForegroundPkg = "";
+    private long lastOverlayAlertTs = 0;
 
     // Current call state
     private boolean callActive = false;
@@ -177,6 +197,23 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
         }
     }
 
+    public static class OverlayAttackAlert {
+        public final String overlayPkg;
+        public final String underlyingPkg;
+        public final String attackType; // "overlay" | "autofill_hijack" | "clipboard_upi"
+        public final String detail;
+        public final long ts;
+
+        public OverlayAttackAlert(String overlayPkg, String underlyingPkg,
+                                   String attackType, String detail) {
+            this.overlayPkg = overlayPkg;
+            this.underlyingPkg = underlyingPkg;
+            this.attackType = attackType;
+            this.detail = detail;
+            this.ts = System.currentTimeMillis();
+        }
+    }
+
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
     @Override
@@ -186,22 +223,23 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED |
             AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED |
             AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED |
-            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED;
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED |
+            AccessibilityEvent.TYPE_VIEW_FOCUSED |
+            AccessibilityEvent.TYPE_WINDOWS_CHANGED;
         info.feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC;
         info.flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
                    | AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
         info.notificationTimeout = 100;
 
-        // Monitor WhatsApp + all tracked browser packages
-        String[] allPkgs = new String[2 + BROWSER_PKGS.length];
-        allPkgs[0] = WHATSAPP_PKG;
-        allPkgs[1] = WHATSAPP_B_PKG;
-        System.arraycopy(BROWSER_PKGS, 0, allPkgs, 2, BROWSER_PKGS.length);
-        info.packageNames = allPkgs;
+        // Monitor all packages (null = system-wide) so overlay and clipboard
+        // attacks in any app are caught. WhatsApp + browser checks are pkg-gated.
+        info.packageNames = null;
 
         setServiceInfo(info);
         createPhishingNotificationChannel();
-        Log.i(TAG, "Accessibility service connected — monitoring WhatsApp + " + BROWSER_PKGS.length + " browsers");
+        createOverlayNotificationChannel();
+        startClipboardMonitoring();
+        Log.i(TAG, "Accessibility service connected — monitoring all packages + clipboard");
     }
 
     @Override
@@ -209,20 +247,36 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
         if (event == null) return;
 
         String pkg = event.getPackageName() != null ? event.getPackageName().toString() : "";
+        int type = event.getEventType();
+
+        // ── Track foreground package ──────────────────────────────────────
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && !pkg.isEmpty()) {
+            // Only update foreground if this is a real Activity (not SystemUI / overlay)
+            if (!pkg.equals("com.android.systemui") && !pkg.isEmpty()) {
+                lastForegroundPkg = pkg;
+            }
+        }
+
+        // ── Overlay attack detection ──────────────────────────────────────
+        // Check on every windows-changed event for suspicious overlay windows
+        if (type == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
+                type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            checkOverlayAttack(pkg);
+        }
 
         // ── Browser phishing check ────────────────────────────────────────
         if (isBrowserPkg(pkg)) {
-            if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ||
-                    event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
-                    event.getEventType() == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
+            if (type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ||
+                    type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+                    type == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) {
                 checkBrowserUrl(event);
             }
-            return; // browsers don't need impersonation check
+            return;
         }
 
         // ── WhatsApp: call detection ───────────────────────────────────────
-        if (event.getEventType() == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-                || event.getEventType() == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+                || type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             checkCallState(event);
         }
 
@@ -237,11 +291,226 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
                 }
             }
         }
+
+        // ── Autofill hijack detection (focused password field in suspicious context) ─
+        if (type == AccessibilityEvent.TYPE_VIEW_FOCUSED) {
+            checkAutofillHijack(event, pkg);
+        }
     }
 
     @Override
     public void onInterrupt() {
         Log.w(TAG, "Accessibility service interrupted");
+    }
+
+    // ── Overlay Attack Detection ──────────────────────────────────────────────
+
+    /**
+     * Detects when an application draws a TYPE_APPLICATION_OVERLAY window on top
+     * of a sensitive financial or banking app. This is a classic credential-harvesting
+     * technique: a malicious app shows a fake login overlay on top of a real bank app.
+     *
+     * Fires OverlayAttackAlert if:
+     *   - An overlay window is visible AND
+     *   - The underlying app is a protected financial package AND
+     *   - The overlay's package is NOT the underlying app itself AND
+     *   - We haven't alerted for the same pair within 60 seconds
+     */
+    private void checkOverlayAttack(String eventPkg) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) return;
+
+        long now = System.currentTimeMillis();
+        if (now - lastOverlayAlertTs < 60_000) return; // throttle
+
+        List<AccessibilityWindowInfo> windows = getWindows();
+        if (windows == null || windows.size() < 2) return;
+
+        String appWindowPkg = null;
+        boolean hasOverlay   = false;
+        String overlayPkg    = null;
+
+        for (AccessibilityWindowInfo w : windows) {
+            int windowType = w.getType();
+            CharSequence title = w.getTitle();
+            String wPkg = (title != null) ? title.toString() : "";
+
+            if (windowType == AccessibilityWindowInfo.TYPE_APPLICATION) {
+                if (w.isActive() && !wPkg.isEmpty()) {
+                    appWindowPkg = lastForegroundPkg;
+                }
+            }
+            // TYPE_ACCESSIBILITY_OVERLAY or system overlay
+            if (windowType == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY ||
+                    windowType == 2003 /* TYPE_APPLICATION_OVERLAY not in API <26 constant */) {
+                hasOverlay = true;
+                // Try to infer the overlay's package from the event
+                overlayPkg = eventPkg;
+            }
+        }
+
+        if (!hasOverlay || appWindowPkg == null || appWindowPkg.isEmpty()) return;
+        if (overlayPkg != null && overlayPkg.equals(appWindowPkg)) return; // same app, legit
+
+        // Is the underlying app a financial target?
+        if (!isFinancialPkg(appWindowPkg)) return;
+        if (overlayPkg == null || overlayPkg.isEmpty()) return;
+        if (isKnownSafeOverlay(overlayPkg)) return;
+
+        lastOverlayAlertTs = now;
+        OverlayAttackAlert alert = new OverlayAttackAlert(
+            overlayPkg, appWindowPkg, "overlay",
+            "App '" + overlayPkg + "' is drawing over '" + appWindowPkg +
+            "' — possible credential overlay attack"
+        );
+        emitOverlayAlert(alert);
+        sendOverlayNotification(alert);
+        Log.w(TAG, "OVERLAY ATTACK: " + overlayPkg + " over " + appWindowPkg);
+    }
+
+    private static final String[] FINANCIAL_PKGS = {
+        "com.sbi.online", "com.csam.icici.bank.imobile", "net.one97.paytm",
+        "com.phonepe.app", "in.amazon.mShop.android.shopping",
+        "com.google.android.apps.nbu.paisa.user",  // Google Pay
+        "com.dreamplug.androidapp",                // CRED
+        "com.mobikwik_new", "com.freecharge.android",
+        "com.axis.mobile", "com.hdfc.netmobile", "com.kotak.mahindra.kotak",
+        "com.indusind.mobilebanking", "com.yesbank",
+        "com.idbi.mpassbook", "com.finacus.union",
+        "com.npci.upiapp",                          // BHIM
+    };
+
+    private static boolean isFinancialPkg(String pkg) {
+        for (String fp : FINANCIAL_PKGS) {
+            if (fp.equals(pkg)) return true;
+        }
+        return false;
+    }
+
+    private static final String[] KNOWN_SAFE_OVERLAY_PKGS = {
+        "com.ankr.shield",       // ourselves
+        "com.google.android.inputmethod.latin",
+        "com.samsung.android.honeyboard",
+        "com.swiftkey.swiftkeyapp",
+        "com.gboard.android",
+        "com.android.systemui",
+        "com.android.settings",
+    };
+
+    private static boolean isKnownSafeOverlay(String pkg) {
+        for (String s : KNOWN_SAFE_OVERLAY_PKGS) {
+            if (s.equals(pkg)) return true;
+        }
+        // Accessibility IME overlays are safe
+        return pkg.contains(".keyboard") || pkg.contains(".ime") || pkg.contains(".inputmethod");
+    }
+
+    // ── Clipboard UPI Monitoring ──────────────────────────────────────────────
+
+    /**
+     * Registers a ClipboardManager listener. When a UPI VPA is copied to the
+     * clipboard in the context of a suspicious app (not a banking app or UPI app),
+     * a ClipboardUpiAlert is fired.
+     *
+     * Intent: catch apps that silently read UPI IDs from the clipboard to redirect payments.
+     */
+    private void startClipboardMonitoring() {
+        try {
+            clipboardManager = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboardManager == null) return;
+
+            clipboardManager.addPrimaryClipChangedListener(() -> {
+                try {
+                    ClipData clip = clipboardManager.getPrimaryClip();
+                    if (clip == null || clip.getItemCount() == 0) return;
+                    String text = clip.getItemAt(0).coerceToText(getApplicationContext()).toString().trim();
+
+                    if (text.equals(lastCheckedClip)) return;
+                    lastCheckedClip = text;
+
+                    if (UPI_VPA_PATTERN.matcher(text).matches()) {
+                        long now = System.currentTimeMillis();
+                        if (now - lastClipAlertTs < 30_000) return; // 30s dedup
+                        lastClipAlertTs = now;
+
+                        // Check if clipboard was written by a non-UPI app
+                        String ctx = lastForegroundPkg.isEmpty() ? "unknown" : lastForegroundPkg;
+                        boolean isUpiApp = ctx.contains("paytm") || ctx.contains("phonepe") ||
+                                           ctx.contains("google") || ctx.contains("bhim") ||
+                                           ctx.contains("npci") || ctx.contains("upi");
+
+                        if (!isUpiApp) {
+                            OverlayAttackAlert alert = new OverlayAttackAlert(
+                                ctx, "", "clipboard_upi",
+                                "UPI VPA '" + text + "' copied to clipboard by '" + ctx +
+                                "' — verify the recipient before paying"
+                            );
+                            emitOverlayAlert(alert);
+                            Log.w(TAG, "CLIPBOARD UPI: VPA=" + text + " copied by " + ctx);
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "Clipboard check error: " + e.getMessage());
+                }
+            });
+            Log.i(TAG, "Clipboard UPI monitoring started");
+        } catch (Exception e) {
+            Log.w(TAG, "Could not start clipboard monitoring: " + e.getMessage());
+        }
+    }
+
+    // ── Autofill Hijack Detection ─────────────────────────────────────────────
+
+    /**
+     * Detects when a password/OTP field gains focus in an app that:
+     *   - Is NOT in our list of known legitimate financial apps
+     *   - But has a name/title that mimics a bank or UPI service
+     *
+     * This catches fake apps that look like HDFC or SBI but use a different package name.
+     */
+    private void checkAutofillHijack(AccessibilityEvent event, String pkg) {
+        if (pkg.isEmpty()) return;
+        if (isKnownSafeOverlay(pkg)) return;
+
+        AccessibilityNodeInfo node = event.getSource();
+        if (node == null) return;
+
+        try {
+            boolean isPasswordField = node.isPassword();
+            if (!isPasswordField) return;
+
+            // Check if the window title impersonates a bank
+            List<AccessibilityWindowInfo> windows = getWindows();
+            if (windows == null) return;
+
+            for (AccessibilityWindowInfo w : windows) {
+                if (w.getType() != AccessibilityWindowInfo.TYPE_APPLICATION) continue;
+                CharSequence title = w.getTitle();
+                if (title == null) continue;
+                String titleLower = title.toString().toLowerCase();
+
+                for (String target : PROTECTED_DOMAINS) {
+                    String shortTarget = target.replace(".co.in", "")
+                                                .replace(".com", "")
+                                                .replace(".in", "");
+                    if (titleLower.contains(shortTarget) && !isFinancialPkg(pkg)) {
+                        long now = System.currentTimeMillis();
+                        if (now - lastOverlayAlertTs < 30_000) return;
+                        lastOverlayAlertTs = now;
+
+                        OverlayAttackAlert alert = new OverlayAttackAlert(
+                            pkg, shortTarget, "autofill_hijack",
+                            "App '" + pkg + "' shows a password field claiming to be '" +
+                            title + "' — possible fake login screen"
+                        );
+                        emitOverlayAlert(alert);
+                        Log.w(TAG, "AUTOFILL HIJACK: pkg=" + pkg + " title=" + title);
+                        break;
+                    }
+                }
+            }
+        } finally {
+            node.recycle();
+        }
     }
 
     // ── Browser Phishing Detection ────────────────────────────────────────────
@@ -569,5 +838,62 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
             .build();
 
         nm.notify(9900 + (int)(System.currentTimeMillis() % 100), n);
+    }
+
+    // ── Overlay alert emission ────────────────────────────────────────────────
+
+    private void emitOverlayAlert(OverlayAttackAlert alert) {
+        try {
+            if (reactContext == null || !reactContext.hasActiveCatalystInstance()) return;
+            WritableMap m = Arguments.createMap();
+            m.putString("overlayPkg",     alert.overlayPkg);
+            m.putString("underlyingPkg",  alert.underlyingPkg);
+            m.putString("attackType",     alert.attackType);
+            m.putString("detail",         alert.detail);
+            m.putDouble("ts",             alert.ts);
+
+            String eventName = "clipboard_upi".equals(alert.attackType)
+                ? "ClipboardUpiAlert" : "OverlayAttackAlert";
+            reactContext.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                .emit(eventName, m);
+        } catch (Exception ignored) {}
+    }
+
+    private void sendOverlayNotification(OverlayAttackAlert alert) {
+        NotificationManager nm =
+            (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm == null) return;
+
+        String title = "autofill_hijack".equals(alert.attackType)
+            ? "⚠️ Fake Login Screen Detected"
+            : "🚨 Overlay Attack Detected";
+
+        Notification n = new NotificationCompat.Builder(this, OVERLAY_CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle(title)
+            .setContentText(alert.detail)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(alert.detail))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setAutoCancel(true)
+            .setVibrate(new long[]{0, 300, 100, 300})
+            .setColor(0xFFF59E0B)
+            .build();
+
+        nm.notify(9800 + (int)(System.currentTimeMillis() % 100), n);
+    }
+
+    private void createOverlayNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel ch = new NotificationChannel(
+                OVERLAY_CHANNEL,
+                "Overlay & Autofill Attack Alerts",
+                NotificationManager.IMPORTANCE_HIGH);
+            ch.setDescription("Warns when an app draws a suspicious overlay or fake login screen");
+            ch.enableVibration(true);
+            NotificationManager nm =
+                (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.createNotificationChannel(ch);
+        }
     }
 }

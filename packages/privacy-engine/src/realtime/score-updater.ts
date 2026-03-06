@@ -4,9 +4,11 @@
  */
 
 import { EventEmitter } from 'events';
+
 import { PrismaClient } from '@prisma/client';
-import type { PrivacyScore } from '../types';
+
 import { PrivacyCalculator } from '../scoring/privacy-calculator';
+import type { PrivacyScore } from '../types';
 
 /**
  * Score update events

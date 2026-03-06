@@ -1,159 +1,207 @@
 /**
  * NetworkBehaviorScreen — A4
- * Per-app network behavior analysis.
- * Philosophy: consent-aware, surgical inhibition — block only excess scope calls,
- * never the whole app, never connections that belong to the app's stated purpose.
+ * Per-app network behavior analysis — live DNS event feed from DnsVpnService.
+ * No mock data. Shows real queries as they happen via DeviceEventEmitter.
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
-  Switch,
   StyleSheet,
   StatusBar,
+  NativeEventEmitter,
+  NativeModules,
+  Platform,
 } from 'react-native';
+
+import { getBlocklistStats } from '../services/ioc-sync';
+
+const { DnsVpn } = NativeModules;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface Connection {
+interface DnsEvent {
+  id: string;
   domain: string;
-  country: string;
-  dataKB: number;
-  expected: boolean;
   blocked: boolean;
-}
-
-interface AppConnection {
-  packageName: string;
-  appName: string;
   category: string;
-  connections: Connection[];
+  vendor: string;
+  ts: number;
 }
 
-// ─── Country flag helper ──────────────────────────────────────────────────────
+interface VpnStats {
+  total: number;
+  blocked: number;
+  running: boolean;
+}
 
-const COUNTRY_FLAGS: Record<string, string> = {
-  CN: '\uD83C\uDDE8\uD83C\uDDF3',
-  RU: '\uD83C\uDDF7\uD83C\uDDFA',
-  US: '\uD83C\uDDFA\uD83C\uDDF8',
-  SG: '\uD83C\uDDF8\uD83C\uDDEC',
-  IN: '\uD83C\uDDEE\uD83C\uDDF3',
+// ─── Domain → App Name lookup ─────────────────────────────────────────────────
+
+const DOMAIN_APP: Record<string, string> = {
+  'whatsapp.net': 'WhatsApp',
+  'fbcdn.net': 'Facebook',
+  'facebook.com': 'Facebook',
+  'instagram.com': 'Instagram',
+  'cdninstagram.com': 'Instagram',
+  'googleapis.com': 'Google',
+  'gstatic.com': 'Google',
+  'google.com': 'Google',
+  'youtube.com': 'YouTube',
+  'ytimg.com': 'YouTube',
+  'googlevideo.com': 'YouTube',
+  'nflxvideo.net': 'Netflix',
+  'nflximg.net': 'Netflix',
+  'netflix.com': 'Netflix',
+  'hdfcbank.com': 'HDFC Bank',
+  'sbicard.com': 'SBI Card',
+  'paytm.com': 'Paytm',
+  'phonepe.com': 'PhonePe',
+  'amazonpay.in': 'Amazon Pay',
+  'amazon.in': 'Amazon',
+  'flipkart.com': 'Flipkart',
+  'akamai.net': 'CDN',
+  'cloudflare.com': 'CDN',
+  'fastly.net': 'CDN',
+  'doubleclick.net': 'Google Ads',
+  'googlesyndication.com': 'Google Ads',
+  'appsflyer.com': 'AppsFlyer',
+  'adjust.com': 'Adjust',
+  'branch.io': 'Branch',
+  'mixpanel.com': 'Mixpanel',
+  'amplitude.com': 'Amplitude',
+  'crashlytics.com': 'Firebase',
+  'firebase.com': 'Firebase',
+  'firebaseio.com': 'Firebase',
 };
 
-function countryFlag(code: string): string {
-  return COUNTRY_FLAGS[code] ?? code;
+function domainToApp(domain: string): string | null {
+  for (const [suffix, app] of Object.entries(DOMAIN_APP)) {
+    if (domain === suffix || domain.endsWith('.' + suffix)) return app;
+  }
+  return null;
 }
 
-function formatData(kb: number): string {
-  return kb >= 1024 ? `${(kb / 1024).toFixed(1)} MB` : `${kb} KB`;
+// ─── Category colours ─────────────────────────────────────────────────────────
+
+const CAT_COLOR: Record<string, string> = {
+  analytics: '#f59e0b',
+  advertising: '#ef4444',
+  fingerprinting: '#dc2626',
+  tracking: '#f97316',
+  malware: '#991b1b',
+  cdn: '#22c55e',
+  clean: '#374151',
+};
+
+function catColor(cat: string): string {
+  return CAT_COLOR[cat] ?? '#374151';
 }
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const MOCK_APP_CONNECTIONS: AppConnection[] = [
-  {
-    packageName: 'com.whatsapp',
-    appName: 'WhatsApp',
-    category: 'messaging',
-    connections: [
-      { domain: 'e2.whatsapp.net', country: 'US', dataKB: 1240, expected: true, blocked: false },
-      { domain: 'mmg.whatsapp.net', country: 'US', dataKB: 890, expected: true, blocked: false },
-    ],
-  },
-  {
-    packageName: 'com.superclean.booster',
-    appName: 'Super Cleaner Pro',
-    category: 'system_tool',
-    connections: [
-      {
-        domain: 'analytics.superclean.com',
-        country: 'CN',
-        dataKB: 340,
-        expected: false,
-        blocked: false,
-      },
-      {
-        domain: 'tracker.mobvista.com',
-        country: 'SG',
-        dataKB: 120,
-        expected: false,
-        blocked: false,
-      },
-      { domain: 'cdn.superclean.com', country: 'CN', dataKB: 88, expected: true, blocked: false },
-    ],
-  },
-  {
-    packageName: 'com.flashlight.turbo',
-    appName: 'Flashlight Turbo',
-    category: 'unknown',
-    connections: [
-      {
-        domain: 'data.harvest-api.ru',
-        country: 'RU',
-        dataKB: 560,
-        expected: false,
-        blocked: false,
-      },
-      { domain: 'ads.admob.com', country: 'US', dataKB: 45, expected: false, blocked: false },
-    ],
-  },
-  {
-    packageName: 'com.netflix.mediaclient',
-    appName: 'Netflix',
-    category: 'streaming',
-    connections: [
-      { domain: 'nflxvideo.net', country: 'US', dataKB: 45600, expected: true, blocked: false },
-      { domain: 'nflximg.net', country: 'US', dataKB: 1200, expected: true, blocked: false },
-    ],
-  },
-  {
-    packageName: 'com.hdfc.mobilebanking',
-    appName: 'HDFC MobileBanking',
-    category: 'banking',
-    connections: [
-      {
-        domain: 'netbanking.hdfcbank.com',
-        country: 'IN',
-        dataKB: 780,
-        expected: true,
-        blocked: false,
-      },
-      { domain: 'api.hdfcbank.com', country: 'IN', dataKB: 340, expected: true, blocked: false },
-    ],
-  },
-];
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+type FilterMode = 'all' | 'blocked' | 'allowed';
+
+function formatSyncAge(d: Date | null): string {
+  if (!d) return 'never';
+  const secs = Math.floor((Date.now() - d.getTime()) / 1000);
+  if (secs < 60) return 'just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 export function NetworkBehaviorScreen() {
-  // Per-connection block toggle state: "packageName::domain" -> boolean
-  const [blockState, setBlockState] = useState<Record<string, boolean>>({});
-  // Per-app expected-section expand state
-  const [expectedOpen, setExpectedOpen] = useState<Record<string, boolean>>({});
+  const [events, setEvents] = useState<DnsEvent[]>([]);
+  const [stats, setStats] = useState<VpnStats>({ total: 0, blocked: 0, running: false });
+  const [filter, setFilter] = useState<FilterMode>('all');
+  const [syncStats, setSyncStats] = useState(getBlocklistStats());
+  const idRef = useRef(0);
 
-  function toggleBlock(pkg: string, domain: string) {
-    const key = `${pkg}::${domain}`;
-    setBlockState((prev) => ({ ...prev, [key]: !prev[key] }));
-  }
+  const refreshStats = useCallback(() => {
+    if (Platform.OS !== 'android' || !DnsVpn) return;
+    DnsVpn.getStats()
+      .then((s: any) => {
+        setStats({ total: s.totalQueries, blocked: s.blockedCount, running: s.running });
+      })
+      .catch(() => {});
+  }, []);
 
-  function isConnectionBlocked(pkg: string, domain: string): boolean {
-    return !!blockState[`${pkg}::${domain}`];
-  }
+  useEffect(() => {
+    refreshStats();
+    const interval = setInterval(refreshStats, 3000);
 
-  function toggleExpected(pkg: string) {
-    setExpectedOpen((prev) => ({ ...prev, [pkg]: !prev[pkg] }));
-  }
+    if (Platform.OS !== 'android' || !DnsVpn) return () => clearInterval(interval);
 
-  // Summary stats
-  const suspiciousTotal = MOCK_APP_CONNECTIONS.reduce(
-    (acc, app) => acc + app.connections.filter((c) => !c.expected).length,
-    0
-  );
-  const appsWithSuspicious = MOCK_APP_CONNECTIONS.filter((app) =>
-    app.connections.some((c) => !c.expected)
-  ).length;
+    const emitter = new NativeEventEmitter(DnsVpn);
+    const sub = emitter.addListener('DnsQueryEvent', (ev: any) => {
+      const e: DnsEvent = {
+        id: String(++idRef.current),
+        domain: ev.domain ?? '',
+        blocked: !!ev.blocked,
+        category: ev.category ?? 'clean',
+        vendor: ev.vendor ?? '',
+        ts: Date.now(),
+      };
+      setEvents((prev) => {
+        const next = [e, ...prev];
+        return next.length > 300 ? next.slice(0, 300) : next;
+      });
+    });
+
+    return () => {
+      clearInterval(interval);
+      sub.remove();
+    };
+  }, [refreshStats]);
+
+  // Poll blocklist sync stats every 30s
+  useEffect(() => {
+    const t = setInterval(() => setSyncStats(getBlocklistStats()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  const shown =
+    filter === 'all'
+      ? events
+      : filter === 'blocked'
+        ? events.filter((e) => e.blocked)
+        : events.filter((e) => !e.blocked);
+
+  const renderItem = useCallback(({ item }: { item: DnsEvent }) => {
+    const app = domainToApp(item.domain);
+    const cc = catColor(item.category);
+    return (
+      <View style={[s.row, item.blocked && s.rowBlocked]}>
+        <View style={s.rowLeft}>
+          {app && <Text style={s.rowApp}>{app}</Text>}
+          <Text style={[s.rowDomain, item.blocked && s.rowDomainBlocked]} numberOfLines={1}>
+            {item.domain}
+          </Text>
+          {item.category !== 'clean' && (
+            <View style={[s.catBadge, { borderColor: cc }]}>
+              <Text style={[s.catText, { color: cc }]}>{item.category}</Text>
+            </View>
+          )}
+        </View>
+        <View style={s.rowRight}>
+          <View style={[s.verdictPill, item.blocked ? s.verdictBlock : s.verdictAllow]}>
+            <Text style={s.verdictText}>{item.blocked ? 'BLOCKED' : 'ALLOWED'}</Text>
+          </View>
+          <Text style={s.rowTime}>
+            {new Date(item.ts).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            })}
+          </Text>
+        </View>
+      </View>
+    );
+  }, []);
 
   return (
     <View style={s.container}>
@@ -162,139 +210,96 @@ export function NetworkBehaviorScreen() {
       {/* Header */}
       <View style={s.header}>
         <Text style={s.title}>Network Behavior</Text>
-        <Text style={s.subtitle}>Per-app connection analysis — block only excess scope</Text>
+        <Text style={s.subtitle}>Live DNS feed — per-connection resolution log</Text>
       </View>
 
-      {/* Summary bar */}
-      <View style={s.summaryBar}>
-        <Text style={s.summaryText}>
-          <Text style={s.summaryAmber}>{suspiciousTotal} suspicious connections</Text>
-          {` detected across ${appsWithSuspicious} apps`}
+      {/* Stats bar */}
+      <View style={s.statsBar}>
+        <View style={s.statPill}>
+          <Text style={s.statNum}>{stats.blocked}</Text>
+          <Text style={s.statLabel}>blocked</Text>
+        </View>
+        <View style={s.statDivider} />
+        <View style={s.statPill}>
+          <Text style={s.statNum}>{Math.max(0, stats.total - stats.blocked)}</Text>
+          <Text style={s.statLabel}>allowed</Text>
+        </View>
+        <View style={s.statDivider} />
+        <View style={s.statPill}>
+          <Text style={s.statNum}>{events.length}</Text>
+          <Text style={s.statLabel}>this session</Text>
+        </View>
+        <View style={[s.vpnPill, stats.running ? s.vpnOn : s.vpnOff]}>
+          <Text style={s.vpnText}>{stats.running ? '● VPN ON' : '○ VPN OFF'}</Text>
+        </View>
+      </View>
+
+      {/* Blocklist sync status */}
+      <View style={s.syncBar}>
+        <Text style={s.syncText}>
+          {syncStats.syncInProgress
+            ? '⟳ Syncing blocklist...'
+            : syncStats.count > 0
+              ? `🛡 ${syncStats.count.toLocaleString()} domains · ${formatSyncAge(syncStats.lastSyncAt)}`
+              : '🛡 Blocklist not yet synced'}
         </Text>
       </View>
 
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent}>
-        {MOCK_APP_CONNECTIONS.map((app) => {
-          const unexpected = app.connections.filter((c) => !c.expected);
-          const expected = app.connections.filter((c) => c.expected);
-          const totalDataKB = app.connections.reduce((acc, c) => acc + c.dataKB, 0);
-          const allExpected = unexpected.length === 0;
-          const isExpOpen = !!expectedOpen[app.packageName];
+      {/* VPN offline notice */}
+      {!stats.running && Platform.OS === 'android' && (
+        <View style={s.offlineNotice}>
+          <Text style={s.offlineText}>
+            Enable DNS filtering in Settings to see live network data.
+          </Text>
+        </View>
+      )}
 
-          return (
-            <View key={app.packageName} style={s.card}>
-              {/* Card header: app name + category + total data */}
-              <View style={s.cardHeader}>
-                <View style={s.cardHeaderLeft}>
-                  <Text style={s.appName}>{app.appName}</Text>
-                  <View style={s.categoryRow}>
-                    <View style={s.categoryBadge}>
-                      <Text style={s.categoryText}>{app.category.replace(/_/g, ' ')}</Text>
-                    </View>
-                    <Text style={s.totalData}>{formatData(totalDataKB)} sent</Text>
-                  </View>
-                </View>
-              </View>
+      {/* Filter tabs */}
+      <View style={s.filterRow}>
+        {(['all', 'blocked', 'allowed'] as FilterMode[]).map((f) => (
+          <TouchableOpacity
+            key={f}
+            style={[s.filterTab, filter === f && s.filterTabActive]}
+            onPress={() => setFilter(f)}
+          >
+            <Text style={[s.filterTabText, filter === f && s.filterTabTextActive]}>
+              {f === 'all'
+                ? `All (${events.length})`
+                : f === 'blocked'
+                  ? `Blocked (${events.filter((e) => e.blocked).length})`
+                  : `Allowed (${events.filter((e) => !e.blocked).length})`}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
-              {/* All-clean green line (WhatsApp, Netflix, HDFC) */}
-              {allExpected && (
-                <View style={s.allCleanRow}>
-                  <Text style={s.allCleanText}>{'✓ All connections within purpose'}</Text>
-                  {/* Collapsed expected section toggle */}
-                  <TouchableOpacity onPress={() => toggleExpected(app.packageName)}>
-                    <Text style={s.showExpected}>
-                      {`Expected (${expected.length}) ${isExpOpen ? '▲' : '▼'}`}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Unexpected connections — amber section */}
-              {unexpected.length > 0 && (
-                <View style={s.unexpectedSection}>
-                  <Text style={s.unexpectedHeader}>
-                    {`${unexpected.length} unexpected connection${unexpected.length > 1 ? 's' : ''}`}
-                  </Text>
-                  {unexpected.map((conn) => {
-                    const blocked = isConnectionBlocked(app.packageName, conn.domain);
-                    return (
-                      <View key={conn.domain} style={s.connRow}>
-                        <View style={s.connInfo}>
-                          <Text
-                            style={[s.connDomain, blocked && s.connDomainBlocked]}
-                            numberOfLines={1}
-                          >
-                            {conn.domain}
-                          </Text>
-                          <Text style={s.connMeta}>
-                            {`${countryFlag(conn.country)} ${conn.country}  ·  ${formatData(conn.dataKB)}`}
-                          </Text>
-                        </View>
-                        <View style={s.connRight}>
-                          {blocked && (
-                            <View style={s.blockedBadge}>
-                              <Text style={s.blockedBadgeText}>BLOCKED</Text>
-                            </View>
-                          )}
-                          <Switch
-                            value={blocked}
-                            onValueChange={() => toggleBlock(app.packageName, conn.domain)}
-                            trackColor={{ false: '#1e293b', true: '#7f1d1d' }}
-                            thumbColor={blocked ? '#fca5a5' : '#475569'}
-                          />
-                        </View>
-                      </View>
-                    );
-                  })}
-                  <Text style={s.surgicalNote}>
-                    Only these specific calls will be blocked — app continues to work normally
-                  </Text>
-                </View>
-              )}
-
-              {/* Expected connections — collapsed grey section */}
-              {!allExpected && expected.length > 0 && (
-                <View style={s.expectedSection}>
-                  <TouchableOpacity
-                    style={s.expectedToggle}
-                    onPress={() => toggleExpected(app.packageName)}
-                  >
-                    <Text style={s.expectedToggleText}>
-                      {`Expected (${expected.length}) ${isExpOpen ? '▲' : '▼'}`}
-                    </Text>
-                  </TouchableOpacity>
-                  {isExpOpen &&
-                    expected.map((conn) => (
-                      <View key={conn.domain} style={s.expectedRow}>
-                        <Text style={s.expectedDomain} numberOfLines={1}>
-                          {conn.domain}
-                        </Text>
-                        <Text style={s.expectedMeta}>
-                          {`${countryFlag(conn.country)} ${conn.country}  ·  ${formatData(conn.dataKB)}`}
-                        </Text>
-                      </View>
-                    ))}
-                </View>
-              )}
-
-              {/* All-clean expanded expected list */}
-              {allExpected &&
-                isExpOpen &&
-                expected.map((conn) => (
-                  <View key={conn.domain} style={s.expectedRow}>
-                    <Text style={s.expectedDomain} numberOfLines={1}>
-                      {conn.domain}
-                    </Text>
-                    <Text style={s.expectedMeta}>
-                      {`${countryFlag(conn.country)} ${conn.country}  ·  ${formatData(conn.dataKB)}`}
-                    </Text>
-                  </View>
-                ))}
-            </View>
-          );
-        })}
-        <View style={{ height: 40 }} />
-      </ScrollView>
+      {/* Empty state */}
+      {shown.length === 0 ? (
+        <View style={s.emptyBox}>
+          <Text style={s.emptyIcon}>📡</Text>
+          <Text style={s.emptyText}>
+            {stats.running
+              ? 'Waiting for DNS queries…\nBrowse any app to see live traffic.'
+              : 'Start DNS filtering in Settings\nto monitor network activity.'}
+          </Text>
+          {events.length > 0 && filter !== 'all' && (
+            <TouchableOpacity style={s.clearFilter} onPress={() => setFilter('all')}>
+              <Text style={s.clearFilterText}>Show all events</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : (
+        <FlatList
+          data={shown}
+          keyExtractor={(item) => item.id}
+          style={s.list}
+          contentContainerStyle={{ paddingVertical: 6, paddingHorizontal: 10 }}
+          renderItem={renderItem}
+          initialNumToRender={30}
+          maxToRenderPerBatch={20}
+          removeClippedSubviews
+        />
+      )}
     </View>
   );
 }
@@ -307,121 +312,127 @@ const s = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingTop: 52,
-    paddingBottom: 16,
+    paddingBottom: 14,
     backgroundColor: '#0d1117',
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b',
   },
   title: { color: '#f1f5f9', fontSize: 22, fontWeight: '700' },
-  subtitle: { color: '#64748b', fontSize: 13, marginTop: 4 },
+  subtitle: { color: '#64748b', fontSize: 13, marginTop: 3 },
 
-  summaryBar: {
-    paddingHorizontal: 16,
+  statsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#1a1200',
+    backgroundColor: '#0d1117',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+    gap: 6,
+  },
+  statPill: { alignItems: 'center', minWidth: 44 },
+  statNum: { color: '#f1f5f9', fontSize: 16, fontWeight: '700' },
+  statLabel: { color: '#475569', fontSize: 10, marginTop: 1 },
+  statDivider: { width: 1, height: 24, backgroundColor: '#1e293b', marginHorizontal: 4 },
+
+  vpnPill: {
+    marginLeft: 'auto',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  vpnOn: { backgroundColor: '#052e16' },
+  vpnOff: { backgroundColor: '#1c1917' },
+  vpnText: { fontSize: 11, fontWeight: '700', color: '#22c55e' },
+
+  offlineNotice: {
+    backgroundColor: '#1c1400',
     borderBottomWidth: 1,
     borderBottomColor: '#78350f',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
-  summaryText: { color: '#92400e', fontSize: 13, fontWeight: '500' },
-  summaryAmber: { color: '#fbbf24', fontWeight: '700' },
+  offlineText: { color: '#d97706', fontSize: 12 },
 
-  scroll: { flex: 1 },
-  scrollContent: { padding: 12 },
+  syncBar: {
+    backgroundColor: '#060d0d',
+    borderBottomWidth: 1,
+    borderBottomColor: '#0d2020',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+  },
+  syncText: { color: '#22c55e', fontSize: 11 },
 
-  card: {
+  filterRow: {
+    flexDirection: 'row',
     backgroundColor: '#0d1117',
-    borderRadius: 12,
-    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+    paddingHorizontal: 10,
+    gap: 4,
+    paddingTop: 6,
+  },
+  filterTab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  filterTabActive: { borderBottomColor: '#3b82f6' },
+  filterTabText: { color: '#475569', fontSize: 12, fontWeight: '600' },
+  filterTabTextActive: { color: '#93c5fd' },
+
+  list: { flex: 1 },
+
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 9,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0f172a',
+  },
+  rowBlocked: { backgroundColor: '#0d0000' },
+  rowLeft: { flex: 1, marginRight: 10 },
+  rowApp: {
+    color: '#60a5fa',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 1,
+  },
+  rowDomain: { color: '#cbd5e1', fontSize: 13, fontWeight: '500' },
+  rowDomainBlocked: { color: '#6b7280', textDecorationLine: 'line-through' },
+  catBadge: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginTop: 3,
+  },
+  catText: { fontSize: 10, fontWeight: '600' },
+
+  rowRight: { alignItems: 'flex-end', gap: 4 },
+  verdictPill: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  verdictBlock: { backgroundColor: '#450a0a' },
+  verdictAllow: { backgroundColor: '#052e16' },
+  verdictText: { fontSize: 9, fontWeight: '800', color: '#e2e8f0', letterSpacing: 0.5 },
+  rowTime: { color: '#334155', fontSize: 10 },
+
+  emptyBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  emptyIcon: { fontSize: 48, marginBottom: 16 },
+  emptyText: { color: '#4b5563', fontSize: 14, textAlign: 'center', lineHeight: 21 },
+  clearFilter: {
+    marginTop: 20,
     borderWidth: 1,
     borderColor: '#1e293b',
-    overflow: 'hidden',
-  },
-
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    padding: 14,
-  },
-  cardHeaderLeft: { flex: 1 },
-  appName: { color: '#e2e8f0', fontSize: 15, fontWeight: '700' },
-  categoryRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 5 },
-  categoryBadge: {
-    backgroundColor: '#1e293b',
-    borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-  },
-  categoryText: { color: '#94a3b8', fontSize: 11, textTransform: 'capitalize' },
-  totalData: { color: '#475569', fontSize: 12 },
-
-  // All-clean green indicator
-  allCleanRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingBottom: 12,
-  },
-  allCleanText: { color: '#4ade80', fontSize: 13, fontWeight: '600' },
-  showExpected: { color: '#475569', fontSize: 12 },
-
-  // Unexpected amber section
-  unexpectedSection: {
-    backgroundColor: '#1a0a0a',
-    borderTopWidth: 1,
-    borderTopColor: '#450a0a',
-    padding: 12,
-  },
-  unexpectedHeader: { color: '#fca5a5', fontSize: 12, fontWeight: '700', marginBottom: 8 },
-
-  connRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    borderRadius: 8,
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2d0a0a',
+    paddingHorizontal: 20,
   },
-  connInfo: { flex: 1, marginRight: 10 },
-  connDomain: { color: '#f1f5f9', fontSize: 13, fontWeight: '600' },
-  connDomainBlocked: { textDecorationLine: 'line-through', color: '#6b7280' },
-  connMeta: { color: '#6b7280', fontSize: 12, marginTop: 2 },
-  connRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-
-  blockedBadge: {
-    backgroundColor: '#450a0a',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  blockedBadgeText: { color: '#fca5a5', fontSize: 10, fontWeight: '800' },
-
-  surgicalNote: {
-    color: '#78350f',
-    fontSize: 11,
-    marginTop: 10,
-    fontStyle: 'italic',
-    lineHeight: 16,
-  },
-
-  // Expected grey section
-  expectedSection: {
-    borderTopWidth: 1,
-    borderTopColor: '#1e293b',
-  },
-  expectedToggle: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  expectedToggleText: { color: '#475569', fontSize: 12 },
-
-  expectedRow: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#161b22',
-  },
-  expectedDomain: { color: '#4b5563', fontSize: 12 },
-  expectedMeta: { color: '#374151', fontSize: 11, marginTop: 2 },
+  clearFilterText: { color: '#60a5fa', fontSize: 13 },
 });

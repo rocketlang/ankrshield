@@ -4,6 +4,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+
 import type {
   PrivacyScore,
   PrivacyLevel,
@@ -42,10 +43,7 @@ export class PrivacyCalculator {
   /**
    * Calculate total privacy score for user
    */
-  async calculateTotalScore(
-    userId: string,
-    timeRange?: TimeRange
-  ): Promise<PrivacyScore> {
+  async calculateTotalScore(_userId: string, timeRange?: TimeRange): Promise<PrivacyScore> {
     const range = timeRange || this.getDefaultTimeRange();
 
     // Calculate component scores in parallel
@@ -83,10 +81,7 @@ export class PrivacyCalculator {
   /**
    * Calculate network privacy score
    */
-  async calculateNetworkScore(
-    userId: string,
-    timeRange: TimeRange
-  ): Promise<number> {
+  async calculateNetworkScore(_userId: string, _timeRange: TimeRange): Promise<number> {
     // Query network events
     const stats = await this.prisma.networkEvent.aggregate({
       where: {
@@ -118,10 +113,7 @@ export class PrivacyCalculator {
   /**
    * Calculate DNS privacy score
    */
-  async calculateDNSScore(
-    userId: string,
-    timeRange: TimeRange
-  ): Promise<number> {
+  async calculateDNSScore(_userId: string, _timeRange: TimeRange): Promise<number> {
     // Simplified DNS score
     // Real implementation would query DNS-specific events
     return 0; // Placeholder
@@ -130,10 +122,7 @@ export class PrivacyCalculator {
   /**
    * Calculate app privacy score
    */
-  async calculateAppScore(
-    userId: string,
-    timeRange: TimeRange
-  ): Promise<number> {
+  async calculateAppScore(_userId: string, _timeRange: TimeRange): Promise<number> {
     // Simplified app score
     // Real implementation would query app-level data
     return 0; // Placeholder
@@ -186,8 +175,8 @@ export class PrivacyCalculator {
    * Identify top privacy issues
    */
   private async identifyTopIssues(
-    userId: string,
-    timeRange: TimeRange,
+    _userId: string,
+    _timeRange: TimeRange,
     score: PrivacyScore
   ): Promise<PrivacyIssue[]> {
     const issues: PrivacyIssue[] = [];
@@ -228,10 +217,7 @@ export class PrivacyCalculator {
   /**
    * Generate recommendations
    */
-  private generateRecommendations(
-    score: PrivacyScore,
-    issues: PrivacyIssue[]
-  ): string[] {
+  private generateRecommendations(score: PrivacyScore, issues: PrivacyIssue[]): string[] {
     const recommendations: string[] = [];
 
     if (score.totalScore > 80) {
@@ -256,7 +242,7 @@ export class PrivacyCalculator {
    * Get score trend
    */
   private async getScoreTrend(
-    userId: string,
+    _userId: string,
     currentScore: number,
     currentRange: TimeRange
   ): Promise<ScoreTrend | undefined> {
@@ -272,9 +258,7 @@ export class PrivacyCalculator {
 
     const change = currentScore - previousScore.totalScore;
     const percentageChange =
-      previousScore.totalScore > 0
-        ? (change / previousScore.totalScore) * 100
-        : 0;
+      previousScore.totalScore > 0 ? (change / previousScore.totalScore) * 100 : 0;
 
     let direction: TrendDirection = 'stable';
     if (Math.abs(change) >= 5) {

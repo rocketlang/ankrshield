@@ -29,3 +29,8 @@ export * from './realtime/score-updater';
 
 // Alert hierarchy (AnkrShield seamless mode — 5-level: SILENT/SUBTLE/MEDIUM/HIGH/CRITICAL)
 export * from './alert-classifier';
+
+// Smart Trust System — App tier classification + per-app safe zone scoring + VPN rules
+export * from './app-trust-engine';
+export * from './app-behavior-tracker';
+export * from './smart-rules';

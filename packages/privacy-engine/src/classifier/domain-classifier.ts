@@ -6,6 +6,7 @@
 import { PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
 import { parse as parseDomain } from 'tldts';
+
 import type { TrackerInfo, ClassificationResult, BatchClassificationResult } from '../types';
 
 /**
@@ -92,9 +93,7 @@ export class DomainClassifier {
     let cacheMisses = 0;
 
     // Normalize and deduplicate
-    const normalizedDomains = Array.from(
-      new Set(domains.map((d) => this.normalizeDomain(d)))
-    );
+    const normalizedDomains = Array.from(new Set(domains.map((d) => this.normalizeDomain(d))));
 
     // Separate cached and uncached
     const uncached: string[] = [];
@@ -195,9 +194,7 @@ export class DomainClassifier {
   /**
    * Batch lookup trackers from database
    */
-  private async batchLookupTrackers(
-    domains: string[]
-  ): Promise<Map<string, TrackerInfo | null>> {
+  private async batchLookupTrackers(domains: string[]): Promise<Map<string, TrackerInfo | null>> {
     const results = new Map<string, TrackerInfo | null>();
 
     // Get all matching trackers in one query

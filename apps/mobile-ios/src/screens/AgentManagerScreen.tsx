@@ -12,6 +12,7 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
+
 import { WarriorService, QuarantinedAgent, ScopeViolation } from '../services/WarriorService';
 
 const service = new WarriorService();
@@ -27,7 +28,13 @@ const VIOLATION_LABELS: Record<string, string> = {
   off_day_access: 'Off-Day Access',
 };
 
-function AgentCard({ agent, onRelease }: { agent: QuarantinedAgent; onRelease: (id: string) => void }) {
+function AgentCard({
+  agent,
+  onRelease,
+}: {
+  agent: QuarantinedAgent;
+  onRelease: (id: string) => void;
+}) {
   const when = new Date(agent.quarantinedAt).toLocaleString();
 
   const confirmRelease = () => {
@@ -48,7 +55,9 @@ function AgentCard({ agent, onRelease }: { agent: QuarantinedAgent; onRelease: (
           <Text style={styles.agentName}>{agent.agentName}</Text>
           <Text style={styles.agentId}>{agent.agentId}</Text>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: agent.isActive ? '#2a1111' : '#1a2a1a' }]}>
+        <View
+          style={[styles.statusBadge, { backgroundColor: agent.isActive ? '#2a1111' : '#1a2a1a' }]}
+        >
           <Text style={[styles.statusText, { color: agent.isActive ? '#f44336' : '#4CAF50' }]}>
             {agent.isActive ? 'QUARANTINED' : 'RELEASED'}
           </Text>
@@ -69,16 +78,25 @@ function AgentCard({ agent, onRelease }: { agent: QuarantinedAgent; onRelease: (
 
 function ViolationRow({ violation }: { violation: ScopeViolation }) {
   const label = VIOLATION_LABELS[violation.violationType] ?? violation.violationType;
-  const actionColor = violation.action === 'QUARANTINE' ? '#f44336'
-    : violation.action === 'BLOCK' ? '#FF9800' : '#FFC107';
-  const time = new Date(violation.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const actionColor =
+    violation.action === 'QUARANTINE'
+      ? '#f44336'
+      : violation.action === 'BLOCK'
+        ? '#FF9800'
+        : '#FFC107';
+  const time = new Date(violation.timestamp).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
   return (
     <View style={styles.violationRow}>
       <View style={styles.violationLeft}>
         <Text style={styles.violationAgent}>{violation.agentName}</Text>
         <Text style={styles.violationType}>{label}</Text>
-        <Text style={styles.violationResource} numberOfLines={1}>{violation.resource}</Text>
+        <Text style={styles.violationResource} numberOfLines={1}>
+          {violation.resource}
+        </Text>
       </View>
       <View style={styles.violationRight}>
         <View style={[styles.actionBadge, { borderColor: actionColor }]}>
@@ -103,10 +121,14 @@ export function AgentManagerScreen() {
       ]);
       setQuarantined(q);
       setViolations(v);
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -127,9 +149,7 @@ export function AgentManagerScreen() {
     {
       title: `Quarantined Agents (${quarantined.length})`,
       data: quarantined,
-      renderItem: ({ item }: any) => (
-        <AgentCard agent={item} onRelease={handleRelease} />
-      ),
+      renderItem: ({ item }: any) => <AgentCard agent={item} onRelease={handleRelease} />,
     },
     {
       title: `Recent Scope Violations (${violations.length})`,
@@ -149,7 +169,9 @@ export function AgentManagerScreen() {
         </View>
       )}
       renderItem={({ item, section }) => section.renderItem({ item })}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF9800" />}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#FF9800" />
+      }
       ListEmptyComponent={
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>🤖</Text>
@@ -176,7 +198,12 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   cardActive: { borderLeftWidth: 3, borderLeftColor: '#f44336' },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
   agentName: { color: '#fff', fontSize: 15, fontWeight: '600' },
   agentId: { color: '#555', fontSize: 11, marginTop: 2 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
@@ -208,7 +235,13 @@ const styles = StyleSheet.create({
   violationType: { color: '#aaa', fontSize: 12, marginTop: 2 },
   violationResource: { color: '#555', fontSize: 11, marginTop: 2 },
   violationRight: { alignItems: 'flex-end' },
-  actionBadge: { borderWidth: 1, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginBottom: 4 },
+  actionBadge: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginBottom: 4,
+  },
   actionBadgeText: { fontSize: 10, fontWeight: '700' },
   violationTime: { color: '#555', fontSize: 11 },
   // Empty

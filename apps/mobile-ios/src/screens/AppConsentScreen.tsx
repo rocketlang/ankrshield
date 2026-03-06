@@ -7,74 +7,22 @@
 import {
   validateConsent,
   type ConsentValidation,
-  AppPermissions,
+  type AppPermissions,
 } from '@ankrshield/android-monitor';
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Switch,
+  ActivityIndicator,
+  TouchableOpacity,
+  NativeModules,
+  Platform,
+} from 'react-native';
 
-// ---------------------------------------------------------------------------
-// Mock data — real app populates these from the native PackageManager bridge
-// ---------------------------------------------------------------------------
-
-const MOCK_APPS: AppPermissions[] = [
-  {
-    packageName: 'com.whatsapp',
-    appName: 'WhatsApp',
-    installSource: 'play_store',
-    isSystemApp: false,
-    permissions: [
-      'READ_CONTACTS',
-      'WRITE_CONTACTS',
-      'RECORD_AUDIO',
-      'CAMERA',
-      'ACCESS_FINE_LOCATION',
-      'READ_EXTERNAL_STORAGE',
-      'RECEIVE_BOOT_COMPLETED',
-    ],
-  },
-  {
-    packageName: 'com.android.chrome',
-    appName: 'Chrome',
-    installSource: 'play_store',
-    isSystemApp: false,
-    permissions: ['CAMERA', 'RECORD_AUDIO', 'ACCESS_FINE_LOCATION'],
-  },
-  {
-    packageName: 'com.superclean.booster',
-    appName: 'Super Cleaner Pro',
-    installSource: 'unknown',
-    isSystemApp: false,
-    permissions: [
-      'READ_SMS',
-      'READ_CONTACTS',
-      'ACCESS_FINE_LOCATION',
-      'RECORD_AUDIO',
-      'READ_CALL_LOG',
-      'SYSTEM_ALERT_WINDOW',
-    ],
-  },
-  {
-    packageName: 'com.flashlight.turbo',
-    appName: 'Flashlight Turbo',
-    installSource: 'file_manager',
-    isSystemApp: false,
-    permissions: ['READ_SMS', 'ACCESS_FINE_LOCATION', 'READ_CONTACTS', 'RECORD_AUDIO'],
-  },
-  {
-    packageName: 'com.hdfc.mobilebanking',
-    appName: 'HDFC MobileBanking',
-    installSource: 'play_store',
-    isSystemApp: false,
-    permissions: ['CAMERA', 'READ_PHONE_STATE', 'RECEIVE_SMS', 'READ_SMS', 'ACCESS_FINE_LOCATION'],
-  },
-  {
-    packageName: 'com.netflix.mediaclient',
-    appName: 'Netflix',
-    installSource: 'play_store',
-    isSystemApp: false,
-    permissions: ['READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE'],
-  },
-];
+const { AppScanner } = NativeModules;
 
 // ---------------------------------------------------------------------------
 // Sub-components
@@ -110,7 +58,9 @@ function AppCard({ validation }: { validation: ConsentValidation }) {
     <View style={styles.card}>
       {/* Header */}
       <View style={styles.cardHeader}>
-        <Text style={styles.appName}>{appName}</Text>
+        <Text style={styles.appName} numberOfLines={1}>
+          {appName}
+        </Text>
         <View style={styles.categoryBadge}>
           <Text style={styles.categoryText}>
             {detectedCategory.toUpperCase().replace('_', ' ')}
@@ -184,30 +134,138 @@ function AppCard({ validation }: { validation: ConsentValidation }) {
 // ---------------------------------------------------------------------------
 
 export function AppConsentScreen() {
-  const validations = MOCK_APPS.map((app) => validateConsent(app));
-  const excessCount = validations.filter((v) => v.excessPermissions.length > 0).length;
+  const [allApps, setAllApps] = useState<ConsentValidation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [offline, setOffline] = useState(false);
+  const [showSystem, setShowSystem] = useState(false);
+  const [showClean, setShowClean] = useState(false);
+
+  const loadApps = useCallback(async () => {
+    if (Platform.OS !== 'android' || !AppScanner) {
+      setOffline(true);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setOffline(false);
+    try {
+      const raw: AppPermissions[] = await AppScanner.getInstalledApps();
+      const validated = raw
+        .filter((a) => a.permissions.length > 0) // skip apps with no granted permissions
+        .map((a) => validateConsent(a));
+      setAllApps(validated);
+    } catch (_e) {
+      setOffline(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadApps();
+  }, [loadApps]);
+
+  // Apply filters
+  const visible = allApps.filter((v) => {
+    if (!showSystem && v.isSystemApp) return false;
+    if (!showClean && v.excessPermissions.length === 0) return false;
+    return true;
+  });
+
+  const excessCount = allApps.filter((v) => v.excessPermissions.length > 0).length;
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#1565C0" />
+        <Text style={styles.loadingText}>
+          Scanning {allApps.length > 0 ? allApps.length : ''} apps…
+        </Text>
+      </View>
+    );
+  }
+
+  if (offline) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.offlineIcon}>🔌</Text>
+        <Text style={styles.offlineTitle}>App Scanner Unavailable</Text>
+        <Text style={styles.offlineSub}>
+          {Platform.OS !== 'android'
+            ? 'App Scope Monitor requires Android.'
+            : 'Could not read installed apps. Check permissions and try again.'}
+        </Text>
+        <TouchableOpacity style={styles.retryBtn} onPress={loadApps}>
+          <Text style={styles.retryBtnText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>App Scope Monitor</Text>
-        <Text style={styles.headerSub}>Apps using permissions beyond their purpose</Text>
+        <Text style={styles.headerSub}>
+          {allApps.length} apps scanned · {excessCount} with excess scope
+        </Text>
       </View>
 
       {/* Summary bar */}
       <View style={[styles.summaryBar, { borderColor: excessCount > 0 ? '#FF9800' : '#4CAF50' }]}>
         <Text style={[styles.summaryText, { color: excessCount > 0 ? '#FF9800' : '#4CAF50' }]}>
-          {excessCount} of {validations.length} apps have excess scope
+          {excessCount} of {allApps.filter((v) => !v.isSystemApp).length} user apps have excess
+          scope
         </Text>
       </View>
 
-      {/* App cards */}
-      <View style={styles.list}>
-        {validations.map((v) => (
-          <AppCard key={v.packageName} validation={v} />
-        ))}
+      {/* Filter toggles */}
+      <View style={styles.filterRow}>
+        <View style={styles.filterItem}>
+          <Text style={styles.filterLabel}>Show system apps</Text>
+          <Switch
+            value={showSystem}
+            onValueChange={setShowSystem}
+            trackColor={{ false: '#333', true: '#1565C044' }}
+            thumbColor={showSystem ? '#1565C0' : '#555'}
+          />
+        </View>
+        <View style={styles.filterItem}>
+          <Text style={styles.filterLabel}>Show clean apps</Text>
+          <Switch
+            value={showClean}
+            onValueChange={setShowClean}
+            trackColor={{ false: '#333', true: '#4CAF5044' }}
+            thumbColor={showClean ? '#4CAF50' : '#555'}
+          />
+        </View>
       </View>
+
+      {/* App cards */}
+      {visible.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyIcon}>✅</Text>
+          <Text style={styles.emptyTitle}>
+            {excessCount === 0 ? 'All apps look clean' : 'No apps to show with current filters'}
+          </Text>
+          <Text style={styles.emptySub}>
+            {excessCount === 0
+              ? 'No installed apps are using permissions beyond their stated purpose.'
+              : 'Enable "Show clean apps" to see all scanned apps.'}
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.list}>
+          {visible.map((v) => (
+            <AppCard key={v.packageName} validation={v} />
+          ))}
+        </View>
+      )}
+
+      <TouchableOpacity style={styles.refreshBtn} onPress={loadApps}>
+        <Text style={styles.refreshBtnText}>↻ Rescan Apps</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -218,18 +276,42 @@ export function AppConsentScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#080c14' },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#080c14',
+    padding: 32,
+  },
   header: { padding: 20, paddingTop: 28 },
   headerTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
   headerSub: { color: '#666', fontSize: 13, marginTop: 4 },
   summaryBar: {
     marginHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 8,
     borderWidth: 1,
     borderRadius: 8,
     padding: 10,
     backgroundColor: '#0d1117',
   },
   summaryText: { fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  filterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    gap: 12,
+  },
+  filterItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0d1117',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  filterLabel: { color: '#888', fontSize: 12 },
   list: { padding: 16, gap: 12 },
   card: { backgroundColor: '#0d1117', borderRadius: 12, padding: 14, marginBottom: 4 },
   cardHeader: {
@@ -237,8 +319,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 8,
+    gap: 8,
   },
-  appName: { color: '#e8eaed', fontSize: 16, fontWeight: '700' },
+  appName: { color: '#e8eaed', fontSize: 16, fontWeight: '700', flex: 1 },
   categoryBadge: {
     backgroundColor: '#1e293b',
     borderRadius: 4,
@@ -291,4 +374,41 @@ const styles = StyleSheet.create({
   inhibitLeft: { flex: 1, marginRight: 8 },
   inhibitLabel: { color: '#ccc', fontSize: 13, fontWeight: '600' },
   inhibitNote: { color: '#1565C0', fontSize: 11, marginTop: 3 },
+  loadingText: { color: '#555', fontSize: 13, marginTop: 16 },
+  offlineIcon: { fontSize: 48, marginBottom: 16 },
+  offlineTitle: { color: '#e2e8f0', fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  offlineSub: {
+    color: '#6b7280',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 24,
+  },
+  retryBtn: {
+    backgroundColor: '#1565C0',
+    borderRadius: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  retryBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  emptyBox: { alignItems: 'center', paddingTop: 48, paddingHorizontal: 32, paddingBottom: 24 },
+  emptyIcon: { fontSize: 48, marginBottom: 14 },
+  emptyTitle: {
+    color: '#4ade80',
+    fontSize: 17,
+    fontWeight: '700',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  emptySub: { color: '#555', fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  refreshBtn: {
+    margin: 16,
+    marginBottom: 40,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  refreshBtnText: { color: '#4b5563', fontSize: 13, fontWeight: '600' },
 });

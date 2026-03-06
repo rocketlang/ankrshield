@@ -3,8 +3,14 @@
  * Main landing screen with privacy score overview
  */
 
+import {
+  createAppTrustEngine,
+  createAppBehaviorTracker,
+  TIER_COLOR,
+} from '@ankrshield/privacy-engine';
 import React, { useEffect, useState } from 'react';
 import {
+  Platform,
   View,
   Text,
   StyleSheet,
@@ -15,12 +21,58 @@ import {
 } from 'react-native';
 
 import { PrivacyScoreCircle } from '../components/PrivacyScoreCircle';
+import { SafeZoneMeter } from '../components/SafeZoneMeter';
 import { StatsCard } from '../components/StatsCard';
 import { MdmStorage } from '../mdm/storage';
 import { startBlocklistSync, getBlocklistStats } from '../services/ioc-sync';
 import { PrivacyService } from '../services/PrivacyService';
 import { startReporting } from '../services/StatsReporter';
 import { vpnService, VpnStats } from '../services/VpnService';
+
+// ─── Smart Trust engines ──────────────────────────────────────────────────────
+const _trustEngine = createAppTrustEngine(MdmStorage);
+const _behaviorTracker = createAppBehaviorTracker(MdmStorage);
+
+const PROTECTION_TOOLS = [
+  // India-specific threats first
+  { icon: '💳', name: 'UPI Guard', desc: 'Payment fraud check', route: 'UpiGuard' },
+  { icon: '💬', name: 'SMS Shield', desc: 'Fraud SMS scanner', route: 'SmsShield' },
+  { icon: '📞', name: 'Call Shield', desc: 'India fraud patterns', route: 'CallProtection' },
+  { icon: '💬', name: 'WA Guard', desc: 'File threat scan', route: 'WhatsAppGuard' },
+  { icon: '🌐', name: 'Safe Browse', desc: 'Phishing blocker', route: 'SafeBrowsing' },
+  { icon: '📋', name: 'DPDP Scan', desc: 'Privacy compliance', route: 'DpdpScan' },
+  { icon: '🔗', name: 'Link Scan', desc: 'Phishing URL check', route: 'LinkScanner' },
+  // Malware / device security
+  { icon: '🔬', name: 'AV Scan', desc: 'Malware detector', route: 'AvScanner' },
+  { icon: '🔒', name: 'Anti-Theft', desc: 'Lock & remote wipe', route: 'AntiTheft' },
+  { icon: '🦠', name: 'Ransomware', desc: 'File encryption watch', route: 'Ransomware' },
+  { icon: '🕵️', name: 'Stalkerware', desc: 'Hidden spy apps', route: 'Stalkerware' },
+  // App & permission auditing
+  { icon: '🔍', name: 'App Scope', desc: 'Excess permissions', route: 'AppConsent' },
+  { icon: '🔔', name: 'Perm Watch', desc: 'Gained since update', route: 'PermissionChange' },
+  { icon: '🏥', name: 'Dev Health', desc: 'Security hygiene', route: 'DeviceHealth' },
+  // Network & corporate
+  { icon: '🔗', name: 'Network', desc: 'DNS tracker feed', route: 'NetworkBehavior' },
+  { icon: '🏢', name: 'Corporate', desc: 'MDM enrollment', route: 'Mdm' },
+  // iOS-only tiles (filtered at runtime)
+  ...(Platform.OS === 'ios'
+    ? [
+        {
+          icon: '🔐',
+          name: 'Permissions',
+          desc: 'iOS permission audit',
+          route: 'iOSPermissionAudit',
+        },
+      ]
+    : []),
+];
+
+interface AppSummaryRow {
+  packageName: string;
+  displayName: string;
+  score: number;
+  tierColor: string;
+}
 
 const DEFAULT_VPN: VpnStats = {
   totalQueries: 0,
@@ -40,6 +92,14 @@ export function HomeScreen({ navigation }: any) {
   const [iocStats, setIocStats] = useState(getBlocklistStats());
   const [streak, setStreak] = useState(0);
   const [_lastThreatDate, setLastThreatDate] = useState<Date | null>(null);
+  const [trustSummary, setTrustSummary] = useState<{
+    safe: number;
+    watch: number;
+    danger: number;
+    top3: AppSummaryRow[];
+  }>({ safe: 0, watch: 0, danger: 0, top3: [] });
+  const [trustLoadedAt, setTrustLoadedAt] = useState<number | null>(null); // ms timestamp
+  const [trustFromCache, setTrustFromCache] = useState(false);
 
   async function loadStreakState() {
     try {
@@ -108,6 +168,78 @@ export function HomeScreen({ navigation }: any) {
   }
 
   useEffect(() => {
+    loadTrustSummary();
+  }, []);
+
+  const TRUST_CACHE_KEY = '@ankrshield/trust-summary-v1';
+
+  async function loadTrustSummary() {
+    // 1. Load cache immediately for instant display
+    try {
+      const cached = await MdmStorage.getItem(TRUST_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached) as {
+          safe: number;
+          watch: number;
+          danger: number;
+          top3: AppSummaryRow[];
+          cachedAt: number;
+        };
+        setTrustSummary({
+          safe: parsed.safe,
+          watch: parsed.watch,
+          danger: parsed.danger,
+          top3: parsed.top3,
+        });
+        setTrustLoadedAt(parsed.cachedAt);
+        setTrustFromCache(true);
+      }
+    } catch (_e) {
+      // Cache miss or parse error — proceed to live load
+    }
+
+    // 2. Compute fresh data
+    try {
+      await Promise.all([_trustEngine.init(), _behaviorTracker.init()]);
+      const pkgs = _behaviorTracker.getTrackedPackages();
+      const rows = pkgs.map((pkg) => {
+        const record = _trustEngine.classifyApp(pkg);
+        const appStats = _behaviorTracker.getAppStats(pkg);
+        return {
+          packageName: pkg,
+          displayName: record.displayName,
+          score: appStats.safeZoneScore,
+          tierColor: TIER_COLOR[record.effectiveTier],
+        };
+      });
+      const safe = rows.filter((r) => r.score < 60).length;
+      const watch = rows.filter((r) => r.score >= 60 && r.score < 80).length;
+      const danger = rows.filter((r) => r.score >= 80).length;
+      const top3 = [...rows].sort((a, b) => b.score - a.score).slice(0, 3);
+      const now = Date.now();
+      setTrustSummary({ safe, watch, danger, top3 });
+      setTrustLoadedAt(now);
+      setTrustFromCache(false);
+      // 3. Save to cache
+      await MdmStorage.setItem(
+        TRUST_CACHE_KEY,
+        JSON.stringify({ safe, watch, danger, top3, cachedAt: now })
+      );
+    } catch (_e) {
+      // Live load failed — cached data still shown (with staleness indicator)
+    }
+  }
+
+  function trustStalenessLabel(): string | null {
+    if (!trustFromCache || !trustLoadedAt) return null;
+    const ageMs = Date.now() - trustLoadedAt;
+    if (ageMs < 60_000) return null; // under 1 min — don't show
+    if (ageMs < 3_600_000) return `Data from ${Math.round(ageMs / 60_000)}m ago`;
+    if (ageMs < 86_400_000) return `Data from ${Math.round(ageMs / 3_600_000)}h ago`;
+    return `Data from ${Math.round(ageMs / 86_400_000)}d ago`;
+  }
+
+  useEffect(() => {
     loadData();
     loadStreakState();
     const serverInterval = setInterval(loadData, 30000);
@@ -168,37 +300,61 @@ export function HomeScreen({ navigation }: any) {
 
   return (
     <ScrollView style={styles.container}>
-      {/* ── Fear-based purpose banner ───────────────────────────────────── */}
-      {vpnStats.running && vpnStats.blockedCount > 0 ? (
-        <View style={[styles.purposeBanner, styles.purposeBannerActive]}>
-          <View style={styles.purposeBody}>
-            <Text style={styles.purposeThreat}>
-              🔴 {vpnStats.blockedCount} tracker{vpnStats.blockedCount !== 1 ? 's' : ''} tried to
-              follow you
-            </Text>
-            <Text style={styles.purposeDefend}>AnkrShield intercepted every one.</Text>
+      {/* ── Smart Trust Summary ──────────────────────────────────────────── */}
+      <View style={styles.trustCard}>
+        <View style={styles.trustCardHeader}>
+          <Text style={styles.trustCardTitle}>
+            {vpnStats.running ? '🛡 AnkrShield active' : '👁 Monitoring your apps'}
+          </Text>
+          <TouchableOpacity onPress={() => navigation.navigate('AppTrust')}>
+            <Text style={styles.manageAppsLink}>Manage apps ›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Safe / Watch / Danger pill row */}
+        <View style={styles.trustPillRow}>
+          <View style={[styles.trustPill, { backgroundColor: '#4CAF5018' }]}>
+            <Text style={[styles.trustPillCount, { color: '#4CAF50' }]}>{trustSummary.safe}</Text>
+            <Text style={styles.trustPillLabel}>in safe zone</Text>
+          </View>
+          <View style={[styles.trustPill, { backgroundColor: '#FF980018' }]}>
+            <Text style={[styles.trustPillCount, { color: '#FF9800' }]}>{trustSummary.watch}</Text>
+            <Text style={styles.trustPillLabel}>being watched</Text>
+          </View>
+          <View style={[styles.trustPill, { backgroundColor: '#F4433618' }]}>
+            <Text style={[styles.trustPillCount, { color: '#F44336' }]}>{trustSummary.danger}</Text>
+            <Text style={styles.trustPillLabel}>high concern</Text>
           </View>
         </View>
-      ) : vpnStats.running ? (
-        <View style={[styles.purposeBanner, styles.purposeBannerActive]}>
-          <View style={styles.purposeBody}>
-            <Text style={styles.purposeThreat}>🛡 Shield active — watching for trackers</Text>
-            <Text style={styles.purposeDefend}>
-              Every DNS query is being inspected in real time.
-            </Text>
+
+        {/* Top 3 apps by safe zone score */}
+        {trustSummary.top3.length > 0 && (
+          <View style={styles.top3List}>
+            {trustSummary.top3.map((app) => (
+              <View key={app.packageName} style={styles.top3Row}>
+                <Text style={styles.top3Name} numberOfLines={1}>
+                  {app.displayName}
+                </Text>
+                <View style={styles.top3Meter}>
+                  <SafeZoneMeter score={app.score} variant="compact" showScore />
+                </View>
+              </View>
+            ))}
           </View>
-        </View>
-      ) : (
-        <View style={[styles.purposeBanner, styles.purposeBannerWarn]}>
-          <View style={styles.purposeBody}>
-            <Text style={styles.purposeWarnTitle}>⚠️ Your phone is being watched.</Text>
-            <Text style={styles.purposeWarnSub}>
-              Ad networks, data brokers and trackers profile you with every tap.{'\n'}
-              Enable DNS Shield in Settings to fight back.
-            </Text>
-          </View>
-        </View>
-      )}
+        )}
+
+        {/* Context line — calm, not scary */}
+        <Text style={styles.trustContextLine}>
+          {vpnStats.running
+            ? `${vpnStats.blockedCount > 0 ? `${vpnStats.blockedCount} trackers filtered` : 'All traffic looks normal'} · DNS shield on`
+            : 'Enable DNS shield in Settings for active filtering'}
+        </Text>
+
+        {/* Staleness indicator — shown only when serving cached data */}
+        {trustStalenessLabel() && (
+          <Text style={styles.trustStaleLabel}>{trustStalenessLabel()} · tap to refresh</Text>
+        )}
+      </View>
       <View style={styles.purposePills}>
         <View style={styles.pill}>
           <Text style={styles.pillTxt}>🌐 Stops trackers</Text>
@@ -211,6 +367,24 @@ export function HomeScreen({ navigation }: any) {
         </View>
         <View style={styles.pill}>
           <Text style={styles.pillTxt}>📵 Blocks ads</Text>
+        </View>
+      </View>
+
+      {/* Protection Tools grid */}
+      <View style={styles.toolsSection}>
+        <Text style={styles.toolsSectionTitle}>Protection Tools</Text>
+        <View style={styles.toolsGrid}>
+          {PROTECTION_TOOLS.map((tool) => (
+            <TouchableOpacity
+              key={tool.route}
+              style={styles.toolCard}
+              onPress={() => navigation.navigate(tool.route)}
+            >
+              <Text style={styles.toolIcon}>{tool.icon}</Text>
+              <Text style={styles.toolName}>{tool.name}</Text>
+              <Text style={styles.toolDesc}>{tool.desc}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
 
@@ -407,6 +581,13 @@ export function HomeScreen({ navigation }: any) {
         >
           <Text style={styles.actionButtonText}>🔍 Risk Lookup</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.actionButton, styles.trustButton]}
+          onPress={() => navigation.navigate('AppTrust')}
+        >
+          <Text style={styles.actionButtonText}>🛡 App Trust Manager</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -417,6 +598,121 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#080c14',
   },
+
+  // ── Smart Trust Card ──────────────────────────────────────────────────────
+  trustCard: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 4,
+    backgroundColor: '#0e1520',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#1a2535',
+  },
+  trustCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  trustCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  manageAppsLink: {
+    fontSize: 13,
+    color: '#4CAF50',
+  },
+  trustPillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  trustPill: {
+    flex: 1,
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  trustPillCount: {
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 24,
+  },
+  trustPillLabel: {
+    fontSize: 10,
+    color: '#555',
+    marginTop: 2,
+  },
+  top3List: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  top3Row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  top3Name: {
+    fontSize: 12,
+    color: '#888',
+    width: 90,
+  },
+  top3Meter: {
+    flex: 1,
+  },
+  trustContextLine: {
+    fontSize: 11,
+    color: '#3a4a5a',
+    textAlign: 'center',
+  },
+  trustStaleLabel: {
+    fontSize: 10,
+    color: '#555',
+    textAlign: 'center',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  trustButton: {
+    backgroundColor: '#0e2020',
+    borderColor: '#4CAF5044',
+    borderWidth: 1,
+  },
+
+  toolsSection: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
+    marginTop: 4,
+  },
+  toolsSectionTitle: {
+    color: '#4b5563',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  toolsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  toolCard: {
+    width: '23%',
+    backgroundColor: '#0e1520',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1a2535',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    gap: 3,
+  },
+  toolIcon: { fontSize: 20 },
+  toolName: { color: '#e2e8f0', fontSize: 10, fontWeight: '700', textAlign: 'center' },
+  toolDesc: { color: '#4b5563', fontSize: 9, textAlign: 'center', lineHeight: 12 },
 
   purposeBanner: {
     marginHorizontal: 16,

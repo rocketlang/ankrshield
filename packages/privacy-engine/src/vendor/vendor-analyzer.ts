@@ -4,6 +4,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+
 import type { VendorStats, VendorHierarchy, TimeRange } from '../types';
 
 /**
@@ -94,13 +95,7 @@ export class VendorAnalyzer {
     this.vendorHierarchy.set('Apple', {
       id: 'apple',
       name: 'Apple',
-      domains: [
-        'apple.com',
-        'icloud.com',
-        'apple-cloudkit.com',
-        'mzstatic.com',
-        'itunes.com',
-      ],
+      domains: ['apple.com', 'icloud.com', 'apple-cloudkit.com', 'mzstatic.com', 'itunes.com'],
       category: 'telemetry',
     });
 
@@ -108,12 +103,7 @@ export class VendorAnalyzer {
     this.vendorHierarchy.set('Twitter', {
       id: 'twitter',
       name: 'Twitter (X)',
-      domains: [
-        'twitter.com',
-        'twimg.com',
-        't.co',
-        'x.com',
-      ],
+      domains: ['twitter.com', 'twimg.com', 't.co', 'x.com'],
       category: 'social',
     });
 
@@ -121,12 +111,7 @@ export class VendorAnalyzer {
     this.vendorHierarchy.set('TikTok', {
       id: 'tiktok',
       name: 'TikTok (Bytedance)',
-      domains: [
-        'tiktok.com',
-        'musical.ly',
-        'byteoversea.com',
-        'tiktokcdn.com',
-      ],
+      domains: ['tiktok.com', 'musical.ly', 'byteoversea.com', 'tiktokcdn.com'],
       category: 'social',
     });
 
@@ -134,13 +119,7 @@ export class VendorAnalyzer {
     this.vendorHierarchy.set('Adobe', {
       id: 'adobe',
       name: 'Adobe',
-      domains: [
-        'adobe.com',
-        'omniture.com',
-        'demdex.net',
-        'adobedtm.com',
-        '2o7.net',
-      ],
+      domains: ['adobe.com', 'omniture.com', 'demdex.net', 'adobedtm.com', '2o7.net'],
       category: 'analytics',
     });
 
@@ -148,13 +127,7 @@ export class VendorAnalyzer {
     this.vendorHierarchy.set('Yahoo', {
       id: 'yahoo',
       name: 'Yahoo (Verizon Media)',
-      domains: [
-        'yahoo.com',
-        'aol.com',
-        'tumblr.com',
-        'flickr.com',
-        'yimg.com',
-      ],
+      domains: ['yahoo.com', 'aol.com', 'tumblr.com', 'flickr.com', 'yimg.com'],
       category: 'advertising',
     });
 
@@ -162,11 +135,7 @@ export class VendorAnalyzer {
     this.vendorHierarchy.set('Cloudflare', {
       id: 'cloudflare',
       name: 'Cloudflare',
-      domains: [
-        'cloudflare.com',
-        'cloudflareinsights.com',
-        'cdnjs.cloudflare.com',
-      ],
+      domains: ['cloudflare.com', 'cloudflareinsights.com', 'cdnjs.cloudflare.com'],
       category: 'cdn',
     });
   }
@@ -179,10 +148,7 @@ export class VendorAnalyzer {
 
     for (const [vendor, info] of this.vendorHierarchy) {
       for (const vendorDomain of info.domains) {
-        if (
-          normalizedDomain === vendorDomain ||
-          normalizedDomain.endsWith(`.${vendorDomain}`)
-        ) {
+        if (normalizedDomain === vendorDomain || normalizedDomain.endsWith(`.${vendorDomain}`)) {
           return vendor;
         }
       }
@@ -194,10 +160,7 @@ export class VendorAnalyzer {
   /**
    * Get vendor statistics for user
    */
-  async getVendorStats(
-    userId: string,
-    timeRange: TimeRange
-  ): Promise<VendorStats[]> {
+  async getVendorStats(userId: string, timeRange: TimeRange): Promise<VendorStats[]> {
     // Query network events grouped by vendor
     const events = await this.prisma.$queryRaw<
       Array<{
@@ -256,9 +219,7 @@ export class VendorAnalyzer {
       stats.topDomains = stats.topDomains.slice(0, 5); // Top 5 domains
     }
 
-    return Array.from(vendorMap.values()).sort(
-      (a, b) => b.requests - a.requests
-    );
+    return Array.from(vendorMap.values()).sort((a, b) => b.requests - a.requests);
   }
 
   /**

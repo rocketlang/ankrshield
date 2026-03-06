@@ -13,14 +13,13 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
+
 import { WarriorService, WarriorStatus } from '../services/WarriorService';
 
 const service = new WarriorService();
 
 function StatusDot({ active }: { active: boolean }) {
-  return (
-    <View style={[styles.statusDot, { backgroundColor: active ? '#4CAF50' : '#f44336' }]} />
-  );
+  return <View style={[styles.statusDot, { backgroundColor: active ? '#4CAF50' : '#f44336' }]} />;
 }
 
 function MetricCard({
@@ -95,7 +94,9 @@ export function WarriorScreen({ navigation }: any) {
   return (
     <ScrollView
       style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4CAF50" />}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4CAF50" />
+      }
     >
       {/* Header */}
       <View style={styles.header}>
@@ -140,11 +141,7 @@ export function WarriorScreen({ navigation }: any) {
             color={status.scopeViolations > 0 ? '#FFC107' : '#4CAF50'}
             onPress={() => navigation.navigate('AgentManager')}
           />
-          <MetricCard
-            label="Policies Generated"
-            value={status.policiesGenerated}
-            color="#9C27B0"
-          />
+          <MetricCard label="Policies Generated" value={status.policiesGenerated} color="#9C27B0" />
           <MetricCard
             label="Honeypot Triggers"
             value={status.honeypotTriggers}
@@ -194,10 +191,7 @@ export function WarriorScreen({ navigation }: any) {
           <Text style={styles.actionChevron}>›</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.actionRow, styles.dangerRow]}
-          onPress={deployHoneypots}
-        >
+        <TouchableOpacity style={[styles.actionRow, styles.dangerRow]} onPress={deployHoneypots}>
           <Text style={styles.actionIcon}>🍯</Text>
           <View style={styles.actionContent}>
             <Text style={styles.actionLabel}>Deploy Honeypots</Text>
@@ -250,7 +244,13 @@ const styles = StyleSheet.create({
   metricValue: { fontSize: 24, fontWeight: '700', marginBottom: 4 },
   metricLabel: { fontSize: 10, color: '#666', textAlign: 'center' },
   section: { margin: 16, marginTop: 20 },
-  sectionTitle: { color: '#666', fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
+  sectionTitle: {
+    color: '#666',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
   actionRow: {
     flexDirection: 'row',
     alignItems: 'center',

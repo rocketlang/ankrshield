@@ -82,11 +82,11 @@ function IndicatorCard({ indicator }: { indicator: SpywareIndicator }) {
 export function SpywareScanScreen() {
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
-  const [_error, setError] = useState<string | null>(null);
+  const [offline, setOffline] = useState(false);
 
   const runScan = async () => {
     setScanning(true);
-    setError(null);
+    setOffline(false);
     setResult(null);
     try {
       const res = await fetch(`${API_BASE}/warrior/spyware-scan`, {
@@ -100,19 +100,9 @@ export function SpywareScanScreen() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setResult(await res.json());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Scan failed');
-      // Fallback: mock result for demo if API not yet wired
-      setResult({
-        scannedAt: new Date().toISOString(),
-        isClean: true,
-        overallConfidence: 0,
-        severity: null,
-        families: [],
-        indicatorsFound: [],
-        recommendations: ['Continue monitoring network traffic', 'Keep ankrshield updated'],
-        scanDurationMs: 420,
-      });
+    } catch (_e) {
+      // Show honest unavailable state — never silently pretend "all clear"
+      setOffline(true);
     } finally {
       setScanning(false);
     }
@@ -126,7 +116,9 @@ export function SpywareScanScreen() {
     <ScrollView style={styles.container}>
       {/* Hero */}
       <View style={styles.hero}>
-        <Text style={styles.heroIcon}>{result?.isClean === false ? '⚠️' : '🔬'}</Text>
+        <Text style={styles.heroIcon}>
+          {result?.isClean === false ? '⚠️' : offline ? '🔌' : '🔬'}
+        </Text>
         <Text style={styles.heroTitle}>Spyware Detection</Text>
         <Text style={styles.heroSub}>
           Detects Pegasus, Candiru, Predator, FinFisher & Hermit using behavioral IOCs, process
@@ -151,6 +143,21 @@ export function SpywareScanScreen() {
           <Text style={styles.scanningHint}>Checking processes, files, and network IOCs...</Text>
         )}
       </View>
+
+      {/* Offline / server unavailable */}
+      {offline && !result && (
+        <View style={styles.offlineBox}>
+          <Text style={styles.offlineIcon}>🔌</Text>
+          <Text style={styles.offlineTitle}>Scan Unavailable</Text>
+          <Text style={styles.offlineDesc}>
+            Could not reach the AnkrShield scan server. Check your internet connection and try
+            again.
+          </Text>
+          <TouchableOpacity style={styles.scanBtn} onPress={runScan}>
+            <Text style={styles.scanBtnText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Result */}
       {result && (
@@ -353,6 +360,19 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   recText: { color: '#ccc', fontSize: 13, flex: 1, lineHeight: 19 },
+  offlineBox: {
+    margin: 20,
+    padding: 24,
+    backgroundColor: '#111',
+    borderWidth: 1,
+    borderColor: '#333',
+    borderRadius: 14,
+    alignItems: 'center',
+    gap: 10,
+  },
+  offlineIcon: { fontSize: 40 },
+  offlineTitle: { color: '#aaa', fontSize: 17, fontWeight: '700' },
+  offlineDesc: { color: '#555', fontSize: 13, textAlign: 'center', lineHeight: 19 },
   infoBox: { margin: 16, padding: 14, backgroundColor: '#111', borderRadius: 10, marginBottom: 40 },
   infoTitle: {
     color: '#666',

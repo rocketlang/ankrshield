@@ -17,6 +17,9 @@
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.READ_CONTACTS"/>
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+  <!-- Anti-Theft — last-known location (does not start GPS, reads cached fix only) -->
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
@@ -39,6 +42,19 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="com.ankr.shield"/>
+      </intent-filter>
+      <!-- UPI deep link handler — opens UpiGuard when user taps a upi:// link -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="upi"/>
+      </intent-filter>
+      <!-- Share target — opens LinkScanner when user shares a URL from any app -->
+      <intent-filter>
+        <action android:name="android.intent.action.SEND"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <data android:mimeType="text/plain"/>
       </intent-filter>
     </activity>
     <activity android:name="com.facebook.react.devsupport.DevSettingsActivity" android:exported="false"/>
@@ -94,6 +110,39 @@
       android:name=".ShieldNotificationService"
       android:exported="false">
     </service>
+
+    <!-- Ransomware file-system watcher (foreground, mediaProjection-safe plain FGS) -->
+    <service
+      android:name=".RansomwareWatcherService"
+      android:exported="false"
+      android:foregroundServiceType="dataSync">
+    </service>
+
+    <!-- AnkrShield Accessibility Service — monitors browser URL bar for phishing -->
+    <service
+      android:name=".AnkrShieldAccessibilityService"
+      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.accessibilityservice.AccessibilityService"/>
+      </intent-filter>
+      <meta-data
+        android:name="android.accessibilityservice"
+        android:resource="@xml/accessibility_service_config"/>
+    </service>
+
+    <!-- AnkrShield Device Admin Receiver — enables lock + wipe (anti-theft) -->
+    <receiver
+      android:name=".AnkrShieldAdminReceiver"
+      android:permission="android.permission.BIND_DEVICE_ADMIN"
+      android:exported="true">
+      <meta-data
+        android:name="android.app.device_admin"
+        android:resource="@xml/device_admin"/>
+      <intent-filter>
+        <action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/>
+      </intent-filter>
+    </receiver>
 
     <!-- Shield Status home screen widget -->
     <receiver

@@ -9,13 +9,14 @@ import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -48,9 +49,10 @@ public class DnsVpnService extends VpnService {
     private static final String VPN_ROUTE    = "10.111.111.2"; // route only the DNS server IP
     private static final int    VPN_PREFIX   = 32;
 
-    // Upstream DNS — Cloudflare (plain UDP, not DoH, for simplicity in v1)
-    private static final String UPSTREAM_DNS = "1.1.1.1";
-    private static final int    DNS_PORT     = 53;
+    // Upstream DNS-over-HTTPS resolvers (privacy-preserving, encrypted)
+    private static final String DOH_PRIMARY  = "https://cloudflare-dns.com/dns-query";
+    private static final String DOH_FALLBACK = "https://dns.google/dns-query";
+    private static final int    DNS_PORT     = 53; // used to detect DNS packets from TUN fd
 
     // Direct listener for React Native event bridge (replaces broadcast)
     public interface DnsEventListener {
@@ -341,7 +343,7 @@ public class DnsVpnService extends VpnService {
                     byte[] dnsQuery = new byte[udpPayloadLen];
                     System.arraycopy(buf, udpPayloadOffset, dnsQuery, 0, udpPayloadLen);
 
-                    byte[] upstreamResponse = forwardDns(dnsQuery);
+                    byte[] upstreamResponse = forwardDnsDoH(dnsQuery);
                     if (upstreamResponse != null) {
                         byte[] response = wrapDnsResponse(upstreamResponse, buf, ipHeaderLen, len);
                         if (response != null) out.write(response);
@@ -418,39 +420,65 @@ public class DnsVpnService extends VpnService {
     }
 
     /**
-     * Forward a DNS query to the upstream resolver (Cloudflare 1.1.1.1:53).
-     * Uses a plain UDP socket with a 2-second timeout.
+     * Forward a DNS query using DNS-over-HTTPS (DoH).
+     * Tries Cloudflare first, falls back to Google if unavailable.
+     * Our package is excluded from the VPN via addDisallowedApplication(), so
+     * these HTTPS connections go directly to the internet — no protect() needed.
      */
-    private static byte[] forwardDns(byte[] query) {
+    private static byte[] forwardDnsDoH(byte[] query) {
+        byte[] result = dohPost(DOH_PRIMARY, query);
+        if (result != null) return result;
+        // Fallback to Google DoH
+        result = dohPost(DOH_FALLBACK, query);
+        if (result == null) Log.w(TAG, "Both DoH resolvers failed");
+        return result;
+    }
+
+    private static byte[] dohPost(String endpoint, byte[] dnsWireQuery) {
+        HttpURLConnection conn = null;
         try {
-            DatagramSocket socket = new DatagramSocket();
-            socket.setSoTimeout(2000);
-            protectSocket(socket); // Tell Android this socket is NOT routed through our VPN
+            conn = (HttpURLConnection) new URL(endpoint).openConnection();
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            conn.setDoInput(true);
+            conn.setConnectTimeout(3000);
+            conn.setReadTimeout(3000);
+            conn.setRequestProperty("Content-Type", "application/dns-message");
+            conn.setRequestProperty("Accept", "application/dns-message");
+            conn.setRequestProperty("Content-Length", String.valueOf(dnsWireQuery.length));
+            conn.setUseCaches(false);
 
-            InetAddress upstream = InetAddress.getByName(UPSTREAM_DNS);
-            DatagramPacket req = new DatagramPacket(query, query.length, upstream, DNS_PORT);
-            socket.send(req);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(dnsWireQuery);
+                os.flush();
+            }
 
-            byte[] respBuf = new byte[4096];
-            DatagramPacket resp = new DatagramPacket(respBuf, respBuf.length);
-            socket.receive(resp);
-            socket.close();
+            int code = conn.getResponseCode();
+            if (code != 200) {
+                Log.w(TAG, "DoH " + endpoint + " returned HTTP " + code);
+                return null;
+            }
 
-            byte[] result = new byte[resp.getLength()];
-            System.arraycopy(respBuf, 0, result, 0, resp.getLength());
-            return result;
-
+            try (InputStream is = conn.getInputStream()) {
+                return readFully(is);
+            }
         } catch (Exception e) {
-            Log.w(TAG, "Upstream DNS error: " + e.getMessage());
+            Log.w(TAG, "DoH error (" + endpoint + "): " + e.getMessage());
             return null;
+        } finally {
+            if (conn != null) conn.disconnect();
         }
     }
 
-    // forwardDns is static; use instance trampoline to call VpnService.protect()
-    private static DnsVpnService instance;
-    private static void protectSocket(DatagramSocket socket) {
-        if (instance != null) instance.protect(socket);
+    private static byte[] readFully(InputStream is) throws java.io.IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        byte[] chunk = new byte[4096];
+        int n;
+        while ((n = is.read(chunk)) != -1) buf.write(chunk, 0, n);
+        return buf.toByteArray();
     }
+
+    private static DnsVpnService instance;
 
     @Override
     public void onCreate() {

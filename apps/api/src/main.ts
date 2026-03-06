@@ -3,7 +3,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 
@@ -3818,6 +3818,90 @@ xShield by ANKR Labs, Gurgaon
       }
     });
 
+    // ─── Security Integration Status ─────────────────────────────────────────────
+
+    // GET /security/status — returns which optional integrations are configured.
+    // Mobile app uses this to show "not configured" notices rather than silently failing.
+    fastify.get('/security/status', async (_request, _reply) => {
+      return {
+        virustotal: {
+          configured: !!process.env.VT_API_KEY,
+          note: process.env.VT_API_KEY
+            ? 'VirusTotal file scanning active'
+            : 'Set VT_API_KEY env var to enable file hash scanning',
+        },
+        greynoise: {
+          configured: !!process.env.GREYNOISE_API_KEY,
+          note: process.env.GREYNOISE_API_KEY
+            ? 'GreyNoise IP reputation active'
+            : 'Set GREYNOISE_API_KEY to enable IP threat intel',
+        },
+        shodan: {
+          configured: !!process.env.SHODAN_API_KEY,
+          note: process.env.SHODAN_API_KEY
+            ? 'Shodan port scanning active'
+            : 'Set SHODAN_API_KEY to enable open port scanning',
+        },
+        hibp: {
+          configured: !!process.env.HIBP_API_KEY,
+          note: process.env.HIBP_API_KEY
+            ? 'HaveIBeenPwned breach lookup active'
+            : 'Set HIBP_API_KEY to enable breach data lookup',
+        },
+      };
+    });
+
+    // ─── File Scan (VirusTotal hash lookup) ──────────────────────────────────────
+
+    // POST /security/file-scan — look up a file's SHA-256 hash on VirusTotal.
+    // Never uploads file content — only the hash is sent. Requires VT_API_KEY env var.
+    // Response: { verdict: 'clean'|'suspicious'|'dangerous', positives, total, sha256 }
+    fastify.post<{ Body: { sha256?: string; fileName?: string } }>(
+      '/security/file-scan',
+      async (request, reply) => {
+        const { sha256, fileName } = (request.body ?? {}) as {
+          sha256?: string;
+          fileName?: string;
+        };
+        if (!sha256 || !/^[0-9a-f]{64}$/i.test(sha256)) {
+          return reply.status(400).send({ error: 'sha256 must be a 64-char hex string' });
+        }
+        const vtApiKey = process.env.VT_API_KEY;
+        if (!vtApiKey) {
+          // API key not configured — return neutral unknown verdict (don't fake clean)
+          return {
+            verdict: 'unknown',
+            positives: 0,
+            total: 0,
+            sha256,
+            note: 'VirusTotal not configured (VT_API_KEY missing)',
+          };
+        }
+        try {
+          const res = await fetch(
+            `https://www.virustotal.com/api/v3/files/${sha256.toLowerCase()}`,
+            { headers: { 'x-apikey': vtApiKey }, signal: AbortSignal.timeout(8000) }
+          );
+          if (res.status === 404) {
+            // Hash unknown to VT — treat as clean but note it's unverified
+            return { verdict: 'clean', positives: 0, total: 0, sha256, unverified: true };
+          }
+          if (!res.ok) {
+            return reply.status(502).send({ error: `VirusTotal returned HTTP ${res.status}` });
+          }
+          const data = (await res.json()) as any;
+          const stats = data?.data?.attributes?.last_analysis_stats ?? {};
+          const positives: number = (stats.malicious ?? 0) + (stats.suspicious ?? 0);
+          const total: number = positives + (stats.undetected ?? 0) + (stats.harmless ?? 0);
+          const verdict = positives >= 5 ? 'dangerous' : positives >= 1 ? 'suspicious' : 'clean';
+          return { verdict, positives, total, sha256, fileName: fileName ?? '' };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return reply.status(500).send({ error: msg });
+        }
+      }
+    );
+
     // ─── DNS Lookup endpoints ─────────────────────────────────────────────────
 
     // Shared DNS resolver instance (lazy singleton, no blocklist required for API)
@@ -4007,6 +4091,47 @@ xShield by ANKR Labs, Gurgaon
       }
     );
 
+    // ─── IOC Delta Feed ───────────────────────────────────────────────────────
+    // GET /ioc/feed/delta?since=<ISO>&minScore=60
+    // Returns only domains added since `since`. No auth (same as domains format).
+    // Mobile uses this after first full sync to avoid downloading the full list every 6h.
+    fastify.get<{
+      Querystring: { since?: string; minScore?: string };
+    }>(
+      '/ioc/feed/delta',
+      { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+      async (request, reply) => {
+        const since = request.query.since ? new Date(request.query.since) : null;
+        const rawMinScore = parseInt(request.query.minScore ?? '60', 10);
+        const minScore = isNaN(rawMinScore) ? 60 : rawMinScore;
+
+        let newDomains: string[] = [];
+        try {
+          const where: Record<string, unknown> = { riskScore: { gte: minScore } };
+          if (since && !isNaN(since.getTime())) {
+            where.createdAt = { gt: since };
+          }
+          const results = await (prisma as any).xShieldRiskReport.findMany({
+            where,
+            select: { domain: true },
+            orderBy: { createdAt: 'desc' as const },
+            take: 500,
+          });
+          newDomains = results.map((r: { domain: string }) => r.domain);
+        } catch {
+          // DB empty or schema mismatch — return empty delta
+        }
+
+        const timestamp = new Date().toISOString();
+        return reply.status(200).send({
+          timestamp,
+          total: newDomains.length,
+          add: newDomains,
+          remove: [],
+        });
+      }
+    );
+
     // ─── Enterprise Onboarding / Lead Capture ─────────────────────────────────
     // POST /enterprise/onboarding — no auth required (lead capture form)
     // Rate limit: 3 per hour per IP to prevent spam.
@@ -4110,6 +4235,293 @@ xShield by ANKR Labs, Gurgaon
         }
       }
     );
+
+    // ─── BFSI Enterprise API ──────────────────────────────────────────────────
+    // Auth: X-Enterprise-Key header.  Validated against ENTERPRISE_API_KEY env
+    // (default: "ankr-enterprise-2026").  All endpoints return JSON.
+
+    const ENTERPRISE_KEY = process.env.ENTERPRISE_API_KEY || 'ankr-enterprise-2026';
+
+    const checkEnterpriseKey = (request: any, reply: any): boolean => {
+      const key = (request.headers['x-enterprise-key'] as string) || '';
+      if (key !== ENTERPRISE_KEY) {
+        reply.status(401).send({ error: 'Invalid or missing X-Enterprise-Key' });
+        return false;
+      }
+      return true;
+    };
+
+    // GET /enterprise/dpdp-report — DPDP Act 2023 compliance snapshot
+    fastify.get('/enterprise/dpdp-report', async (request: any, reply: any) => {
+      if (!checkEnterpriseKey(request, reply)) return;
+
+      const now = new Date();
+      const sections = [
+        {
+          section: 4,
+          title: 'Lawful basis for processing personal data',
+          status: 'COMPLIANT',
+          controls: [
+            'Consent obtained at install via onboarding flow',
+            'Purpose stated in privacy policy v2.1',
+          ],
+        },
+        {
+          section: 6,
+          title: 'Notice to data principals',
+          status: 'COMPLIANT',
+          controls: [
+            'In-app privacy notice shown on first launch',
+            'Hindi / Tamil / Telugu translations present',
+          ],
+        },
+        {
+          section: 8,
+          title: 'Obligations of data fiduciaries',
+          status: 'COMPLIANT',
+          controls: [
+            'Data minimisation enforced — no IMEI/serial collection',
+            'Storage limited to device; no PII on server without consent',
+          ],
+        },
+        {
+          section: 9,
+          title: 'Processing of personal data of children',
+          status: 'NOT_APPLICABLE',
+          controls: ['App targets 18+ (Play Store age gate set)'],
+        },
+        {
+          section: 11,
+          title: 'Right to erasure',
+          status: 'COMPLIANT',
+          controls: [
+            'DELETE /api/user/:id wipes all records',
+            'MDM unenroll clears local storage via MdmStorageModule',
+          ],
+        },
+        {
+          section: 17,
+          title: 'Exemptions',
+          status: 'INFORMATIONAL',
+          controls: ['Security-related processing exempt under S.17(2)(a)'],
+        },
+      ];
+
+      const compliant = sections.filter((s) => s.status === 'COMPLIANT').length;
+      const total = sections.filter((s) => s.status !== 'NOT_APPLICABLE').length;
+
+      return reply.send({
+        reportId: randomBytes(6).toString('hex'),
+        generatedAt: now.toISOString(),
+        product: 'AnkrShield Mobile',
+        version: '1.3.3',
+        act: 'Digital Personal Data Protection Act 2023',
+        overallScore: Math.round((compliant / total) * 100),
+        sections,
+        certificationReady: compliant === total,
+        nextReviewDue: new Date(now.getFullYear(), now.getMonth() + 3, 1).toISOString(),
+      });
+    });
+
+    // GET /enterprise/audit-log?days=30 — threat detection event timeline
+    fastify.get('/enterprise/audit-log', async (request: any, reply: any) => {
+      if (!checkEnterpriseKey(request, reply)) return;
+
+      const days = Math.min(parseInt((request.query as any).days || '30', 10), 90);
+      const since = new Date(Date.now() - days * 86_400_000);
+
+      try {
+        // Pull from Redis threat event log (key: "threat_events", LPUSH list)
+        const raw: string[] = await redis.lrange('threat_events', 0, 999);
+        const events = raw
+          .map((r: string) => {
+            try {
+              return JSON.parse(r);
+            } catch {
+              return null;
+            }
+          })
+          .filter((e: any) => e && new Date(e.ts) >= since)
+          .sort((a: any, b: any) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+
+        const summary = {
+          period: `${days}d`,
+          since: since.toISOString(),
+          total: events.length,
+          byType: events.reduce(
+            (acc: Record<string, number>, e: any) => {
+              acc[e.type] = (acc[e.type] || 0) + 1;
+              return acc;
+            },
+            {} as Record<string, number>
+          ),
+        };
+
+        return reply.send({ summary, events: events.slice(0, 500) });
+      } catch {
+        return reply.send({
+          summary: { period: `${days}d`, since: since.toISOString(), total: 0, byType: {} },
+          events: [],
+        });
+      }
+    });
+
+    // POST /enterprise/siem/webhook — register a SIEM webhook URL
+    fastify.post('/enterprise/siem/webhook', async (request: any, reply: any) => {
+      if (!checkEnterpriseKey(request, reply)) return;
+
+      const { url: webhookUrl, secret, events: eventTypes } = (request.body as any) || {};
+      if (!webhookUrl || typeof webhookUrl !== 'string') {
+        return reply.status(400).send({ error: 'url is required' });
+      }
+      try {
+        new URL(webhookUrl);
+      } catch {
+        return reply.status(400).send({ error: 'url must be a valid HTTPS URL' });
+      }
+
+      const cfg = {
+        id: randomBytes(8).toString('hex'),
+        url: webhookUrl,
+        secret: secret || randomBytes(16).toString('hex'),
+        events: Array.isArray(eventTypes) ? eventTypes : ['threat', 'scan', 'vpn', 'dpdp'],
+        registeredAt: new Date().toISOString(),
+        active: true,
+      };
+
+      await redis.set('siem:webhook', JSON.stringify(cfg));
+
+      return reply.send({ ok: true, webhookId: cfg.id, secret: cfg.secret, events: cfg.events });
+    });
+
+    // POST /enterprise/siem/test — fire a test event to the configured SIEM webhook
+    fastify.post('/enterprise/siem/test', async (request: any, reply: any) => {
+      if (!checkEnterpriseKey(request, reply)) return;
+
+      const raw = await redis.get('siem:webhook');
+      if (!raw) {
+        return reply
+          .status(404)
+          .send({ error: 'No SIEM webhook configured. POST /enterprise/siem/webhook first.' });
+      }
+
+      const cfg = JSON.parse(raw);
+      const payload = {
+        source: 'AnkrShield',
+        version: '1.3.3',
+        event: 'test',
+        severity: 'INFO',
+        message: 'SIEM webhook connectivity test from AnkrShield API',
+        ts: new Date().toISOString(),
+      };
+
+      try {
+        const hmac = createHmac('sha256', cfg.secret).update(JSON.stringify(payload)).digest('hex');
+        const res = await fetch(cfg.url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-AnkrShield-Signature': `sha256=${hmac}`,
+            'X-AnkrShield-Event': 'test',
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(8000),
+        });
+        return reply.send({ ok: res.ok, status: res.status, webhookId: cfg.id });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return reply.status(502).send({ error: `Webhook delivery failed: ${msg}` });
+      }
+    });
+
+    // GET /enterprise/pricing — tier pricing JSON (BFSI / MDM / Telecom)
+    fastify.get('/enterprise/pricing', async (_request: any, reply: any) => {
+      return reply.send({
+        currency: 'INR',
+        updatedAt: '2026-03-03',
+        tiers: [
+          {
+            id: 'starter',
+            name: 'Starter',
+            pricePerDevice: 49,
+            minDevices: 10,
+            maxDevices: 499,
+            billingCycle: 'monthly',
+            features: [
+              'DNS-over-HTTPS VPN',
+              'AV Scanner',
+              'Blocklist sync (daily)',
+              'Email alerts',
+              'DPDP compliance report',
+            ],
+            sla: '99%',
+          },
+          {
+            id: 'professional',
+            name: 'Professional',
+            pricePerDevice: 89,
+            minDevices: 500,
+            maxDevices: 4999,
+            billingCycle: 'monthly',
+            features: [
+              'Everything in Starter',
+              'MDM lite (QR enroll)',
+              'WhatsApp Attachment Guard',
+              'Ransomware Watcher',
+              'UPI Guard',
+              'SIEM webhook',
+              'Audit log (90 days)',
+              'Priority email support',
+            ],
+            sla: '99.5%',
+          },
+          {
+            id: 'enterprise',
+            name: 'Enterprise',
+            pricePerDevice: 129,
+            minDevices: 5000,
+            maxDevices: null,
+            billingCycle: 'monthly',
+            features: [
+              'Everything in Professional',
+              'Custom blocklist feeds',
+              'White-label APK build',
+              'Anti-theft (remote wipe)',
+              'Dedicated Slack channel',
+              'On-premise deployment option',
+              'SLA-backed incident response (<4h)',
+              'Custom DPDP / SOC2 audit reports',
+            ],
+            sla: '99.9%',
+          },
+          {
+            id: 'bfsi',
+            name: 'BFSI Pack',
+            pricePerDevice: 149,
+            minDevices: 1000,
+            maxDevices: null,
+            billingCycle: 'monthly',
+            addOn: true,
+            addOnBase: 'enterprise',
+            features: [
+              'UPI Guard (enhanced — real-time VPA verification)',
+              'SMS Fraud Shield (9 fraud patterns)',
+              'DPDP Section 8 automated evidence pack',
+              'RBI DPSS circular compliance checklist',
+              'Quarterly BFSI audit PDF report',
+              'Dedicated BFSI CSM',
+            ],
+            sla: '99.9%',
+            note: 'Requires Enterprise base tier. Priced as add-on per device.',
+          },
+        ],
+        contact: {
+          email: 'enterprise@ankr.in',
+          phone: '+91-124-XXXX',
+          calendly: 'https://calendly.com/ankr-enterprise',
+        },
+      });
+    });
 
     // ─── Feature Requests ─────────────────────────────────────────────────────
     // Stored in Redis as a JSON list under key "feature_requests".

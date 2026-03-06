@@ -3,6 +3,7 @@
  * App configuration and preferences
  */
 
+import type { ProtectionMode } from '@ankrshield/privacy-engine';
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -18,18 +19,56 @@ import {
   PermissionsAndroid,
 } from 'react-native';
 
+import { setLanguage, getLanguage, supportedLanguages, type Lang } from '../i18n';
+import { MdmStorage } from '../mdm/storage';
 import { vpnService } from '../services/VpnService';
 
-const { WhatsAppGuard } = NativeModules;
+const { WhatsAppGuard, BitwardenBridge } = NativeModules;
+
+const PROTECTION_MODE_KEY = '@ankrshield/protection-mode';
+
+const MODE_INFO: Record<ProtectionMode, { label: string; icon: string; desc: string }> = {
+  smart: {
+    label: 'Smart',
+    icon: '🧠',
+    desc: 'Block only real threats — browsers and normal apps always work',
+  },
+  strict: {
+    label: 'Strict',
+    icon: '🛡',
+    desc: 'Block all trackers including analytics and advertising',
+  },
+  monitor: {
+    label: 'Monitor',
+    icon: '👁',
+    desc: "Watch only — never block, just show what's happening",
+  },
+};
 
 export function SettingsScreen({ navigation }: any) {
   // Network protection mirrors DNS filtering — same VPN, kept in sync
+  const [activeLang, setActiveLang] = useState<Lang>(getLanguage());
+  const [bwInstalled, setBwInstalled] = useState<boolean | null>(null);
+  const [bwAutofill, setBwAutofill] = useState(false);
   const [dnsFiltering, setDnsFiltering] = useState(false);
   const [dnsLoading, setDnsLoading] = useState(false);
   const [dnsPaused, setDnsPaused] = useState(false);
   const [pauseUntilMs, setPauseUntilMs] = useState(0);
   const [notifications, setNotifications] = useState(true);
   const [notifsLoading, setNotifsLoading] = useState(false);
+  const [protectionMode, setProtectionModeState] = useState<ProtectionMode>('smart');
+
+  function handleLangChange(lang: Lang) {
+    setLanguage(lang);
+    setActiveLang(lang);
+    MdmStorage.setItem('@ankrshield/language', lang).catch(() => {});
+  }
+
+  async function handleModeChange(mode: ProtectionMode) {
+    setProtectionModeState(mode);
+    await MdmStorage.setItem(PROTECTION_MODE_KEY, mode);
+    // VPN applies mode on next rule reload — no restart needed for next connection
+  }
 
   // Sync DNS + pause state every 5 s; load saved notification preference
   useEffect(() => {
@@ -49,6 +88,35 @@ export function SettingsScreen({ navigation }: any) {
       WhatsAppGuard.getNotificationsEnabled()
         .then((v: boolean) => setNotifications(v))
         .catch(() => {});
+    }
+
+    // Load persisted protection mode
+    MdmStorage.getItem(PROTECTION_MODE_KEY)
+      .then((saved) => {
+        if (saved === 'smart' || saved === 'strict' || saved === 'monitor') {
+          setProtectionModeState(saved);
+        }
+      })
+      .catch(() => {});
+
+    // Restore persisted language preference
+    MdmStorage.getItem('@ankrshield/language')
+      .then((saved) => {
+        if (saved === 'en' || saved === 'hi' || saved === 'ta' || saved === 'te') {
+          setLanguage(saved as Lang);
+          setActiveLang(saved as Lang);
+        }
+      })
+      .catch(() => {});
+
+    // Bitwarden status (Android only)
+    if (Platform.OS === 'android' && BitwardenBridge) {
+      BitwardenBridge.getStatus()
+        .then((s: { installed: boolean; autofillEnabled: boolean }) => {
+          setBwInstalled(s.installed);
+          setBwAutofill(s.autofillEnabled);
+        })
+        .catch(() => setBwInstalled(false));
     }
 
     return () => clearInterval(interval);
@@ -218,6 +286,33 @@ export function SettingsScreen({ navigation }: any) {
         )}
       </View>
 
+      {/* Protection Mode */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Protection Mode</Text>
+        <View style={styles.modeRow}>
+          {(['smart', 'strict', 'monitor'] as ProtectionMode[]).map((mode) => {
+            const info = MODE_INFO[mode];
+            const active = protectionMode === mode;
+            return (
+              <TouchableOpacity
+                key={mode}
+                style={[styles.modeBtn, active && styles.modeBtnActive]}
+                onPress={() => handleModeChange(mode)}
+              >
+                <Text style={styles.modeBtnIcon}>{info.icon}</Text>
+                <Text style={[styles.modeBtnLabel, active && styles.modeBtnLabelActive]}>
+                  {info.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <View style={styles.modeDescBox}>
+          <Text style={styles.modeDescText}>{MODE_INFO[protectionMode].desc}</Text>
+          {protectionMode === 'smart' && <Text style={styles.modeRecommended}>Recommended</Text>}
+        </View>
+      </View>
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Notifications</Text>
 
@@ -238,6 +333,16 @@ export function SettingsScreen({ navigation }: any) {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Help</Text>
+
+        <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('Mdm')}>
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>🏢 Corporate Shield</Text>
+            <Text style={styles.settingDescription}>
+              MDM enrollment — manage device policy from your organisation
+            </Text>
+          </View>
+          <Text style={styles.settingValue}>&gt;</Text>
+        </TouchableOpacity>
 
         <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('Help')}>
           <View style={styles.settingInfo}>
@@ -261,12 +366,74 @@ export function SettingsScreen({ navigation }: any) {
         </TouchableOpacity>
       </View>
 
+      {/* Bitwarden Password Manager (Android only) */}
+      {Platform.OS === 'android' && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Password Manager</Text>
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>🔑 Bitwarden</Text>
+              <Text style={styles.settingDescription}>
+                {bwInstalled === null
+                  ? 'Checking…'
+                  : bwInstalled
+                    ? bwAutofill
+                      ? '✅ Installed · Autofill active'
+                      : '⚠️ Installed · Autofill not enabled'
+                    : 'Not installed — tap to get it free'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.bwBtn}
+              onPress={() => {
+                if (!bwInstalled) {
+                  BitwardenBridge?.installPrompt();
+                } else if (!bwAutofill) {
+                  BitwardenBridge?.openSetup();
+                } else {
+                  BitwardenBridge?.openVault();
+                }
+              }}
+            >
+              <Text style={styles.bwBtnTxt}>
+                {!bwInstalled ? 'Install' : !bwAutofill ? 'Enable' : 'Open'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.bwNote}>
+            AnkrShield never reads your vault. Bitwarden is open-source and end-to-end encrypted.
+          </Text>
+        </View>
+      )}
+
+      {/* Language picker */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Language</Text>
+        <View style={styles.langRow}>
+          {supportedLanguages.map((lang) => {
+            const active = activeLang === lang.code;
+            return (
+              <TouchableOpacity
+                key={lang.code}
+                style={[styles.langBtn, active && styles.langBtnActive]}
+                onPress={() => handleLangChange(lang.code)}
+              >
+                <Text style={[styles.langNative, active && styles.langNativeActive]}>
+                  {lang.nativeName}
+                </Text>
+                <Text style={[styles.langEng, active && styles.langEngActive]}>{lang.name}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>About</Text>
 
         <TouchableOpacity style={styles.settingRow}>
           <Text style={styles.settingLabel}>Version</Text>
-          <Text style={styles.settingValue}>1.3.0</Text>
+          <Text style={styles.settingValue}>1.3.3</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -331,6 +498,52 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#aaa',
   },
+  modeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  modeBtn: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    paddingVertical: 12,
+    alignItems: 'center',
+    gap: 4,
+  },
+  modeBtnActive: {
+    backgroundColor: '#0d1f0d',
+    borderColor: '#4CAF50',
+  },
+  modeBtnIcon: {
+    fontSize: 20,
+  },
+  modeBtnLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+  },
+  modeBtnLabelActive: {
+    color: '#4CAF50',
+  },
+  modeDescBox: {
+    backgroundColor: '#111',
+    borderRadius: 8,
+    padding: 12,
+    gap: 4,
+  },
+  modeDescText: {
+    color: '#888',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  modeRecommended: {
+    color: '#4CAF50',
+    fontSize: 11,
+    fontWeight: '600',
+  },
   bypassBox: {
     backgroundColor: '#0f1f0f',
     borderRadius: 8,
@@ -381,5 +594,58 @@ const styles = StyleSheet.create({
     color: '#fbbf24',
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  langRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  langBtn: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+    paddingVertical: 10,
+    alignItems: 'center',
+    gap: 2,
+  },
+  langBtnActive: {
+    backgroundColor: '#080c14',
+    borderColor: '#4ade80',
+  },
+  langNative: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#555',
+  },
+  langNativeActive: {
+    color: '#4ade80',
+  },
+  langEng: {
+    fontSize: 10,
+    color: '#444',
+  },
+  langEngActive: {
+    color: '#22c55e',
+  },
+  bwBtn: {
+    backgroundColor: '#175ddc',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignSelf: 'center',
+  },
+  bwBtnTxt: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  bwNote: {
+    color: '#4b5563',
+    fontSize: 11,
+    paddingHorizontal: 4,
+    paddingTop: 6,
+    lineHeight: 16,
   },
 });

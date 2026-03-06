@@ -7,8 +7,19 @@
  */
 
 import type { AppPermissions } from '@ankrshield/android-monitor';
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  NativeModules,
+  Platform,
+} from 'react-native';
+
+const { AppScanner } = NativeModules;
 
 // ---------------------------------------------------------------------------
 // Detection types
@@ -23,63 +34,8 @@ interface AppDetection {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data
+// No mock data — real apps only
 // ---------------------------------------------------------------------------
-
-const MOCK_APPS: AppPermissions[] = [
-  // User knowingly installed — NEVER flag based on permissions alone
-  {
-    packageName: 'com.google.android.apps.maps',
-    appName: 'Google Maps',
-    installSource: 'play_store',
-    isSystemApp: false,
-    permissions: [
-      'ACCESS_FINE_LOCATION',
-      'ACCESS_BACKGROUND_LOCATION',
-      'CAMERA',
-      'RECORD_AUDIO',
-      'READ_CONTACTS',
-    ],
-  },
-  // IOC match — definite stalkerware
-  {
-    packageName: 'com.thetruthspy.android',
-    appName: 'System Service',
-    installSource: 'unknown',
-    isSystemApp: false,
-    permissions: [
-      'READ_SMS',
-      'READ_CALL_LOG',
-      'ACCESS_FINE_LOCATION',
-      'RECORD_AUDIO',
-      'READ_CONTACTS',
-    ],
-  },
-  // Disguised — name doesn't match package
-  {
-    packageName: 'com.track.spouse.hidden',
-    appName: 'Phone Optimizer',
-    installSource: 'file_manager',
-    isSystemApp: false,
-    permissions: ['READ_SMS', 'ACCESS_FINE_LOCATION', 'RECORD_AUDIO', 'RECEIVE_BOOT_COMPLETED'],
-  },
-  // Clean sideload — games APK
-  {
-    packageName: 'com.mojang.minecraftpe',
-    appName: 'Minecraft',
-    installSource: 'file_manager',
-    isSystemApp: false,
-    permissions: ['WRITE_EXTERNAL_STORAGE', 'RECORD_AUDIO'],
-  },
-  // Legit banking app
-  {
-    packageName: 'com.sbi.SBIFreedomPlus',
-    appName: 'SBI YONO',
-    installSource: 'play_store',
-    isSystemApp: false,
-    permissions: ['CAMERA', 'READ_PHONE_STATE', 'RECEIVE_SMS', 'ACCESS_FINE_LOCATION'],
-  },
-];
 
 // ---------------------------------------------------------------------------
 // Detection logic (inline — simple, no external package dependency)
@@ -148,7 +104,7 @@ function detectApp(app: AppPermissions): AppDetection {
 // Card components
 // ---------------------------------------------------------------------------
 
-function CleanCard({ app }: { app: AppPermissions }) {
+function _CleanCard({ app }: { app: AppPermissions }) {
   return (
     <View style={styles.card}>
       <View style={styles.cardRow}>
@@ -209,8 +165,36 @@ function StalkerwareCard({ detection }: { detection: AppDetection }) {
 // ---------------------------------------------------------------------------
 
 export function StalkerwareScreen() {
-  const detections = MOCK_APPS.map(detectApp);
-  const flaggedCount = detections.filter((d) => d.status !== 'clean').length;
+  const [scanning, setScanning] = useState(false);
+  const [scanDone, setScanDone] = useState(false);
+  const [detections, setDetections] = useState<AppDetection[]>([]);
+  const [scannedCount, setScannedCount] = useState(0);
+
+  async function runScan() {
+    setScanning(true);
+    setScanDone(false);
+    setDetections([]);
+    try {
+      const rawApps: AppPermissions[] =
+        Platform.OS === 'android' && AppScanner ? await AppScanner.getInstalledApps() : [];
+      setScannedCount(rawApps.length);
+      // Only keep flagged — clean apps are uninteresting
+      const results = rawApps.map(detectApp).filter((d) => d.status !== 'clean');
+      setDetections(results);
+    } catch (e) {
+      console.error('Stalkerware scan error:', e);
+    } finally {
+      setScanning(false);
+      setScanDone(true);
+    }
+  }
+
+  // Auto-scan on mount
+  useEffect(() => {
+    runScan();
+  }, []);
+
+  const flaggedCount = detections.length;
 
   return (
     <ScrollView style={styles.container}>
@@ -222,25 +206,54 @@ export function StalkerwareScreen() {
         </Text>
       </View>
 
-      {/* Summary */}
-      <View style={[styles.summaryBar, { borderColor: flaggedCount > 0 ? '#f44336' : '#4CAF50' }]}>
-        <Text style={[styles.summaryText, { color: flaggedCount > 0 ? '#f44336' : '#4CAF50' }]}>
-          {flaggedCount > 0
-            ? `${flaggedCount} app${flaggedCount > 1 ? 's' : ''} flagged for review`
-            : 'No stalkerware detected'}
-        </Text>
-      </View>
+      {/* Scan progress / result */}
+      {scanning ? (
+        <View style={styles.scanningBox}>
+          <ActivityIndicator size="large" color="#4CAF50" />
+          <Text style={styles.scanningText}>Scanning installed apps...</Text>
+          <Text style={styles.scanningHint}>
+            Checking package names, permissions, and install source
+          </Text>
+        </View>
+      ) : scanDone ? (
+        <>
+          {/* Summary */}
+          <View
+            style={[styles.summaryBar, { borderColor: flaggedCount > 0 ? '#f44336' : '#4CAF50' }]}
+          >
+            <Text style={[styles.summaryText, { color: flaggedCount > 0 ? '#f44336' : '#4CAF50' }]}>
+              {flaggedCount > 0
+                ? `${flaggedCount} app${flaggedCount > 1 ? 's' : ''} flagged for review`
+                : `All clear — ${scannedCount} apps scanned, no stalkerware found`}
+            </Text>
+          </View>
 
-      {/* App list */}
-      <View style={styles.list}>
-        {detections.map((d) => {
-          if (d.status === 'stalkerware')
-            return <StalkerwareCard key={d.app.packageName} detection={d} />;
-          if (d.status === 'suspicious')
-            return <SuspiciousCard key={d.app.packageName} detection={d} />;
-          return <CleanCard key={d.app.packageName} app={d.app} />;
-        })}
-      </View>
+          {/* App list — only flagged shown */}
+          {flaggedCount > 0 && (
+            <View style={styles.list}>
+              {detections.map((d) => {
+                if (d.status === 'stalkerware')
+                  return <StalkerwareCard key={d.app.packageName} detection={d} />;
+                return <SuspiciousCard key={d.app.packageName} detection={d} />;
+              })}
+            </View>
+          )}
+
+          {/* Re-scan button */}
+          <TouchableOpacity style={styles.rescanBtn} onPress={runScan}>
+            <Text style={styles.rescanTxt}>Scan again</Text>
+          </TouchableOpacity>
+        </>
+      ) : null}
+
+      {/* Not Android notice */}
+      {Platform.OS !== 'android' && scanDone && (
+        <View style={styles.noteBox}>
+          <Text style={styles.noteText}>
+            Stalkerware scanning requires Android. iOS version coming soon.
+          </Text>
+        </View>
+      )}
 
       {/* Philosophy note */}
       <View style={styles.noteBox}>
@@ -320,4 +333,19 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   noteText: { color: '#555', fontSize: 12, textAlign: 'center', fontStyle: 'italic' },
+  scanningBox: { alignItems: 'center', padding: 40, gap: 12 },
+  scanningText: { color: '#aaa', fontSize: 15, fontWeight: '600' },
+  scanningHint: { color: '#444', fontSize: 12, textAlign: 'center' },
+  rescanBtn: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    padding: 12,
+    backgroundColor: '#0d1117',
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#222',
+  },
+  rescanTxt: { color: '#555', fontSize: 13 },
 });
