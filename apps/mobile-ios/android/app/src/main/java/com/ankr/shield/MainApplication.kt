@@ -42,6 +42,12 @@ class MainApplication : Application(), ReactApplication {
             packages.add(AntiTheftPackage())
             packages.add(BitwardenBridgePackage())
             packages.add(CallGuardMLPackage())
+            // A10 — WhatsApp OTP Guard
+            packages.add(OtpGuardPackage())
+            // A11 — Linked Devices Watchdog
+            packages.add(LinkedDevicesPackage())
+            // A12 — SIM Swap Detector
+            packages.add(SimSwapPackage())
             return packages
           }
 

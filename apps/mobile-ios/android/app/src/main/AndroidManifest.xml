@@ -20,6 +20,14 @@
   <!-- Anti-Theft — last-known location (does not start GPS, reads cached fix only) -->
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
   <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+  <!-- A10 — WhatsApp OTP Guard: receive SMS to detect hijack attempts -->
+  <uses-permission android:name="android.permission.RECEIVE_SMS"/>
+  <!-- A12 — SIM Swap Detector: read SIM ICCID to detect swap events -->
+  <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+  <!-- A10 — Full-screen intent for CRITICAL OTP hijack overlay -->
+  <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+  <!-- A11 — WorkManager background work -->
+  <uses-permission android:name="android.permission.WAKE_LOCK"/>
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
@@ -141,6 +149,25 @@
         android:resource="@xml/device_admin"/>
       <intent-filter>
         <action android:name="android.app.action.DEVICE_ADMIN_ENABLED"/>
+      </intent-filter>
+    </receiver>
+
+    <!-- A10 — WhatsApp OTP Guard BroadcastReceiver -->
+    <receiver
+      android:name=".OtpGuardReceiver"
+      android:exported="true"
+      android:permission="android.permission.BROADCAST_SMS">
+      <intent-filter android:priority="999">
+        <action android:name="android.provider.Telephony.SMS_RECEIVED"/>
+      </intent-filter>
+    </receiver>
+
+    <!-- A10 — OTP Guard dismiss receiver (user taps "I'm Safe") -->
+    <receiver
+      android:name=".OtpGuardDismissReceiver"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="com.ankr.shield.ACTION_OTP_GUARD_DISMISS"/>
       </intent-filter>
     </receiver>
 

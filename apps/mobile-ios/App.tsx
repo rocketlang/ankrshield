@@ -24,6 +24,7 @@ import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { setLanguage, type Lang } from './src/i18n';
 import { MdmScreen } from './src/mdm/MdmScreen';
 import { MdmStorage } from './src/mdm/storage';
+import AccountGuardScreen from './src/screens/AccountGuardScreen';
 import { ActivityScreen } from './src/screens/ActivityScreen';
 import { AgentManagerScreen } from './src/screens/AgentManagerScreen';
 import { AndroidMonitorScreen } from './src/screens/AndroidMonitorScreen';
@@ -625,6 +626,17 @@ function App(): React.JSX.Element {
               headerTintColor: '#60a5fa',
             }}
           />
+          {/* A13 — Account Guard (aggregates OTP Guard + Linked Devices + SIM Swap) */}
+          <Stack.Screen
+            name="AccountGuard"
+            component={eb(AccountGuardScreen, 'AccountGuard')}
+            options={{
+              title: '🛡️ Account Guard',
+              headerStyle: { backgroundColor: '#0a0e0b' },
+              headerTintColor: '#22c55e',
+            }}
+          />
+
           {/* iOS-only screens */}
           {Platform.OS === 'ios' && (
             <Stack.Screen

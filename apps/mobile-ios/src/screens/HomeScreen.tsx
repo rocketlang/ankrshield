@@ -39,6 +39,7 @@ const PROTECTION_TOOLS = [
   { icon: '💬', name: 'SMS Shield', desc: 'Fraud SMS scanner', route: 'SmsShield' },
   { icon: '📞', name: 'Call Shield', desc: 'India fraud patterns', route: 'CallProtection' },
   { icon: '💬', name: 'WA Guard', desc: 'File threat scan', route: 'WhatsAppGuard' },
+  { icon: '🛡️', name: 'Account Guard', desc: 'WhatsApp + UPI safety', route: 'AccountGuard' },
   { icon: '🌐', name: 'Safe Browse', desc: 'Phishing blocker', route: 'SafeBrowsing' },
   { icon: '📋', name: 'DPDP Scan', desc: 'Privacy compliance', route: 'DpdpScan' },
   { icon: '🔗', name: 'Link Scan', desc: 'Phishing URL check', route: 'LinkScanner' },

@@ -17,6 +17,18 @@ public class NotificationChannels {
     public static final String CHANNEL_WHATSAPP_GUARD = "whatsapp_guard";
     public static final String CHANNEL_RANSOMWARE     = "ransomware_watcher";
     public static final String CHANNEL_PHISHING       = "phishing_guard";
+    // A10 — WhatsApp OTP hijack (CRITICAL, MAX + bypass DnD)
+    public static final String CHANNEL_OTP_GUARD      = "ankrshield_otp_guard";
+    // A11 — Linked devices
+    public static final String CHANNEL_LINKED_DEVICES = "ankrshield_linked_devices";
+    // A12 — SIM swap
+    public static final String CHANNEL_SIM_SWAP       = "ankrshield_sim_swap";
+
+    // Notification IDs
+    public static final int NOTIF_ID_OTP_GUARD            = 7010;
+    public static final int NOTIF_ID_LINKED_DEVICE        = 7011;
+    public static final int NOTIF_ID_LINKED_DEVICE_REMIND = 7012;
+    public static final int NOTIF_ID_SIM_SWAP             = 7013;
 
     /** Register all AnkrShield notification channels. Safe to call multiple times. */
     public static void register(Context ctx) {
@@ -64,6 +76,39 @@ public class NotificationChannels {
             phishing.setBypassDnd(true);
         }
         nm.createNotificationChannel(phishing);
+
+        // A10 — WhatsApp OTP hijack — CRITICAL, max priority, bypass DnD, vibrate + sound
+        NotificationChannel otpGuard = make(
+            CHANNEL_OTP_GUARD,
+            "WhatsApp Hijack Alert",
+            "CRITICAL: fires when a WhatsApp OTP arrives without user-initiated re-registration",
+            NotificationManager.IMPORTANCE_MAX,
+            true
+        );
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            otpGuard.setBypassDnd(true);
+            otpGuard.enableVibration(true);
+            otpGuard.setVibrationPattern(new long[]{0, 400, 200, 400, 200, 400});
+        }
+        nm.createNotificationChannel(otpGuard);
+
+        // A11 — Linked devices alert — high priority
+        nm.createNotificationChannel(make(
+            CHANNEL_LINKED_DEVICES,
+            "WhatsApp Linked Devices",
+            "Alerts when a new device is linked to your WhatsApp account",
+            NotificationManager.IMPORTANCE_HIGH,
+            true
+        ));
+
+        // A12 — SIM swap alert — high priority
+        nm.createNotificationChannel(make(
+            CHANNEL_SIM_SWAP,
+            "SIM Swap Alert",
+            "Alerts when your SIM card is replaced or swapped",
+            NotificationManager.IMPORTANCE_HIGH,
+            true
+        ));
     }
 
     private static NotificationChannel make(

@@ -65,6 +65,17 @@ public class UpiGuardModule extends ReactContextBaseJavaModule {
     // Check history (ring buffer, last 50)
     public static final List<WritableMap> checkHistory = new CopyOnWriteArrayList<>();
 
+    // A12 — SIM swap UPI block: set to true by SimSwapModule for 10 min after swap detection
+    private static volatile boolean simSwapBlockActive = false;
+
+    public static void setSimSwapBlock(boolean active) {
+        simSwapBlockActive = active;
+    }
+
+    public static boolean isSimSwapBlockActive() {
+        return simSwapBlockActive;
+    }
+
     public UpiGuardModule(@NonNull ReactApplicationContext ctx) {
         super(ctx);
     }
@@ -78,6 +89,20 @@ public class UpiGuardModule extends ReactContextBaseJavaModule {
         try {
             WritableMap result = Arguments.createMap();
             WritableArray flags = Arguments.createArray();
+
+            // A12 — SIM swap block: reject all UPI transactions for 10 min post-swap
+            if (simSwapBlockActive) {
+                flags.pushString("SIM swap detected — UPI blocked for 10 min as a safety measure");
+                result.putString("riskLevel", "critical");
+                result.putBoolean("simSwapBlock", true);
+                result.putArray("flags", flags);
+                result.putString("vpa", "");
+                result.putString("payeeName", "");
+                result.putString("amount", "");
+                result.putBoolean("isUpiUri", false);
+                promise.resolve(result);
+                return;
+            }
 
             // ── Parse URI ────────────────────────────────────────────────────
             String vpa      = "";
