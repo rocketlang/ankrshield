@@ -12,7 +12,6 @@
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <!-- Android 14+ requires explicit foreground service type permission -->
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
   <!-- Android 13+ — runtime permission for posting notifications -->
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.READ_CONTACTS"/>
@@ -77,11 +76,11 @@
       </intent-filter>
     </service>
 
-    <!-- WhatsApp Attachment Guard (foreground file watcher) -->
+    <!-- WhatsApp Attachment Guard (foreground file watcher)
+         NO foregroundServiceType — plain FGS avoids Android 14 crash (no dataSync) -->
     <service
       android:name=".WhatsAppGuardService"
-      android:exported="false"
-      android:foregroundServiceType="dataSync"/>
+      android:exported="false"/>
 
     <!-- Boot receiver — restarts WhatsApp Guard after device reboot -->
     <receiver
@@ -119,11 +118,10 @@
       android:exported="false">
     </service>
 
-    <!-- Ransomware file-system watcher (foreground, mediaProjection-safe plain FGS) -->
+    <!-- Ransomware file-system watcher — plain FGS, no foregroundServiceType (Android 14 safe) -->
     <service
       android:name=".RansomwareWatcherService"
-      android:exported="false"
-      android:foregroundServiceType="dataSync">
+      android:exported="false">
     </service>
 
     <!-- AnkrShield Accessibility Service — monitors browser URL bar for phishing -->
