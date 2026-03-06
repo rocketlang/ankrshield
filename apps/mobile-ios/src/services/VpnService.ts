@@ -54,6 +54,12 @@ const stubStats: VpnStats = {
   pauseUntilMs: 0,
 };
 
+export interface InstalledApp {
+  packageName: string;
+  appName: string;
+  bypassed: boolean;
+}
+
 class AnkrShieldVpn {
   private emitter: NativeEventEmitter | null = null;
   private _eventHistory: FeedEvent[] = [];
@@ -154,6 +160,36 @@ class AnkrShieldVpn {
     if (!this.emitter) return () => {};
     const subscription = this.emitter.addListener('DnsQueryEvent', callback);
     return () => subscription.remove();
+  }
+
+  /** Returns all installed user apps with current bypass state (Android only). */
+  async getInstalledApps(): Promise<InstalledApp[]> {
+    if (Platform.OS !== 'android' || !DnsVpn) return [];
+    return DnsVpn.getInstalledApps() as Promise<InstalledApp[]>;
+  }
+
+  /** Toggle bypass for a single package; rebuilds VPN interface if running. */
+  async toggleBypassApp(packageName: string, bypass: boolean): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn) return;
+    await DnsVpn.toggleBypassApp(packageName, bypass);
+  }
+
+  /** Overwrite the entire bypass list atomically. */
+  async setBypassApps(packages: string[]): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn) return;
+    await DnsVpn.setBypassApps(packages);
+  }
+
+  /** Enable/disable passive (observe-only) mode. */
+  async setPassiveMode(enabled: boolean): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn) return;
+    await DnsVpn.setPassiveMode(enabled);
+  }
+
+  /** Returns true if passive mode is currently enabled. */
+  async isPassiveMode(): Promise<boolean> {
+    if (Platform.OS !== 'android' || !DnsVpn) return false;
+    return DnsVpn.isPassiveMode() as Promise<boolean>;
   }
 }
 

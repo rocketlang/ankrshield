@@ -334,6 +334,19 @@ export function SettingsScreen({ navigation }: any) {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Help</Text>
 
+        <TouchableOpacity
+          style={styles.settingRow}
+          onPress={() => navigation.navigate('SplitTunnel')}
+        >
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>🔀 App Bypass (Split Tunnel)</Text>
+            <Text style={styles.settingDescription}>
+              Choose which apps bypass DNS filtering — banking & payment apps recommended
+            </Text>
+          </View>
+          <Text style={styles.settingValue}>&gt;</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('Mdm')}>
           <View style={styles.settingInfo}>
             <Text style={styles.settingLabel}>🏢 Corporate Shield</Text>

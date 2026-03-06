@@ -51,6 +51,7 @@ import { RiskLookupScreen } from './src/screens/RiskLookupScreen';
 import { SafeBrowsingScreen } from './src/screens/SafeBrowsingScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { SmsShieldScreen } from './src/screens/SmsShieldScreen';
+import SplitTunnelScreen from './src/screens/SplitTunnelScreen';
 import { SpywareScanScreen } from './src/screens/SpywareScanScreen';
 import { StalkerwareScreen } from './src/screens/StalkerwareScreen';
 import { ThreatAlertsScreen } from './src/screens/ThreatAlertsScreen';
@@ -634,6 +635,17 @@ function App(): React.JSX.Element {
               title: '🛡️ Account Guard',
               headerStyle: { backgroundColor: '#0a0e0b' },
               headerTintColor: '#22c55e',
+            }}
+          />
+
+          {/* A1-4 — Split Tunnel (per-app DNS bypass + passive mode) */}
+          <Stack.Screen
+            name="SplitTunnel"
+            component={eb(SplitTunnelScreen, 'SplitTunnel')}
+            options={{
+              title: '🔀 App Bypass',
+              headerStyle: { backgroundColor: '#0f172a' },
+              headerTintColor: '#3b82f6',
             }}
           />
 

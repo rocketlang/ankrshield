@@ -19,6 +19,9 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -71,6 +74,12 @@ public class DnsVpnService extends VpnService {
     static volatile boolean paused       = false;
     static volatile long    pauseUntilMs = 0;  // 0 = indefinite (call-driven)
 
+
+    // Split-tunnel bypass: package names in this set bypass DNS filtering (VPN excluded)
+    static final Set<String> bypassPackages = Collections.synchronizedSet(new HashSet<>());
+    // Passive mode: intercept + log but never block
+    static volatile boolean passiveMode = false;
+
     private ParcelFileDescriptor vpnInterface;
     private Thread               packetThread;
     private SQLiteDatabase       trackerDb;
@@ -99,6 +108,22 @@ public class DnsVpnService extends VpnService {
             paused = false;
             pauseUntilMs = 0;
             Log.i(TAG, "AnkrShield DNS resumed manually");
+            return START_STICKY;
+        }
+        if ("REBUILD".equals(action)) {
+            // Rebuild VPN interface to apply new bypass list
+            if (vpnInterface != null) {
+                try {
+                    vpnInterface.close();
+                } catch (Exception ignored) {}
+                vpnInterface = null;
+            }
+            try {
+                establishVpnInterface();
+                Log.i(TAG, "AnkrShield VPN rebuilt with " + bypassPackages.size() + " bypass apps");
+            } catch (Exception e) {
+                Log.e(TAG, "VPN rebuild failed", e);
+            }
             return START_STICKY;
         }
         startVpn();
@@ -172,6 +197,11 @@ public class DnsVpnService extends VpnService {
                .setBlocking(true)
                .setMtu(1500)
                .addDisallowedApplication(getPackageName()); // Don't route our own traffic
+
+        // Apply per-app bypass: excluded apps bypass DNS interception entirely
+        for (String pkg : bypassPackages) {
+            try { builder.addDisallowedApplication(pkg); } catch (Exception ignored) {}
+        }
 
         vpnInterface = builder.establish();
         if (vpnInterface == null) {
@@ -324,7 +354,13 @@ public class DnsVpnService extends VpnService {
                     Log.i(TAG, "AnkrShield DNS bypass expired — protection resumed");
                 }
 
+                // In passive mode, detect but never block (advisory only)
                 TrackerMatch match = paused ? null : lookupTracker(domain);
+                if (passiveMode && match != null) {
+                    // report as advisory, then pass through
+                    broadcastDnsEvent(domain, false, match.category + ":advisory", match.vendor);
+                    match = null;
+                }
 
                 if (match != null) {
                     // BLOCKED — synthesise NXDOMAIN response

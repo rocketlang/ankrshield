@@ -9,7 +9,14 @@ import androidx.annotation.Nullable;
 
 import com.facebook.react.bridge.ActivityEventListener;
 import com.facebook.react.bridge.Arguments;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.ReadableArray;
+import com.facebook.react.bridge.WritableArray;
+import com.facebook.react.bridge.WritableNativeArray;
+import com.facebook.react.bridge.WritableNativeMap;
+import java.util.List;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -179,6 +186,76 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
                 .emit(eventName, params);
         } catch (Exception ignored) {}
+    }
+
+
+    /** Returns list of installed user apps {packageName, appName, icon}. */
+    @ReactMethod
+    public void getInstalledApps(Promise promise) {
+        PackageManager pm = getReactApplicationContext().getPackageManager();
+        List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
+        WritableArray result = new WritableNativeArray();
+        String myPkg = getReactApplicationContext().getPackageName();
+        for (ApplicationInfo app : apps) {
+            // Skip system apps and ourselves
+            if ((app.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
+            if (app.packageName.equals(myPkg)) continue;
+            WritableNativeMap entry = new WritableNativeMap();
+            entry.putString("packageName", app.packageName);
+            entry.putString("appName", (String) pm.getApplicationLabel(app));
+            entry.putBoolean("bypassed", DnsVpnService.bypassPackages.contains(app.packageName));
+            result.pushMap(entry);
+        }
+        promise.resolve(result);
+    }
+
+    /** Set the full bypass list; restarts VPN interface if running. */
+    @ReactMethod
+    public void setBypassApps(ReadableArray packages, Promise promise) {
+        DnsVpnService.bypassPackages.clear();
+        for (int i = 0; i < packages.size(); i++) {
+            DnsVpnService.bypassPackages.add(packages.getString(i));
+        }
+        if (DnsVpnService.running) {
+            // Rebuild VPN to apply new bypass list
+            Intent intent = new Intent(getReactApplicationContext(), DnsVpnService.class);
+            intent.setAction("REBUILD");
+            getReactApplicationContext().startService(intent);
+        }
+        promise.resolve(null);
+    }
+
+    /** Toggle one package in/out of the bypass list. */
+    @ReactMethod
+    public void toggleBypassApp(String packageName, boolean bypass, Promise promise) {
+        if (bypass) DnsVpnService.bypassPackages.add(packageName);
+        else        DnsVpnService.bypassPackages.remove(packageName);
+        if (DnsVpnService.running) {
+            Intent intent = new Intent(getReactApplicationContext(), DnsVpnService.class);
+            intent.setAction("REBUILD");
+            getReactApplicationContext().startService(intent);
+        }
+        promise.resolve(null);
+    }
+
+    /** Get current bypass list as array of package name strings. */
+    @ReactMethod
+    public void getBypassApps(Promise promise) {
+        WritableArray result = new WritableNativeArray();
+        for (String pkg : DnsVpnService.bypassPackages) result.pushString(pkg);
+        promise.resolve(result);
+    }
+
+    /** Enable or disable passive mode (detect but never block). */
+    @ReactMethod
+    public void setPassiveMode(boolean enabled, Promise promise) {
+        DnsVpnService.passiveMode = enabled;
+        promise.resolve(null);
+    }
+
+    @ReactMethod
+    public void isPassiveMode(Promise promise) {
+        promise.resolve(DnsVpnService.passiveMode);
     }
 
     @ReactMethod
