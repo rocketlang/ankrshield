@@ -7,8 +7,8 @@
     "domain": "xshieldai.com",
     "domains": ["xshieldai.com", "www.xshieldai.com", "shield.ankr.in"],
     "description": "Enterprise Digital Risk Protection (DRP). Domain risk scanning, 13-source threat intel, AI Warrior (Claude Sonnet 4.6), spyware detection, GitHub Action CI/CD gate.",
-    "target_audience": "Security teams, SMEs, DevOps engineers — priced out of Resecurity ($15K-$50K/yr)",
-    "status": "LIVE — production, Cloudflare + nginx",
+    "target_audience": "Security teams, SMEs, DevOps engineers \u2014 priced out of Resecurity ($15K-$50K/yr)",
+    "status": "LIVE \u2014 production, Cloudflare + nginx",
     "competitors": ["Resecurity", "Recorded Future", "ZeroFox"],
     "pricing": "$0 (10 scans/month) | $99/month (500 scans) | $499/month (unlimited) | Enterprise custom",
     "infra_layer": "ankrshield-api (port 4480)",
@@ -42,7 +42,7 @@
       "xshield.brand.impersonation_found"
     ],
     "auth": "X-API-Key header (tier-gated) or Bearer JWT. Free tier: IP-based, 5 domains/day.",
-    "github_action": "ankrlabs/xshield-scan — fail CI pipelines on high risk score",
+    "github_action": "ankrlabs/xshield-scan \u2014 fail CI pipelines on high risk score",
     "capability_audit": {
       "domain_risk_scan": {
         "status": "built",
@@ -68,7 +68,7 @@
             "path": "/risk/score?domain=X",
             "body": [],
             "returns": "{ domain, score: 0-100, level: MINIMAL|LOW|MEDIUM|HIGH|CRITICAL, categories, lastSeen, serverIp }",
-            "auth": "optional — free tier IP-limited"
+            "auth": "optional \u2014 free tier IP-limited"
           },
           "report": {
             "method": "GET",
@@ -288,7 +288,7 @@
       },
       "dns_audit": {
         "status": "built",
-        "what": "Full DNS security posture — SPF, DMARC, DNSSEC, CAA, MX.",
+        "what": "Full DNS security posture \u2014 SPF, DMARC, DNSSEC, CAA, MX.",
         "routes": {
           "lookup": {
             "method": "GET",
@@ -386,13 +386,13 @@
             "method": "POST",
             "path": "/billing/webhook",
             "body": [],
-            "returns": "Stripe webhook handler — checkout, subscription, invoice"
+            "returns": "Stripe webhook handler \u2014 checkout, subscription, invoice"
           }
         }
       },
       "apk_download": {
         "status": "built",
-        "what": "AnkrShield Android APK — production and debug builds.",
+        "what": "AnkrShield Android APK \u2014 production and debug builds.",
         "routes": {
           "prod": {
             "method": "GET",
@@ -415,13 +415,13 @@
     "service_key": "ankrshield-consumer",
     "product_name": "AnkrShield",
     "domain": "ankrshield.com",
-    "status": "PRE-LAUNCH — MVP 95%. APK built. Domain not live.",
-    "target_audience": "Individual privacy advocates — personal devices, families",
+    "status": "PRE-LAUNCH \u2014 MVP 95%. APK built. Domain not live.",
+    "target_audience": "Individual privacy advocates \u2014 personal devices, families",
     "pricing": "$0 (free) | $9.99/month Pro (VPN, 10 devices) | $49/user/month Enterprise",
     "competitors": ["Little Snitch ($45)", "Ghostery (free)", "Pi-hole (free)", "Mullvad VPN"],
     "what_exists": {
-      "android_apk": "v1.3.3 — built, signed, downloadable at /download/ankrshield.apk",
-      "desktop_app": "Electron — Windows/macOS/Linux (built)",
+      "android_apk": "v1.3.3 \u2014 built, signed, downloadable at /download/ankrshield.apk",
+      "desktop_app": "Electron \u2014 Windows/macOS/Linux (built)",
       "api_server": "Shares main API server with xShieldAI (feature-gated by tier)",
       "landing_page": "partial"
     },
@@ -556,14 +556,16 @@
             "method": "DELETE",
             "path": "/account",
             "body": [],
-            "returns": "{ ok } — full erasure"
+            "returns": "{ ok } \u2014 full erasure"
           }
         }
       },
       "last_audited": "2026-04-05"
     }
   },
-  "claw_mask": 0,
+  "claw_mask": 42092,
   "claw_mask_schema": "claw-design-16bit-v1",
-  "claw_mask_note": "Multi-brand combined codex (_products: xshieldai + ankrshield_consumer). Not a single service codex. claw_mask=0 pending per-brand audit. 2026-04-05."
+  "claw_mask_note": "7/16: 2,3,5,6,10,13,15. +Bit2: limit capped in watch alerts (min(limit,200)) main.ts:2239. +Bit3: /health main.ts:392. +Bit5: addHook(onRequest) main.ts:519. +Bit6: no force:true. +Bit10: rateLimit plugin main.ts:2484+. +Bit13: SSE device stream main.ts:1142. +Bit15: pnpm monorepo. Bit0: no top-level can_answer (nested per-brand). Bit7: @rule=0. Bit8: no Forja. Audit 2026-04-05.",
+  "claude_ankr_mask": 2,
+  "claude_ankr_mask_note": "CA-001 no overflow escape \u274c CA-002 no force:true \u2705 CA-003 no Forja SENSE \u274c CA-004 no duration_ms \u274c CA-005 AI narrative no human-edit path \u274c"
 }
