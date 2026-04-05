@@ -1,0 +1,569 @@
+{
+  "_products": "Two brands, one codebase, one API server. Feature-gated by subscription tier.",
+  "xshieldai": {
+    "service_key": "xshieldai",
+    "product_name": "xShieldAI",
+    "port": 8080,
+    "domain": "xshieldai.com",
+    "domains": ["xshieldai.com", "www.xshieldai.com", "shield.ankr.in"],
+    "description": "Enterprise Digital Risk Protection (DRP). Domain risk scanning, 13-source threat intel, AI Warrior (Claude Sonnet 4.6), spyware detection, GitHub Action CI/CD gate.",
+    "target_audience": "Security teams, SMEs, DevOps engineers — priced out of Resecurity ($15K-$50K/yr)",
+    "status": "LIVE — production, Cloudflare + nginx",
+    "competitors": ["Resecurity", "Recorded Future", "ZeroFox"],
+    "pricing": "$0 (10 scans/month) | $99/month (500 scans) | $499/month (unlimited) | Enterprise custom",
+    "infra_layer": "ankrshield-api (port 4480)",
+    "can_answer": [
+      "What is the threat risk score for this domain?",
+      "Has this domain appeared in breach databases?",
+      "Are there phishing or typosquat variants of this domain?",
+      "What MITRE ATT&CK techniques are active against this target?",
+      "Is this IP associated with known C2 infrastructure?",
+      "What exposed secrets exist in this GitHub repository?",
+      "Has this phone number been hijacked or spoofed?"
+    ],
+    "can_do": [
+      "DOMAIN_RISK_SCAN",
+      "PHONE_RISK_CHECK",
+      "TYPOSQUAT_DETECTION",
+      "DOMAIN_WATCH_MONITOR",
+      "SPYWARE_APK_SCAN",
+      "THREAT_NARRATIVE_AI",
+      "GITHUB_ACTION_GATE",
+      "IOC_FEED_STIX_TAXII",
+      "CERT_IN_EVIDENCE_REPORT",
+      "BRAND_IMPERSONATION_CHECK",
+      "DNS_SECURITY_AUDIT",
+      "SIEM_WEBHOOK_STREAM"
+    ],
+    "emits": [
+      "xshield.domain.risk_score_updated",
+      "xshield.watch.alert_triggered",
+      "xshield.phone.hijack_detected",
+      "xshield.brand.impersonation_found"
+    ],
+    "auth": "X-API-Key header (tier-gated) or Bearer JWT. Free tier: IP-based, 5 domains/day.",
+    "github_action": "ankrlabs/xshield-scan — fail CI pipelines on high risk score",
+    "capability_audit": {
+      "domain_risk_scan": {
+        "status": "built",
+        "what": "13-source parallel domain risk scan. 0-100 score. MITRE ATT&CK v15 mapping.",
+        "sources": [
+          "GreyNoise",
+          "AlienVault OTX",
+          "Shodan",
+          "HIBP",
+          "urlscan.io",
+          "crt.sh",
+          "DNS",
+          "psbdmp.ws",
+          "SPF/DMARC/DNSSEC",
+          "OpenPhish+SURBL+PhishStats",
+          "IP-API+ASN",
+          "GitHub code search",
+          "Feodo Tracker+ThreatFox"
+        ],
+        "routes": {
+          "score": {
+            "method": "GET",
+            "path": "/risk/score?domain=X",
+            "body": [],
+            "returns": "{ domain, score: 0-100, level: MINIMAL|LOW|MEDIUM|HIGH|CRITICAL, categories, lastSeen, serverIp }",
+            "auth": "optional — free tier IP-limited"
+          },
+          "report": {
+            "method": "GET",
+            "path": "/risk/report?domain=X",
+            "body": [],
+            "returns": "{ domain, riskScore, riskLevel, factors, serverIp, generatedAt }",
+            "auth": "required"
+          },
+          "playbook": {
+            "method": "GET",
+            "path": "/risk/playbook?domain=X",
+            "body": [],
+            "returns": "{ steps: [{action, description, impact}] }",
+            "auth": "API key required"
+          },
+          "narrative": {
+            "method": "GET",
+            "path": "/risk/narrative?domain=X",
+            "body": [],
+            "returns": "{ domain, narrative, summary }",
+            "model": "Claude Sonnet 4.6 via AI Proxy"
+          },
+          "phishing": {
+            "method": "GET",
+            "path": "/risk/phishing-kit?domain=X",
+            "body": [],
+            "returns": "phishing kit fingerprint"
+          },
+          "india": {
+            "method": "GET",
+            "path": "/risk/india-threat?domain=X&ip=X",
+            "body": [],
+            "returns": "India-specific threat intel"
+          },
+          "ip": {
+            "method": "GET",
+            "path": "/risk/ip/:ip",
+            "body": [],
+            "returns": "{ ip, reputation, asn, bulletproof_hosting, reports }"
+          },
+          "typosquats": {
+            "method": "GET",
+            "path": "/risk/typosquats?domain=X",
+            "body": [],
+            "returns": "[{ variant, registered, registrant, riskLevel }]"
+          }
+        },
+        "graphql": [
+          "xshieldScan(domain)",
+          "xshieldPlaybook(domain)",
+          "xshieldTyposquats(domain)",
+          "xshieldIocFeed",
+          "xshieldStatus"
+        ]
+      },
+      "phone_risk": {
+        "status": "built",
+        "what": "Check if phone number has been hijacked or spoofed. Crowd-source reports.",
+        "routes": {
+          "check": {
+            "method": "GET",
+            "path": "/risk/phone?number=X",
+            "body": [],
+            "returns": "{ number, risk_level, hijacked, spoofed, reports_count, platform_hits }",
+            "rate_limits": "FREE:50/day STARTER:500/day PRO:5000/day"
+          },
+          "report": {
+            "method": "POST",
+            "path": "/risk/phone/report",
+            "body": [
+              "number",
+              "platform: whatsapp|telegram|instagram|facebook|gmail|other",
+              "notes?"
+            ],
+            "returns": "{ ok }"
+          }
+        }
+      },
+      "domain_watch": {
+        "status": "built",
+        "what": "Continuous domain monitoring. Alerts on risk changes, new lookalikes, cert changes.",
+        "routes": {
+          "add": {
+            "method": "POST",
+            "path": "/watch/domain",
+            "body": ["domain", "webhookUrl?"],
+            "returns": "watch object with alerts"
+          },
+          "remove": {
+            "method": "DELETE",
+            "path": "/watch/domain/:domain",
+            "body": [],
+            "returns": "{ ok }"
+          },
+          "list": {
+            "method": "GET",
+            "path": "/watch/domains",
+            "body": [],
+            "returns": "{ watches: [{ domain, createdAt, alerts }] }"
+          },
+          "alerts": {
+            "method": "GET",
+            "path": "/watch/domain/:domain/alerts?limit=50",
+            "body": [],
+            "returns": "{ domain, alerts: [{ triggeredAt, changeType, detail }] }"
+          }
+        },
+        "graphql": [
+          "xshieldWatches",
+          "xshieldWatchAlerts(watchId)",
+          "xshieldAddWatch(input)",
+          "xshieldRemoveWatch(watchId)",
+          "xshieldPauseWatch(watchId)",
+          "xshieldResumeWatch(watchId)"
+        ]
+      },
+      "spyware_detection": {
+        "status": "built",
+        "what": "8-engine spyware scan. Detects Pegasus, Candiru, APT groups, Linux rootkits, CVEs.",
+        "engines": [
+          "NetworkIOCDetector",
+          "AptC2Detector",
+          "ProcessDetector",
+          "FileArtifactDetector",
+          "LinuxRootkitDetector",
+          "CveDetector",
+          "YaraDetector (11 rules)",
+          "LiveIocDetector"
+        ],
+        "targets": [
+          "Pegasus",
+          "Candiru",
+          "Predator",
+          "FinFisher",
+          "Hermit",
+          "Lazarus",
+          "APT41",
+          "Sandworm",
+          "BPFDoor",
+          "XZ Utils backdoor"
+        ],
+        "routes": {
+          "scan": {
+            "method": "POST",
+            "path": "/warrior/spyware-scan",
+            "body": ["sha256", "fileName?"],
+            "returns": "{ infected, detections: [{family, severity, iocs}] }"
+          }
+        }
+      },
+      "ai_warrior": {
+        "status": "built",
+        "what": "Claude Sonnet 4.6 attack chain correlation + policy generation + honeypot.",
+        "model": "claude-sonnet-4-6 via AI Proxy",
+        "routes": {
+          "preblocked": {
+            "method": "GET",
+            "path": "/warrior/preblocked-ips",
+            "body": [],
+            "returns": "{ total, cacheSize, threshold, recent: [{ip, reason, score}] }"
+          },
+          "android": {
+            "method": "POST",
+            "path": "/warrior/android-check",
+            "body": ["apps: [{packageName, version}]", "system_props"],
+            "returns": "{ security_score, vulnerabilities }"
+          },
+          "evidence": {
+            "method": "GET",
+            "path": "/warrior/evidence-report",
+            "body": [],
+            "returns": "incident evidence report (CERT-In format)"
+          },
+          "honeypot": {
+            "method": "GET",
+            "path": "/warrior/honeypot-hits",
+            "body": [],
+            "returns": "[{ ip, ts, path, method, userAgent }]"
+          },
+          "threats": {
+            "method": "GET",
+            "path": "/warrior/threats/live",
+            "body": [],
+            "returns": "SSE JSON lines of live threat events"
+          },
+          "monitor": {
+            "method": "GET",
+            "path": "/monitor/stats",
+            "body": [],
+            "returns": "{ detected_bots, blocked_requests, top_sources }"
+          }
+        },
+        "graphql": [
+          "warriorStatus",
+          "attackChains(limit, minThreatScore)",
+          "scopeViolations",
+          "generatedPolicies",
+          "quarantinedAgents",
+          "honeypotAssets",
+          "warriorEvents",
+          "incidentReport",
+          "deployDefaultHoneypots",
+          "addHoneypot(input)"
+        ]
+      },
+      "brand_impersonation": {
+        "status": "built",
+        "what": "Detect brand name similarity and impersonation candidates.",
+        "routes": {
+          "check": {
+            "method": "GET",
+            "path": "/brand/report?brandTerms=X&candidates=X",
+            "body": [],
+            "returns": "{ candidates: [{ name, similarity_score, flagged_reason }] }"
+          }
+        }
+      },
+      "dns_audit": {
+        "status": "built",
+        "what": "Full DNS security posture — SPF, DMARC, DNSSEC, CAA, MX.",
+        "routes": {
+          "lookup": {
+            "method": "GET",
+            "path": "/dns/lookup?domain=X",
+            "body": [],
+            "returns": "{ domain, dns_records, spf_policy, dmarc_policy, dnssec_valid, caa_records }"
+          },
+          "summary": {
+            "method": "GET",
+            "path": "/dns/summary?domain=X",
+            "body": [],
+            "returns": "{ grade: A|B|C, issues }"
+          }
+        }
+      },
+      "api_key_management": {
+        "status": "built",
+        "what": "Create, list, revoke API keys. Secret shown ONCE at creation.",
+        "routes": {
+          "create": {
+            "method": "POST",
+            "path": "/api-keys",
+            "body": ["name", "tier?"],
+            "returns": "{ id, prefix: 'xsh_live...', secret: ONE_TIME_ONLY, createdAt }"
+          },
+          "list": {
+            "method": "GET",
+            "path": "/api-keys",
+            "body": [],
+            "returns": "[{ id, name, prefix, tier, usedThisMonth, monthlyQuota, lastUsedAt, isActive }]"
+          },
+          "revoke": {
+            "method": "DELETE",
+            "path": "/api-keys/:id",
+            "body": [],
+            "returns": "{ ok }"
+          }
+        },
+        "graphql": ["xshieldApiKey(keyPrefix)", "xshieldCreateApiKey(input)"],
+        "note": "rawKey/secret shown ONCE at creation. No recovery path."
+      },
+      "siem_enterprise": {
+        "status": "built",
+        "what": "SIEM webhook streaming + enterprise audit log + DPDP/SOC2 reporting.",
+        "routes": {
+          "siem_register": {
+            "method": "POST",
+            "path": "/enterprise/siem/webhook",
+            "body": ["webhookUrl", "format?"],
+            "returns": "{ id, registered }"
+          },
+          "siem_test": {
+            "method": "POST",
+            "path": "/enterprise/siem/test",
+            "body": [],
+            "returns": "{ ok, latencyMs }"
+          },
+          "audit": {
+            "method": "GET",
+            "path": "/enterprise/audit-log",
+            "body": [],
+            "returns": "[AuditEntry]"
+          },
+          "dpdp_report": {
+            "method": "GET",
+            "path": "/enterprise/dpdp-report",
+            "body": [],
+            "returns": "DPDP compliance report"
+          }
+        }
+      },
+      "billing": {
+        "status": "built",
+        "what": "Stripe subscription + plan management.",
+        "routes": {
+          "checkout": {
+            "method": "POST",
+            "path": "/billing/checkout",
+            "body": ["planId: free|starter|pro", "email?"],
+            "returns": "{ checkoutUrl, sessionId }"
+          },
+          "portal": {
+            "method": "GET",
+            "path": "/billing/portal",
+            "body": [],
+            "returns": "{ portalUrl }"
+          },
+          "plans": {
+            "method": "GET",
+            "path": "/billing/plans",
+            "body": [],
+            "returns": "[{id, name, price, currency, interval, scans, features}]"
+          },
+          "webhook": {
+            "method": "POST",
+            "path": "/billing/webhook",
+            "body": [],
+            "returns": "Stripe webhook handler — checkout, subscription, invoice"
+          }
+        }
+      },
+      "apk_download": {
+        "status": "built",
+        "what": "AnkrShield Android APK — production and debug builds.",
+        "routes": {
+          "prod": {
+            "method": "GET",
+            "path": "/download/ankrshield.apk",
+            "body": [],
+            "returns": "APK binary (32MB)"
+          },
+          "debug": {
+            "method": "GET",
+            "path": "/download/ankrshield-debug.apk",
+            "body": [],
+            "returns": "APK binary with extended logging (166MB)"
+          }
+        }
+      },
+      "last_audited": "2026-04-05"
+    }
+  },
+  "ankrshield_consumer": {
+    "service_key": "ankrshield-consumer",
+    "product_name": "AnkrShield",
+    "domain": "ankrshield.com",
+    "status": "PRE-LAUNCH — MVP 95%. APK built. Domain not live.",
+    "target_audience": "Individual privacy advocates — personal devices, families",
+    "pricing": "$0 (free) | $9.99/month Pro (VPN, 10 devices) | $49/user/month Enterprise",
+    "competitors": ["Little Snitch ($45)", "Ghostery (free)", "Pi-hole (free)", "Mullvad VPN"],
+    "what_exists": {
+      "android_apk": "v1.3.3 — built, signed, downloadable at /download/ankrshield.apk",
+      "desktop_app": "Electron — Windows/macOS/Linux (built)",
+      "api_server": "Shares main API server with xShieldAI (feature-gated by tier)",
+      "landing_page": "partial"
+    },
+    "what_is_not_built": [
+      "ankrshield.com domain not live",
+      "iOS app (React Native, in progress)",
+      "Payment flow (Stripe keys present, no subscription UI)",
+      "MDM integration",
+      "Zero-trust network access"
+    ],
+    "can_do": [
+      "TRACKER_BLOCKING",
+      "DNS_OVER_HTTPS",
+      "DEVICE_FLEET_MANAGEMENT",
+      "PRIVACY_SCORE",
+      "SPYWARE_DETECTION",
+      "AI_TOOL_ACTIVITY_LOG",
+      "DOWNLOAD_APK"
+    ],
+    "capability_audit": {
+      "device_management": {
+        "status": "built",
+        "what": "Multi-device tracker and threat telemetry. SSE stream for real-time.",
+        "routes": {
+          "stats": {
+            "method": "GET",
+            "path": "/device/stats",
+            "body": [],
+            "returns": "aggregate security stats"
+          },
+          "record": {
+            "method": "POST",
+            "path": "/device/stats",
+            "body": ["deviceId", "trackers_blocked", "ips_blocked", "threats_detected"],
+            "returns": "{ ok }"
+          },
+          "history": {
+            "method": "GET",
+            "path": "/device/history/:deviceId",
+            "body": [],
+            "returns": "[DeviceEvent { tracker blocks, IP blocks }]"
+          },
+          "stream": {
+            "method": "GET",
+            "path": "/device/stream/:deviceId",
+            "body": [],
+            "returns": "SSE stream of real-time device events"
+          },
+          "audit": {
+            "method": "GET",
+            "path": "/device/audit/:deviceId",
+            "body": [],
+            "returns": "[AuditEntry for device actions]"
+          },
+          "push": {
+            "method": "POST",
+            "path": "/device/push",
+            "body": ["deviceId", "title", "body", "actionUrl?"],
+            "returns": "{ ok }"
+          }
+        }
+      },
+      "privacy_score": {
+        "status": "built",
+        "what": "Daily privacy score 0-100 from tracker blocks, threats, network behavior.",
+        "graphql": [
+          "privacyScores(limit, period)",
+          "trackers(limit, category?)",
+          "networkEvents(limit, offset, deviceId?)"
+        ]
+      },
+      "auth": {
+        "status": "built",
+        "what": "JWT (24h) + httpOnly refresh cookie (7d). Email verification, password reset.",
+        "routes": {
+          "register": {
+            "method": "POST",
+            "path": "/auth/register",
+            "body": ["email", "password", "name?"],
+            "returns": "{ token: JWT(24h), user: {id, email, name, tier} }"
+          },
+          "login": {
+            "method": "POST",
+            "path": "/auth/login",
+            "body": ["email", "password"],
+            "returns": "{ token, user }"
+          },
+          "refresh": {
+            "method": "POST",
+            "path": "/auth/refresh",
+            "body": [],
+            "returns": "new JWT (uses httpOnly cookie xsh_refresh)"
+          },
+          "me": {
+            "method": "GET",
+            "path": "/auth/me",
+            "body": [],
+            "returns": "current user profile"
+          },
+          "pw_reset": {
+            "method": "POST",
+            "path": "/auth/password-reset",
+            "body": ["email"],
+            "returns": "{ ok }"
+          },
+          "pw_confirm": {
+            "method": "POST",
+            "path": "/auth/password-reset/confirm",
+            "body": ["token", "newPassword"],
+            "returns": "{ ok }"
+          }
+        },
+        "graphql": ["me", "register(input)", "login(input)"]
+      },
+      "data_rights": {
+        "status": "built",
+        "what": "GDPR/DPDP right to data access and erasure.",
+        "routes": {
+          "summary": {
+            "method": "GET",
+            "path": "/account/data-summary",
+            "body": [],
+            "returns": "data stored by ANKR"
+          },
+          "export": {
+            "method": "GET",
+            "path": "/account/export",
+            "body": [],
+            "returns": "JSON/CSV download of all personal data"
+          },
+          "delete": {
+            "method": "DELETE",
+            "path": "/account",
+            "body": [],
+            "returns": "{ ok } — full erasure"
+          }
+        }
+      },
+      "last_audited": "2026-04-05"
+    }
+  },
+  "claw_mask": 0,
+  "claw_mask_schema": "claw-design-16bit-v1",
+  "claw_mask_note": "Multi-brand combined codex (_products: xshieldai + ankrshield_consumer). Not a single service codex. claw_mask=0 pending per-brand audit. 2026-04-05."
+}
