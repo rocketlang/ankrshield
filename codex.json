@@ -567,5 +567,11 @@
   "claw_mask_schema": "claw-design-16bit-v1",
   "claw_mask_note": "7/16: 2,3,5,6,10,13,15. +Bit2: limit capped in watch alerts (min(limit,200)) main.ts:2239. +Bit3: /health main.ts:392. +Bit5: addHook(onRequest) main.ts:519. +Bit6: no force:true. +Bit10: rateLimit plugin main.ts:2484+. +Bit13: SSE device stream main.ts:1142. +Bit15: pnpm monorepo. Bit0: no top-level can_answer (nested per-brand). Bit7: @rule=0. Bit8: no Forja. Audit 2026-04-05.",
   "claude_ankr_mask": 2,
-  "claude_ankr_mask_note": "CA-001 no overflow escape \u274c CA-002 no force:true \u2705 CA-003 no Forja SENSE \u274c CA-004 no duration_ms \u274c CA-005 AI narrative no human-edit path \u274c"
+  "claude_ankr_mask_note": "CA-001 no overflow escape \u274c CA-002 no force:true \u2705 CA-003 no Forja SENSE \u274c CA-004 no duration_ms \u274c CA-005 AI narrative no human-edit path \u274c",
+  "gap_classification": {
+    "schema": "ankr-gap-class-v1",
+    "cgin_gaps": [1, 4, 8, 11],
+    "structural_gaps": [0, 7, 9, 12, 14],
+    "note": "cgin_gaps: no customer impact \u2014 platform intelligence backlog. structural_gaps: prioritise before external exposure."
+  }
 }
