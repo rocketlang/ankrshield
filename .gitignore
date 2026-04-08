@@ -1,3 +1,14 @@
+# xShieldAI Enterprise Edition — not in this repo
+# See: github.com/rocketlang/ankrshield-ee (private)
+packages/ai-warrior/
+packages/ai-governance/
+packages/spyware-detector/
+packages/ankrshield-mdm-bridge/
+apps/xshield-active-api/
+apps/mobile-android/
+apps/mobile-ios/
+apps/desktop/
+
 # Dependencies
 node_modules/
 .pnp
