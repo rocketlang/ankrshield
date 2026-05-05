@@ -114,6 +114,11 @@ export interface VesselState {
   // Posture
   postureScore: number | null;
   senseEvents: SenseEvent[];
+
+  // Phase 2 — IACS compliance + score history
+  iacs_audit: IACSCapabilityResult[];
+  protocol_audit: ProtocolAuditResult[];
+  score_history: ScoreHistoryEntry[];
 }
 
 const store = new Map<string, VesselState>();
@@ -137,6 +142,9 @@ export function getVessel(vessel_id: string): VesselState {
       topology: null,
       postureScore: null,
       senseEvents: [],
+      iacs_audit: [],
+      protocol_audit: [],
+      score_history: [],
     });
   }
   return store.get(vessel_id)!;
@@ -148,4 +156,40 @@ export function listVessels(): string[] {
 
 export function tupleKey(t: ModbusTuple): string {
   return `${t.src_ip}:${t.unit_id}:${t.function_code}:${t.register}`;
+}
+
+// ─── Phase 2 types ────────────────────────────────────────────────────────────
+
+export type ComplianceStatus = 'PASS' | 'PARTIAL' | 'FAIL' | 'UNKNOWN';
+
+export interface IACSCapabilityResult {
+  cap_id: string;
+  name: string;
+  iacs_clause: string;
+  rule_id: string;
+  status: ComplianceStatus;
+  evidence: string;
+  assessed_at: number;
+}
+
+export interface ProtocolAuditResult {
+  protocol: string;
+  rule_id: string;
+  status: ComplianceStatus;
+  detail: string;
+}
+
+export interface ScoreHistoryEntry {
+  posture_score: number;
+  posture_band: 'GREEN' | 'AMBER' | 'RED';
+  iacs_pass: number;
+  iacs_fail: number;
+  checkpoint_at: number;
+  trigger: string;
+}
+
+// @rule:P2-005 Append score history before any overwrite
+export function appendScoreHistory(vessel: VesselState, entry: ScoreHistoryEntry): void {
+  vessel.score_history.push(entry);
+  if (vessel.score_history.length > 200) vessel.score_history.shift();
 }
