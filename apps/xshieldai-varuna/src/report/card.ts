@@ -8,9 +8,10 @@
 
 import { buildTriggeredEvidencePack } from '../evidence/pack.js';
 import { runIACSScorer } from '../iacs/scorer.js';
+import { notifyShip8xCapabilityActive } from '../integrations/ship8x.js';
+import { computePostureScore } from '../posture/scorer.js';
 import { runProtocolScorer } from '../protocol/scorer.js';
 import { appendScoreHistory, getVessel } from '../store/vessel.js';
-import type { VesselState } from '../store/vessel.js';
 
 const AI_PROXY_URL = process.env['AI_PROXY_URL'] ?? 'http://localhost:4444';
 const ANKRCLAW_URL = process.env['ANKRCLAW_URL'] ?? 'http://localhost:4150';
@@ -67,10 +68,9 @@ export async function assembleReportCard(
   const protocol = runProtocolScorer(vessel);
   const evidence = buildTriggeredEvidencePack(vessel);
 
-  // Compute posture score (same logic as posture/routes.ts)
-  const postureScore = computePostureScore(vessel);
+  // Compute posture score from shared scorer
+  const { score: postureScore, band: posture_band } = computePostureScore(vessel);
   vessel.postureScore = postureScore;
-  const posture_band = postureScore >= 80 ? 'GREEN' : postureScore >= 50 ? 'AMBER' : 'RED';
 
   // Top findings: FAIL first, then PARTIAL, limited to 10
   const top_findings = [
@@ -136,32 +136,14 @@ export async function assembleReportCard(
     return { overflow_granthx_ref: ref, vessel_id };
   }
 
+  // @rule:P3-004 Notify Ship8x capability bit (fire-and-forget)
+  const _logStub = {
+    debug: (_ctx: object, _msg: string) => {},
+    warn: (_ctx: object, _msg: string) => {},
+  };
+  notifyShip8xCapabilityActive(vessel_id, postureScore, _logStub).catch(() => {});
+
   return card;
-}
-
-function computePostureScore(vessel: VesselState): number {
-  let deductions = 0;
-
-  const critModbus = vessel.modbusAnomalies.filter((a) => a.severity === 'CRITICAL').length;
-  const warnModbus = vessel.modbusAnomalies.filter((a) => a.severity === 'WARN').length;
-  deductions += Math.min(30, critModbus * 10);
-  deductions += Math.min(10, warnModbus * 2);
-  if (!vessel.modbusBaselineLocked && vessel.modbusBaseline.size > 0) deductions += 5;
-
-  const critNMEA = vessel.nmeaAnomalies.filter((a) => a.severity === 'CRITICAL').length;
-  deductions += Math.min(25, critNMEA * 10);
-
-  deductions += Math.min(15, vessel.gpsAnomalies.length * 5);
-
-  if (!vessel.topology) deductions += 10;
-  else if (vessel.topology.flat_network) deductions += 20;
-
-  const runaway = vessel.senseEvents.find(
-    (e) => e.event_type === 'vrn.runaway_diesel.precursor.detected'
-  );
-  if (runaway) deductions += 100;
-
-  return Math.max(0, 100 - Math.min(100, deductions));
 }
 
 async function generateExecutiveSummary(

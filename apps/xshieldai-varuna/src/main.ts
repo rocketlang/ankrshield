@@ -3,7 +3,7 @@
  *
  * Port: 4254 (from PORT env — never hardcoded per ankr-ctl policy)
  * Service key: xshieldai-varuna
- * Phase: 2 (IACS compliance + Report Card + evidence pack + score history)
+ * Phase: 3 (Continuous monitoring + crew roles + TAXII + Ship8x wire)
  */
 
 import cors from '@fastify/cors';
@@ -11,14 +11,17 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 
 import { registerAISRoutes } from './ais/routes.js';
+import { registerCrewRoutes } from './crew/routes.js';
 import { registerEvidenceRoutes } from './evidence/routes.js';
 import { registerForjaRoutes } from './forja/routes.js';
 import { registerIACSRoutes } from './iacs/routes.js';
 import { registerModbusRoutes } from './modbus/routes.js';
+import { startBackgroundMonitor } from './monitor/background.js';
 import { registerNMEARoutes } from './nmea/routes.js';
 import { registerPostureRoutes } from './posture/routes.js';
 import { registerProtocolRoutes } from './protocol/routes.js';
 import { registerReportRoutes } from './report/routes.js';
+import { registerTAXIIRoutes } from './taxii/routes.js';
 import { registerTopologyRoutes } from './topology/routes.js';
 
 // ─── Port guard ───────────────────────────────────────────────────────────────
@@ -62,7 +65,7 @@ app.get('/health', async () => ({
   service: 'xshieldai-varuna',
   version: '0.1.0',
   port: PORT,
-  phase: 'phase-2-iacs-report-card',
+  phase: 'phase-3-continuous-monitoring',
   timestamp: new Date().toISOString(),
 }));
 
@@ -77,13 +80,27 @@ await registerIACSRoutes(app);
 await registerProtocolRoutes(app);
 await registerEvidenceRoutes(app);
 await registerReportRoutes(app);
+await registerCrewRoutes(app);
+await registerTAXIIRoutes(app);
+
+// ─── Background monitor (hook must be before listen) ─────────────────────────
+let monitorHandle: ReturnType<typeof setInterval> | undefined;
+app.addHook('onClose', async () => {
+  if (monitorHandle) {
+    clearInterval(monitorHandle);
+    app.log.info('[monitor] Background monitor stopped');
+  }
+});
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 try {
   await app.listen({ port: parseInt(PORT), host: HOST });
   app.log.info(
-    `Varuna Maritime OT Posture running on port ${PORT} (Phase 2 — IACS/Report Card/Evidence/History)`
+    `Varuna Maritime OT Posture running on port ${PORT} (Phase 3 — Monitor/Crew/TAXII/Ship8x)`
   );
+
+  // @rule:P3-003 Start background posture degradation monitor after listen
+  monitorHandle = startBackgroundMonitor(app.log);
 } catch (err) {
   app.log.error(err);
   process.exit(1);
