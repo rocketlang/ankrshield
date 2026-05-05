@@ -60,17 +60,17 @@
   "trust_mask": 1,
   "trust_mask_schema": "ankr-trust-32bit-v1",
   "trust_mask_status": "provisional",
-  "k_mask": 79,
+  "k_mask": 127,
   "k_mask_schema": "ankr-prajna-8bit-v1",
-  "k_mask_note": "bit0=brainstorm(2026-04-15) bit1=project(2026-05-05) bit2=logics(2026-05-05) bit3=todo(2026-05-05) bit6=superdomain(2026-05-05). 69 VRN rules seeded. Missing: deep-knowledge(bit4), capability_audit(bit5), PROOF(bit7).",
+  "k_mask_note": "bits 0-6 set. bit0=brainstorm bit1=project bit2=logics bit3=todo bit4=deep-knowledge(2026-05-05) bit5=capability_audit(phase2) bit6=superdomain(69 VRN rules). Missing: PROOF sweep(bit7).",
   "claw_mask": 1,
   "claw_mask_schema": "claw-design-16bit-v1",
   "claw_mask_audited_at": "2026-05-05",
   "claw_mask_note": "Bit 0 set: declared surface (can_answer:10, can_do:12). Pre-build — bits 7/9/15 are near-miss, flip at first commit. Bits 1/2/3/5/8/12 flip in Phase 0 Forja wire. Bits 4/6/11/13/14 require Phase 1 architecture decisions.",
-  "claude_ankr_mask": 0,
+  "claude_ankr_mask": 29,
   "claude_ankr_mask_schema": "claude-ankr-5bit-v1",
   "claude_ankr_mask_audited_at": "2026-05-05",
-  "claude_ankr_mask_note": "0 = honest for pre-build. CA-001: need overflow_granthx_ref on posture payload. CA-002: confirm_disable_safety_coil naming on destructive routes. CA-003: before_snapshot on vrn.* SENSE events. CA-004: _meta on every resolver. CA-005: human_modified on report card findings.",
+  "claude_ankr_mask_note": "bit0=CA-001(overflow_granthx_ref in report card) bit2=CA-003(before/after on all SENSE events) bit3=CA-004(_meta on all resolvers) bit4=CA-005(human_modified:false on report card). bit1=CA-002 N/A (passive-only, no destructive ops).",
   "req_mask": 985037,
   "req_mask_schema": "ankr-req-32bit-v1",
   "req_mask_source": "declared",
@@ -92,7 +92,7 @@
   "capability_captured_schema": "ankr-archmask-v1",
   "capability_captured_note": "false until req_mask == trust_mask == forja_mask (ArchMask equality, Zenodo 10.5281/zenodo.19417112)",
   "capability_audit": {
-    "audit_status": "pre-build",
+    "audit_status": "phase-2-complete",
     "last_updated": "2026-05-05",
     "logics_doc": "xshieldai-varuna--logics--formal--2026-05-05.md",
     "shastra_rules": 50,
@@ -119,25 +119,32 @@
       "pentest_rules": ["VRN-041 to VRN-050"]
     },
     "capabilities": {
-      "ASSESS_VESSEL_OT_POSTURE": "not_built",
-      "SCORE_IACS_UR_E26_COMPLIANCE": "not_built",
-      "MONITOR_MODBUS_ANOMALIES": "not_built",
-      "DETECT_NMEA_INJECTION": "not_built",
-      "DETECT_AIS_SPOOFING": "not_built",
-      "DETECT_RUNAWAY_DIESEL_SEQUENCE": "not_built",
-      "GENERATE_POSTURE_REPORT_CARD": "not_built",
-      "MAP_VESSEL_PROTOCOL_SURFACE": "not_built",
-      "SCORE_VESSEL_PROTOCOL_SECURITY": "not_built",
+      "ASSESS_VESSEL_OT_POSTURE": "built",
+      "SCORE_IACS_UR_E26_COMPLIANCE": "built",
+      "MONITOR_MODBUS_ANOMALIES": "built",
+      "DETECT_NMEA_INJECTION": "built",
+      "DETECT_AIS_SPOOFING": "built",
+      "DETECT_RUNAWAY_DIESEL_SEQUENCE": "built",
+      "GENERATE_POSTURE_REPORT_CARD": "built",
+      "MAP_VESSEL_PROTOCOL_SURFACE": "built",
+      "SCORE_VESSEL_PROTOCOL_SECURITY": "built",
       "VALIDATE_OT_PENTEST_SCOPE": "not_built",
-      "BUILD_MODBUS_BASELINE": "not_built",
-      "CORRELATE_BRIDGE_PROTOCOL_ANOMALIES": "not_built"
+      "BUILD_MODBUS_BASELINE": "built",
+      "CORRELATE_BRIDGE_PROTOCOL_ANOMALIES": "built"
     },
     "counts": {
-      "built": 0,
+      "built": 11,
       "partial": 0,
       "unknown": 0,
-      "not_built": 12
-    }
+      "not_built": 1
+    },
+    "phase_2_built": [
+      "IACS UR E26/E27 25-capability scorer (CAP-01 to CAP-25)",
+      "Protocol posture scorer VRN-026 to VRN-040",
+      "Posture Report Card (JSON + PDF + WhatsApp)",
+      "Three-column evidence pack (VRN + IACS clause + MITRE ATT&CK ICS)",
+      "Score history append-only (P2-005)"
+    ]
   },
   "gap_classification": {
     "schema": "ankr-gap-class-v1",
