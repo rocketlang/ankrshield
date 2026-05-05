@@ -1,0 +1,210 @@
+{
+  "service": "xshieldai-varuna",
+  "port": 4254,
+  "domain": "xshieldai.com/maritime",
+  "description": "Varuna — Maritime OT Posture. IACS UR E26/E27 compliance scoring, vessel protocol security assessment (Modbus/NMEA/AIS/GPS), continuous posture monitoring, and P&I-ready Posture Report Card. 5th sibling of the xShieldAI Posture Suite.",
+  "rule_prefix": "VRN",
+  "product_family": "xShieldAI Maritime",
+  "sibling_position": 5,
+  "regulatory_anchors": [
+    "IACS UR E26",
+    "IACS UR E27",
+    "NIST CSF v2.0",
+    "IEC 62443-2-1",
+    "NIST SP 800-82r3"
+  ],
+  "can_answer": [
+    "What is the OT cyber posture score for this vessel?",
+    "Does this vessel comply with IACS UR E26/E27?",
+    "Which VRN rules does this vessel fail?",
+    "Has this vessel's Modbus bus shown anomalous write patterns?",
+    "What is the runaway-diesel risk for this engine configuration?",
+    "Is this vessel's NMEA bus showing injection anomalies?",
+    "What is the AIS integrity status for this vessel?",
+    "What protocol security gaps exist on this vessel's bridge network?",
+    "Is this vessel ready for P&I cyber renewal assessment?",
+    "What is the vessel's IACS UR E26 compliance gap?"
+  ],
+  "can_do": [
+    "ASSESS_VESSEL_OT_POSTURE",
+    "SCORE_IACS_UR_E26_COMPLIANCE",
+    "MONITOR_MODBUS_ANOMALIES",
+    "DETECT_NMEA_INJECTION",
+    "DETECT_AIS_SPOOFING",
+    "DETECT_RUNAWAY_DIESEL_SEQUENCE",
+    "GENERATE_POSTURE_REPORT_CARD",
+    "MAP_VESSEL_PROTOCOL_SURFACE",
+    "SCORE_VESSEL_PROTOCOL_SECURITY",
+    "VALIDATE_OT_PENTEST_SCOPE",
+    "BUILD_MODBUS_BASELINE",
+    "CORRELATE_BRIDGE_PROTOCOL_ANOMALIES"
+  ],
+  "emits": [
+    "vrn.modbus.anomaly.detected",
+    "vrn.nmea.injection.suspected",
+    "vrn.ais.spoofing.detected",
+    "vrn.runaway_diesel.precursor.detected",
+    "vrn.posture.score.computed",
+    "vrn.posture.degraded",
+    "vrn.iacs_compliance.gap.found",
+    "vrn.safety_system.integrity.alert",
+    "vrn.vendor_laptop.connection.detected",
+    "vrn.pentest.scope.validated"
+  ],
+  "depends_on": ["xshieldai", "ship8x", "superdomain", "ai-proxy"],
+  "forja_state": "/api/v2/forja/state",
+  "forja_trust": "/api/v2/forja/trust/:userId",
+  "forja_sense": "/api/v2/forja/sense/emit",
+  "forja_proof": "/api/v2/forja/proof",
+  "forja_version": "2.0",
+  "trust_mask": 1,
+  "trust_mask_schema": "ankr-trust-32bit-v1",
+  "trust_mask_status": "provisional",
+  "k_mask": 79,
+  "k_mask_schema": "ankr-prajna-8bit-v1",
+  "k_mask_note": "bit0=brainstorm(2026-04-15) bit1=project(2026-05-05) bit2=logics(2026-05-05) bit3=todo(2026-05-05) bit6=superdomain(2026-05-05). 69 VRN rules seeded. Missing: deep-knowledge(bit4), capability_audit(bit5), PROOF(bit7).",
+  "claw_mask": 1,
+  "claw_mask_schema": "claw-design-16bit-v1",
+  "claw_mask_audited_at": "2026-05-05",
+  "claw_mask_note": "Bit 0 set: declared surface (can_answer:10, can_do:12). Pre-build — bits 7/9/15 are near-miss, flip at first commit. Bits 1/2/3/5/8/12 flip in Phase 0 Forja wire. Bits 4/6/11/13/14 require Phase 1 architecture decisions.",
+  "claude_ankr_mask": 0,
+  "claude_ankr_mask_schema": "claude-ankr-5bit-v1",
+  "claude_ankr_mask_audited_at": "2026-05-05",
+  "claude_ankr_mask_note": "0 = honest for pre-build. CA-001: need overflow_granthx_ref on posture payload. CA-002: confirm_disable_safety_coil naming on destructive routes. CA-003: before_snapshot on vrn.* SENSE events. CA-004: _meta on every resolver. CA-005: human_modified on report card findings.",
+  "req_mask": 985037,
+  "req_mask_schema": "ankr-req-32bit-v1",
+  "req_mask_source": "declared",
+  "req_mask_bits": {
+    "0_auth": true,
+    "2_events": true,
+    "3_db": true,
+    "6_registered": true,
+    "7_forja": true,
+    "8_llm": true,
+    "9_knowledge": true,
+    "10_domain_rules": true,
+    "16_witnessed": true,
+    "17_verified": true,
+    "18_traceable": true,
+    "19_audit_trail": true
+  },
+  "capability_captured": false,
+  "capability_captured_schema": "ankr-archmask-v1",
+  "capability_captured_note": "false until req_mask == trust_mask == forja_mask (ArchMask equality, Zenodo 10.5281/zenodo.19417112)",
+  "capability_audit": {
+    "audit_status": "pre-build",
+    "last_updated": "2026-05-05",
+    "logics_doc": "xshieldai-varuna--logics--formal--2026-05-05.md",
+    "shastra_rules": 50,
+    "protocol_map": {
+      "engine_protocols": [
+        "Modbus/TCP (VRN-026)",
+        "Modbus/RTU (VRN-027)",
+        "CANbus (VRN-028)",
+        "MAN CEAS/WOIS/K-Chief (VRN-029)",
+        "IEC 62443 zones (VRN-030)",
+        "AMS (VRN-031)"
+      ],
+      "bridge_protocols": [
+        "NMEA 0183 (VRN-032)",
+        "NMEA 2000 (VRN-033)",
+        "IEC 61162-450 (VRN-034)",
+        "AIS (VRN-035)",
+        "GPS/GNSS (VRN-036)",
+        "ECDIS ENC (VRN-037)",
+        "VDR (VRN-038)",
+        "GMDSS (VRN-039)",
+        "Autopilot (VRN-040)"
+      ],
+      "pentest_rules": ["VRN-041 to VRN-050"]
+    },
+    "capabilities": {
+      "ASSESS_VESSEL_OT_POSTURE": "not_built",
+      "SCORE_IACS_UR_E26_COMPLIANCE": "not_built",
+      "MONITOR_MODBUS_ANOMALIES": "not_built",
+      "DETECT_NMEA_INJECTION": "not_built",
+      "DETECT_AIS_SPOOFING": "not_built",
+      "DETECT_RUNAWAY_DIESEL_SEQUENCE": "not_built",
+      "GENERATE_POSTURE_REPORT_CARD": "not_built",
+      "MAP_VESSEL_PROTOCOL_SURFACE": "not_built",
+      "SCORE_VESSEL_PROTOCOL_SECURITY": "not_built",
+      "VALIDATE_OT_PENTEST_SCOPE": "not_built",
+      "BUILD_MODBUS_BASELINE": "not_built",
+      "CORRELATE_BRIDGE_PROTOCOL_ANOMALIES": "not_built"
+    },
+    "counts": {
+      "built": 0,
+      "partial": 0,
+      "unknown": 0,
+      "not_built": 12
+    }
+  },
+  "gap_classification": {
+    "schema": "ankr-gap-class-v1",
+    "cgin_gaps": [],
+    "structural_gaps": [
+      "No Forja STATE endpoint yet — pre-build",
+      "No vessel telemetry ingestion pipeline",
+      "No Modbus passive monitoring agent",
+      "No NMEA sentence parser/anomaly detector",
+      "No Posture Report Card renderer",
+      "Project doc (bit1) not yet written",
+      "TODO doc (bit3) not yet written"
+    ],
+    "note": "Pre-build service. All structural gaps are build tasks, not wiring tasks."
+  },
+  "yuga_tolerance": {
+    "min_query_mode": "Treta",
+    "max_degradation": "Dwapara",
+    "kali_behavior": "REFUSE",
+    "external_signals": []
+  },
+  "proof_config": {
+    "threshold_pct": 90.0,
+    "annotation_sweep_status": "not_started",
+    "rules_seeded": 0,
+    "rules_annotated": 0,
+    "coverage_pct": 0.0,
+    "extractor_script": "src/seeds/proof-extract.mjs"
+  },
+  "xshieldai_suite": {
+    "parent": "xshieldai",
+    "siblings": [
+      "xshieldai-asm-ai-module",
+      "xshieldai-hanumang",
+      "xshieldai-vishvakarma",
+      "nallasetu"
+    ],
+    "integration_notes": {
+      "xshieldai": "Parent DRP engine — shares threat intel feeds and TAXII collective defense",
+      "xshieldai-hanumang": "Covers VRN-005 (crew cyber roles), VRN-021 (competency verification), VRN-022 (notification chain) via agent delegation posture",
+      "xshieldai-asm-ai-module": "Covers VRN-018 (maritime IDS) and TAXII feed integration (VRN-YK-007)",
+      "ship8x": "Primary telemetry source — vessel sensor data feed for continuous posture scoring"
+    }
+  },
+  "pentest_cross_reference": {
+    "port_side": "PORT-CYBERSECURITY-ETHICAL-HACKING-WHITEPAPER_2026-03-06.md",
+    "port_tests": {
+      "Test_2.3": "Modbus TCP read/write — mbtget/ModbusPal, test-device-only",
+      "Test_2.4": "AIS position injection simulation — RTL-SDR passive, RF-isolated"
+    },
+    "vessel_side": "VRN-041 to VRN-050 in logics doc",
+    "note": "Port-side pentest (whitepaper) + vessel OT-side pentest (VRN-041–050) = complete maritime cyber assessment"
+  },
+  "shastra_cross_reference": {
+    "SHP-007": "NMEA 0183 checksum → VRN-032",
+    "SHP-008": "AIS MMSI validation → VRN-035",
+    "SHP-009": "COG vs heading → VRN-032, VRN-036",
+    "SHP-010": "STW vs SOG → VRN-036",
+    "SHP-011": "GMDSS watch → VRN-039",
+    "SHP-012": "MMSI as vessel ID → VRN-035"
+  },
+  "lifecycle": {
+    "status": "pre-build",
+    "born": "2026-04-15",
+    "logics_written": "2026-05-05",
+    "codex_written": "2026-05-05",
+    "first_build_target": "TBD — pending project doc + todo doc + req_mask finalization",
+    "go_to_market": "via Ship8x / Ship8XOS — zero new install footprint"
+  }
+}
