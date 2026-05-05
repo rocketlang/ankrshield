@@ -1,0 +1,25 @@
+{
+  "name": "@ankrshield/xshieldai-varuna",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Varuna — Maritime OT Posture. IACS UR E26/E27 compliance scoring, vessel protocol security, runaway-diesel detection.",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc --noEmitOnError false || true",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "fastify": "^4.28.1",
+    "@fastify/cors": "^9.0.1",
+    "@fastify/rate-limit": "^9.1.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.2",
+    "@types/node": "^20.11.0"
+  }
+}
