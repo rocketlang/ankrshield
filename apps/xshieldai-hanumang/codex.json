@@ -1,0 +1,83 @@
+{
+  "service_key": "xshieldai-hanumang",
+  "display_name": "HanumanG — Agent Delegation Posture Monitor",
+  "version": "0.1.0",
+  "status": "phase-1-complete",
+  "port": 4255,
+  "born": "2026-05-06",
+  "can_answer": [
+    "is-this-agent-carrying-a-valid-mudrika",
+    "is-this-agent-within-mandate-bounds",
+    "did-this-agent-return-with-proof",
+    "what-is-this-agents-7-axis-posture-score",
+    "is-this-agent-overreaching-its-trust_mask",
+    "has-this-agent-filed-a-truthful-report"
+  ],
+  "can_do": [
+    "MUDRIKA_VERIFY",
+    "AXIS_OBSERVE",
+    "POSTURE_SCORE",
+    "ATTESTATION_ISSUE",
+    "BASELINE_RECORD",
+    "REGRESSION_ALERT",
+    "AGENT_REGISTER"
+  ],
+  "emits": [
+    "hanumang.agent_observed",
+    "hanumang.axis_violation",
+    "hanumang.attestation_issued",
+    "hanumang.regression_detected",
+    "hanumang.mudrika_rejected",
+    "hanumang.overreach_detected"
+  ],
+  "depends_on": ["xshieldai:4250", "anchor:4570", "ai-proxy:4444", "pramana:4820", "sakshi:4810"],
+  "forja_version": "2.0",
+  "forja_state": "/api/v2/forja/state",
+  "forja_trust": "/api/v2/forja/trust/:userId",
+  "forja_sense": "/api/v2/forja/sense/emit",
+  "forja_proof": "/api/v2/forja/proof",
+  "trust_mask": 1,
+  "trust_mask_schema": "ankr-trust-32bit-v1",
+  "k_mask": 63,
+  "k_mask_schema": "ankr-prajna-8bit-v1",
+  "req_mask": 167739443,
+  "req_mask_schema": "ankr-req-32bit-v1",
+  "req_mask_source": "declared",
+  "capability_captured": false,
+  "capability_captured_schema": "ankr-archmask-v1",
+  "claw_mask": 0,
+  "claw_mask_schema": "claw-design-16bit-v1",
+  "claude_ankr_mask": 0,
+  "claude_ankr_mask_schema": "claude-ankr-5bit-v1",
+  "axes": [
+    "mudrika_integrity",
+    "identity_broadcast",
+    "mandate_bounds",
+    "proportional_force",
+    "return_with_proof",
+    "no_overreach",
+    "truthful_report"
+  ],
+  "agent_invariant": "EVERY_AGENT_CARRIES_A_MUDRIKA",
+  "aegis_classification": {
+    "hg_group": "HG-2A",
+    "authority_class": "external_call",
+    "data_touch": true,
+    "external_state_touch": true,
+    "financial_touch": false,
+    "irreversible_actions": []
+  },
+  "capability_audit": {
+    "state": "clean",
+    "built": [
+      "MUDRIKA_VERIFY",
+      "AXIS_OBSERVE",
+      "POSTURE_SCORE",
+      "ATTESTATION_ISSUE",
+      "BASELINE_RECORD",
+      "AGENT_REGISTER"
+    ],
+    "partial": ["REGRESSION_ALERT"],
+    "not_built": []
+  }
+}
