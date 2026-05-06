@@ -3,7 +3,7 @@
  *
  * Port: 4254 (from PORT env — never hardcoded per ankr-ctl policy)
  * Service key: xshieldai-varuna
- * Phase: 3 (Continuous monitoring + crew roles + TAXII + Ship8x wire)
+ * Phase: 4 (OT pentest scope + testbed simulator + unified VAPT report)
  */
 
 import cors from '@fastify/cors';
@@ -18,6 +18,7 @@ import { registerIACSRoutes } from './iacs/routes.js';
 import { registerModbusRoutes } from './modbus/routes.js';
 import { startBackgroundMonitor } from './monitor/background.js';
 import { registerNMEARoutes } from './nmea/routes.js';
+import { registerPentestRoutes } from './pentest/routes.js';
 import { registerPostureRoutes } from './posture/routes.js';
 import { registerProtocolRoutes } from './protocol/routes.js';
 import { registerReportRoutes } from './report/routes.js';
@@ -65,7 +66,7 @@ app.get('/health', async () => ({
   service: 'xshieldai-varuna',
   version: '0.1.0',
   port: PORT,
-  phase: 'phase-3-continuous-monitoring',
+  phase: 'phase-4-pentest-vapt',
   timestamp: new Date().toISOString(),
 }));
 
@@ -82,6 +83,7 @@ await registerEvidenceRoutes(app);
 await registerReportRoutes(app);
 await registerCrewRoutes(app);
 await registerTAXIIRoutes(app);
+await registerPentestRoutes(app);
 
 // ─── Background monitor (hook must be before listen) ─────────────────────────
 let monitorHandle: ReturnType<typeof setInterval> | undefined;
@@ -95,9 +97,7 @@ app.addHook('onClose', async () => {
 // ─── Start ────────────────────────────────────────────────────────────────────
 try {
   await app.listen({ port: parseInt(PORT), host: HOST });
-  app.log.info(
-    `Varuna Maritime OT Posture running on port ${PORT} (Phase 3 — Monitor/Crew/TAXII/Ship8x)`
-  );
+  app.log.info(`Varuna Maritime OT Posture running on port ${PORT} (Phase 4 — Pentest/VAPT)`);
 
   // @rule:P3-003 Start background posture degradation monitor after listen
   monitorHandle = startBackgroundMonitor(app.log);
