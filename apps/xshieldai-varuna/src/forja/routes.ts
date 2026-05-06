@@ -12,6 +12,8 @@
 
 import type { FastifyInstance } from 'fastify';
 
+import { scanProof } from './proof.js';
+
 // ─── Capability constants (synced with codex.json) ───────────────────────────
 
 // @rule:VRN-050 Posture is a living score — can_answer reflects continuous capability
@@ -251,12 +253,10 @@ export async function registerForjaRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (!vessel_id) {
-      return reply
-        .status(400)
-        .send({
-          error: 'missing_vessel_id',
-          message: 'vessel_id is required on all VRN SENSE events',
-        });
+      return reply.status(400).send({
+        error: 'missing_vessel_id',
+        message: 'vessel_id is required on all VRN SENSE events',
+      });
     }
 
     if (before_snapshot === undefined || after_snapshot === undefined) {
@@ -291,16 +291,26 @@ export async function registerForjaRoutes(app: FastifyInstance): Promise<void> {
   // VARUNA-P0-004: GET /api/v2/forja/proof
   app.get('/api/v2/forja/proof', async () => {
     const _start = Date.now();
+    const proof = scanProof();
     return {
       service_key: 'xshieldai-varuna',
       logics_doc: 'xshieldai-varuna--logics--formal--2026-05-05.md',
-      rules_total: 50,
-      rules_annotated: 0,
-      coverage_pct: 0.0,
-      proof_status: 'PRE-BUILD',
-      note: 'Phase 0 Forja wire only. @rule: sweep begins at Phase 1 first commit.',
+      files_total: proof.files_total,
+      files_annotated: proof.files_annotated,
+      file_coverage_pct: proof.file_coverage_pct,
+      vrn_code_implementable: proof.vrn_code_implementable,
+      vrn_procedural_count: proof.vrn_procedural_count,
+      vrn_annotated_of_implementable: proof.vrn_annotated_of_implementable,
+      vrn_coverage_pct: proof.vrn_coverage_pct,
+      rules_annotated: proof.unique_rule_ids.length,
+      annotation_count_total: proof.annotation_count_total,
+      coverage_pct: proof.coverage_pct,
+      proof_status: proof.proof_status,
       annotation_target: 0.9,
-      extractor_script: 'src/seeds/proof-extract.mjs',
+      vrn_shastra_annotated: proof.vrn_shastra_annotated,
+      vrn_yukti_annotated: proof.vrn_yukti_annotated,
+      other_rule_ids: proof.other_rule_ids,
+      missing_vrn_implementable: proof.missing_vrn_implementable,
       _meta: {
         computed_at: new Date().toISOString(),
         duration_ms: Date.now() - _start,
