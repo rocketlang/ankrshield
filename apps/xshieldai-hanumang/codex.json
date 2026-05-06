@@ -45,9 +45,9 @@
   "req_mask_source": "declared",
   "capability_captured": false,
   "capability_captured_schema": "ankr-archmask-v1",
-  "claw_mask": 0,
+  "claw_mask": 14255,
   "claw_mask_schema": "claw-design-16bit-v1",
-  "claude_ankr_mask": 0,
+  "claude_ankr_mask": 29,
   "claude_ankr_mask_schema": "claude-ankr-5bit-v1",
   "axes": [
     "mudrika_integrity",
