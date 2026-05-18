@@ -212,6 +212,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
       applied_usd: number | null;
       error?: string;
     }>,
+
+  // ─── AEGIS latency (ASD-T-022 / NFR-1) ────────────────────────────────────
+  aegisProxyGetAegisLatencySnapshot: () =>
+    ipcRenderer.invoke('aegis-proxy:get-aegis-latency-snapshot') as Promise<{
+      label: string;
+      totalRecorded: number;
+      sampleCount: number;
+      windowSize: number;
+      min: number;
+      max: number;
+      mean: number;
+      p50: number;
+      p95: number;
+      p99: number;
+      nfr1_threshold_ms: number;
+      nfr1_pass: boolean;
+    }>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────
@@ -549,6 +566,22 @@ export interface ElectronAPI {
     appId: string;
     hourly_limit_usd: number | null;
   }) => Promise<{ ok: boolean; applied_usd: number | null; error?: string }>;
+
+  // AEGIS latency (ASD-T-022)
+  aegisProxyGetAegisLatencySnapshot: () => Promise<{
+    label: string;
+    totalRecorded: number;
+    sampleCount: number;
+    windowSize: number;
+    min: number;
+    max: number;
+    mean: number;
+    p50: number;
+    p95: number;
+    p99: number;
+    nfr1_threshold_ms: number;
+    nfr1_pass: boolean;
+  }>;
 }
 
 declare global {

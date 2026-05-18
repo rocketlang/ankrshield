@@ -253,6 +253,21 @@ declare global {
         limits: { min_ms: number; max_ms: number; default_ms: number };
       }>;
       aegisProxySetDanTimeoutGlobal?: (ms: number) => Promise<{ ok: boolean; applied_ms: number }>;
+      // AEGIS latency (ASD-T-022)
+      aegisProxyGetAegisLatencySnapshot?: () => Promise<{
+        label: string;
+        totalRecorded: number;
+        sampleCount: number;
+        windowSize: number;
+        min: number;
+        max: number;
+        mean: number;
+        p50: number;
+        p95: number;
+        p99: number;
+        nfr1_threshold_ms: number;
+        nfr1_pass: boolean;
+      }>;
     };
   }
 }
@@ -355,6 +370,7 @@ export function AgentFeed() {
         />
       ) : null}
       <DanTimeoutSettings />
+      <AegisLatencyTile />
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">
@@ -1272,5 +1288,87 @@ function DanTimeoutSettings() {
         {savedAt != null ? <span className="text-xs text-ankr-green">Saved.</span> : null}
       </div>
     </details>
+  );
+}
+
+function AegisLatencyTile() {
+  const [snap, setSnap] = useState<{
+    sampleCount: number;
+    windowSize: number;
+    p50: number;
+    p95: number;
+    p99: number;
+    nfr1_threshold_ms: number;
+    nfr1_pass: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      const api = window.electronAPI;
+      if (!api?.aegisProxyGetAegisLatencySnapshot) return;
+      try {
+        const s = await api.aegisProxyGetAegisLatencySnapshot();
+        if (!cancelled) setSnap(s);
+      } catch {
+        // ignore — main may be reloading
+      }
+    };
+    void tick();
+    const id = setInterval(tick, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  if (!snap) return null;
+  const tone =
+    snap.sampleCount === 0
+      ? 'bg-gray-800 border-gray-700'
+      : snap.nfr1_pass
+        ? 'bg-emerald-900/40 border-emerald-700'
+        : 'bg-red-900/40 border-red-600';
+
+  return (
+    <section className={`rounded-lg border ${tone} p-3`}>
+      <div className="flex items-baseline justify-between gap-4">
+        <div>
+          <div className="text-xs text-gray-400">
+            AEGIS gate latency (NFR-1 ≤ {snap.nfr1_threshold_ms}ms p99)
+          </div>
+          <div className="text-sm font-mono mt-1">
+            p50 <span className="text-white">{snap.p50.toFixed(2)}ms</span>
+            <span className="text-gray-500"> · </span>
+            p95 <span className="text-white">{snap.p95.toFixed(2)}ms</span>
+            <span className="text-gray-500"> · </span>
+            p99{' '}
+            <span className={snap.nfr1_pass ? 'text-emerald-300' : 'text-red-300'}>
+              {snap.p99.toFixed(2)}ms
+            </span>
+          </div>
+        </div>
+        <div className="text-right text-xs text-gray-400">
+          <div>
+            {snap.sampleCount} / {snap.windowSize} samples
+          </div>
+          <div
+            className={
+              snap.sampleCount === 0
+                ? 'text-gray-500'
+                : snap.nfr1_pass
+                  ? 'text-emerald-300'
+                  : 'text-red-300'
+            }
+          >
+            {snap.sampleCount === 0
+              ? '— no samples —'
+              : snap.nfr1_pass
+                ? '✓ NFR-1 pass'
+                : '✗ NFR-1 FAIL'}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }

@@ -118,8 +118,15 @@ export {
   registerDanTimeoutHandlers,
   registerConsentDialogHandlers,
   registerBudgetPanelHandlers,
+  registerAegisLatencyHandlers,
   type BudgetSummaryRow,
 } from './ipc-handlers.js';
+export {
+  LatencyTracker,
+  nowMs,
+  type LatencyStatsSnapshot,
+  type LatencyTrackerOptions,
+} from './latency-tracker.js';
 export {
   BudgetLedger,
   BudgetConfigResolver,

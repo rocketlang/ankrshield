@@ -52,6 +52,7 @@ import {
   PassThroughStreamRewriter,
   type StreamRewriter,
 } from './pii-stream-rewriter.js';
+import { LatencyTracker, nowMs } from './latency-tracker.js';
 
 /**
  * Start the aegis-proxy.
@@ -122,6 +123,9 @@ export async function startAegisProxy(
   // every app gets DESKTOP_AGENT_MASK so the gate is a no-op in practice
   // until the user explicitly downgrades.
   const aegisGate = new AegisGate();
+  // ASD-T-022: NFR-1 instrumentation — track AEGIS gate.guard() latency in a
+  // rolling 1000-sample window so the renderer + tests can verify p99 < 50ms.
+  const aegisLatency = new LatencyTracker({ windowSize: 1000, label: 'aegis-gate' });
 
   // ASD-T-013 (doctrine-corrected — see vivechana Part 2): per-request PII
   // boundary. Default policy = 'redact' for all apps; P2 ASD-T-015 (TOFU)
@@ -253,7 +257,8 @@ export async function startAegisProxy(
       pendingDan,
       danDecisionCache,
       danCarrierRouter,
-      danTimeoutStore
+      danTimeoutStore,
+      aegisLatency
     )
   );
   server.on('connect', (req, socket, head) =>
@@ -275,7 +280,8 @@ export async function startAegisProxy(
       pendingDan,
       danDecisionCache,
       danCarrierRouter,
-      danTimeoutStore
+      danTimeoutStore,
+      aegisLatency
     )
   );
 
@@ -303,6 +309,7 @@ export async function startAegisProxy(
         danTimeoutStore,
         budgetLedger,
         budgetConfig,
+        aegisLatency,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {
@@ -347,7 +354,8 @@ async function handleHttpRequest(
   pendingDan: PendingDanQueue,
   danDecisionCache: DanDecisionCache,
   danCarrierRouter: DanCarrierRouter,
-  danTimeoutStore: DanTimeoutStore
+  danTimeoutStore: DanTimeoutStore,
+  aegisLatency: LatencyTracker
 ): Promise<void> {
   const rawUrl = req.url ?? '';
   if (!/^https?:\/\//i.test(rawUrl)) {
@@ -408,6 +416,7 @@ async function handleHttpRequest(
     danDecisionCache,
     danCarrierRouter,
     danTimeoutStore,
+    aegisLatency,
   });
 }
 
@@ -447,7 +456,8 @@ async function handleHttpConnect(
   pendingDan: PendingDanQueue,
   danDecisionCache: DanDecisionCache,
   danCarrierRouter: DanCarrierRouter,
-  danTimeoutStore: DanTimeoutStore
+  danTimeoutStore: DanTimeoutStore,
+  aegisLatency: LatencyTracker
 ): Promise<void> {
   const target = parseConnectTarget(req.url ?? '');
   if (!target) {
@@ -527,6 +537,7 @@ async function handleHttpConnect(
         danDecisionCache,
         danCarrierRouter,
         danTimeoutStore,
+        aegisLatency,
       })
   );
 
@@ -575,6 +586,7 @@ interface ForwardArgs {
   danDecisionCache: DanDecisionCache;
   danCarrierRouter: DanCarrierRouter;
   danTimeoutStore: DanTimeoutStore;
+  aegisLatency: LatencyTracker;
 }
 
 /**
@@ -606,6 +618,7 @@ function forwardWithObservation(args: ForwardArgs): void {
     danDecisionCache,
     danCarrierRouter,
     danTimeoutStore,
+    aegisLatency,
   } = args;
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
@@ -701,13 +714,19 @@ function forwardWithObservation(args: ForwardArgs): void {
       }
 
       // ASD-T-012: AEGIS lite gate. O(1) bitmask check via vendored lite SDK.
+      // ASD-T-022: time the gate call against NFR-1 (p99 < 50ms). Both the
+      // happy path and the AegisLiteError catch path are recorded — what
+      // matters is *time spent in the gate*, regardless of outcome.
+      const aegisT0 = nowMs();
       try {
         aegisGate.guard({
           appId: identity.appId,
           hasTools: parsed?.hasTools ?? false,
           isStreaming: parsed?.isStreaming ?? false,
         });
+        aegisLatency.record(nowMs() - aegisT0);
       } catch (err) {
+        aegisLatency.record(nowMs() - aegisT0);
         if (err instanceof AegisLiteError) {
           events.emit({
             kind: 'aegis.denied',

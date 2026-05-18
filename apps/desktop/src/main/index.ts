@@ -21,6 +21,7 @@ import {
   registerDanTimeoutHandlers,
   registerConsentDialogHandlers,
   registerBudgetPanelHandlers,
+  registerAegisLatencyHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -118,6 +119,8 @@ app.whenReady().then(async () => {
         aegisProxyHandle.budgetLedger,
         aegisProxyHandle.budgetConfig
       );
+      // ASD-T-022: AEGIS latency snapshot IPC (NFR-1 compliance tile).
+      registerAegisLatencyHandlers(aegisProxyHandle.aegisLatency);
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

@@ -19,6 +19,7 @@ import type { PendingDanQueue, DanRequest } from './pending-dan-queue.js';
 import type { DanDecisionCache } from './dan-decision-cache.js';
 import type { DanTimeoutStore } from './dan-timeout-config.js';
 import type { BudgetLedger, BudgetConfigResolver } from './budget-ledger.js';
+import type { LatencyTracker } from './latency-tracker.js';
 import {
   DAN_TIMEOUT_DEFAULT_MS,
   DAN_TIMEOUT_MIN_MS,
@@ -416,6 +417,28 @@ export function registerBudgetPanelHandlers(
   return () => {
     ipcMain.removeHandler('aegis-proxy:get-budget-summary');
     ipcMain.removeHandler('aegis-proxy:set-budget-cap');
+  };
+}
+
+/**
+ * Wire AEGIS latency IPC (ASD-T-022). The renderer polls this at ~1Hz to
+ * render the NFR-1 compliance tile (p50/p95/p99 over the last 1000 gate
+ * calls). The handler also exposes `nfr1_pass` = p99 < 50ms as the boolean
+ * verdict so the UI can colour the tile green/red without re-computing.
+ */
+export function registerAegisLatencyHandlers(aegisLatency: LatencyTracker): () => void {
+  ipcMain.handle('aegis-proxy:get-aegis-latency-snapshot', () => {
+    const snap = aegisLatency.snapshot();
+    return {
+      ...snap,
+      label: aegisLatency.label,
+      nfr1_threshold_ms: 50,
+      nfr1_pass: snap.sampleCount > 0 ? snap.p99 < 50 : true,
+    };
+  });
+
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:get-aegis-latency-snapshot');
   };
 }
 

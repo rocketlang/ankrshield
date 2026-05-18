@@ -48,6 +48,8 @@ export interface AegisProxyHandle {
   danDecisionCache: import('./dan-decision-cache.js').DanDecisionCache;
   /** DAN timeout config store (ASD-T-018). */
   danTimeoutStore: import('./dan-timeout-config.js').DanTimeoutStore;
+  /** AEGIS gate latency tracker — NFR-1 source of truth (ASD-T-022). */
+  aegisLatency: import('./latency-tracker.js').LatencyTracker;
   stop(): Promise<void>;
 }
 
