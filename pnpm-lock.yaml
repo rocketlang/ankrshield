@@ -201,6 +201,9 @@ importers:
       '@vscode/sudo-prompt':
         specifier: ^9.3.2
         version: 9.3.2
+      '@xshieldai/aegis':
+        specifier: ^2.2.0
+        version: 2.2.0
       electron-squirrel-startup:
         specifier: ^1.0.0
         version: 1.0.1
@@ -2288,6 +2291,9 @@ packages:
   '@fastify/fast-json-stringify-compiler@4.3.0':
     resolution: {integrity: sha512-aZAXGYo6m22Fk1zZzEUKBvut/CIIQe/BapEORnxiD5Qr0kPHqqI69NtEMCme74h+at72sPhbkb4ZrLd1W3KRLA==}
 
+  '@fastify/formbody@7.4.0':
+    resolution: {integrity: sha512-H3C6h1GN56/SMrZS8N2vCT2cZr7mIHzBHzOBa5OPpjfB/D6FzP9mMpE02ZzrFX0ANeh0BAJdoXKOF2e7IbV+Og==}
+
   '@fastify/helmet@11.1.1':
     resolution: {integrity: sha512-pjJxjk6SLEimITWadtYIXt6wBMfFC1I6OQyH/jYVCqSAn36sgAIFjeNiibHtifjCd+e25442pObis3Rjtame6A==}
 
@@ -4076,6 +4082,11 @@ packages:
     resolution: {integrity: sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw==}
     engines: {node: '>=10.0.0'}
     deprecated: this version has critical issues, please update to the latest version
+
+  '@xshieldai/aegis@2.2.0':
+    resolution: {integrity: sha512-Xsh1D2vd9JeQ2PcRKFZNU4BIxUkMRwZxOJ9OMr8xxUTyNnpV9CPjqp8HV9L7sj59WtW1xqbs420Wi6X0DO4PRQ==}
+    engines: {bun: '>=1.0.0', node: '>=18.0.0'}
+    hasBin: true
 
   '@xtuc/ieee754@1.2.0':
     resolution: {integrity: sha512-DX8nKgqcGwsc0eJSqYt5lwP4DH5FlHnmuWWBRy7X0NcaGR0ZtuyeESgMwTYVEtxmsNGY+qit4QYT/MIYTOTPeA==}
@@ -12163,6 +12174,11 @@ snapshots:
     dependencies:
       fast-json-stringify: 5.16.1
 
+  '@fastify/formbody@7.4.0':
+    dependencies:
+      fast-querystring: 1.1.2
+      fastify-plugin: 4.5.1
+
   '@fastify/helmet@11.1.1':
     dependencies:
       fastify-plugin: 4.5.1
@@ -13851,9 +13867,7 @@ snapshots:
     transitivePeerDependencies:
       - '@babel/core'
       - '@babel/preset-env'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-color@2.1.0': {}
 
@@ -14683,6 +14697,13 @@ snapshots:
   '@xmldom/xmldom@0.7.13': {}
 
   '@xmldom/xmldom@0.8.11': {}
+
+  '@xshieldai/aegis@2.2.0':
+    dependencies:
+      '@fastify/cors': 9.0.1
+      '@fastify/formbody': 7.4.0
+      '@fastify/static': 7.0.4
+      fastify: 4.29.1
 
   '@xtuc/ieee754@1.2.0': {}
 

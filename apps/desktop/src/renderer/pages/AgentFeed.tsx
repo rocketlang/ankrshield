@@ -71,6 +71,16 @@ type AegisProxyEvent =
       timestamp: string;
       hostname: string;
       via: 'http' | 'connect';
+    }
+  | {
+      kind: 'aegis.denied';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      capability_hex: string;
+      trust_mask_hex: string;
+      reason: string;
     };
 
 /** Aggregated per-request view, built by pairing request/response by requestId. */
@@ -90,7 +100,13 @@ interface FeedRow {
   completionTokens: number | null;
   finishReason: string | null;
   latencyMs: number | null;
-  state: 'pending' | 'completed' | 'parse_failed' | 'tls_error' | 'privacy_blocked';
+  state:
+    | 'pending'
+    | 'completed'
+    | 'parse_failed'
+    | 'tls_error'
+    | 'privacy_blocked'
+    | 'aegis_denied';
   errorMessage: string | null;
 }
 
@@ -167,7 +183,7 @@ export function AgentFeed() {
         </div>
       </header>
 
-      <section className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <section className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <Stat label="Anthropic" value={stats.anthropic} />
         <Stat label="OpenAI" value={stats.openai} />
         <Stat
@@ -183,6 +199,11 @@ export function AgentFeed() {
           label="Privacy-blocked"
           value={stats.privacyBlocked}
           subtone={stats.privacyBlocked > 0 ? 'warn' : 'ok'}
+        />
+        <Stat
+          label="AEGIS-denied"
+          value={stats.aegisDenied}
+          subtone={stats.aegisDenied > 0 ? 'warn' : 'ok'}
         />
       </section>
 
@@ -298,6 +319,13 @@ function renderStatus(row: FeedRow) {
     return (
       <span className="text-red-300" title={row.errorMessage ?? 'privacy engine refused this host'}>
         🛡 privacy-blocked
+      </span>
+    );
+  }
+  if (row.state === 'aegis_denied') {
+    return (
+      <span className="text-red-400" title={row.errorMessage ?? 'AEGIS gate denied (ASD-004)'}>
+        ⛔ aegis-denied
       </span>
     );
   }
@@ -504,6 +532,35 @@ function mergeEvent(
       byId.set(event.requestId, row);
       return capList([row, ...prev], byId);
     }
+    case 'aegis.denied': {
+      const existing = byId.get(event.requestId);
+      const row: FeedRow = existing
+        ? { ...existing, statusCode: 403, state: 'aegis_denied', errorMessage: event.reason }
+        : {
+            requestId: event.requestId,
+            startedAt: event.timestamp,
+            provider: 'unknown',
+            appId: event.appId,
+            hostname: event.hostname,
+            path: '(AEGIS gate — denied)',
+            model: null,
+            isStreaming: false,
+            messageCount: 0,
+            hasTools: false,
+            statusCode: 403,
+            promptTokens: null,
+            completionTokens: null,
+            finishReason: null,
+            latencyMs: null,
+            state: 'aegis_denied',
+            errorMessage: event.reason,
+          };
+      byId.set(event.requestId, row);
+      if (existing) {
+        return prev.map((r) => (r.requestId === row.requestId ? row : r));
+      }
+      return capList([row, ...prev], byId);
+    }
   }
 }
 
@@ -521,6 +578,7 @@ function summariseFeed(rows: FeedRow[]) {
   let openai = 0;
   let tlsErrors = 0;
   let privacyBlocked = 0;
+  let aegisDenied = 0;
   let latencySum = 0;
   let latencyCount = 0;
   for (const r of rows) {
@@ -528,6 +586,7 @@ function summariseFeed(rows: FeedRow[]) {
     if (r.provider === 'openai') openai++;
     if (r.state === 'tls_error') tlsErrors++;
     if (r.state === 'privacy_blocked') privacyBlocked++;
+    if (r.state === 'aegis_denied') aegisDenied++;
     if (r.latencyMs != null) {
       latencySum += r.latencyMs;
       latencyCount++;
@@ -538,6 +597,7 @@ function summariseFeed(rows: FeedRow[]) {
     openai,
     tlsErrors,
     privacyBlocked,
+    aegisDenied,
     avgLatencyMs: latencyCount > 0 ? Math.round(latencySum / latencyCount) : null,
   };
 }

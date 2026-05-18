@@ -50,6 +50,17 @@ export type AegisProxyEvent =
       hostname: string;
       /** Which proxy entry point intercepted it. */
       via: 'http' | 'connect';
+    }
+  | {
+      kind: 'aegis.denied';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      /** AEGIS bitmask hex strings for renderer display. */
+      capability_hex: string;
+      trust_mask_hex: string;
+      reason: string;
     };
 
 export type AegisProxyEventListener = (event: AegisProxyEvent) => void;

@@ -43,6 +43,7 @@
     "@napi-rs/keyring": "^1.3.0",
     "@prisma/client": "^5.22.0",
     "@vscode/sudo-prompt": "^9.3.2",
+    "@xshieldai/aegis": "^2.2.0",
     "electron-squirrel-startup": "^1.0.0",
     "electron-store": "^11.0.2",
     "electron-updater": "^6.1.7",

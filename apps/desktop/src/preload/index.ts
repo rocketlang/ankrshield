@@ -178,6 +178,16 @@ export type AegisProxyEventPayload =
       timestamp: string;
       hostname: string;
       via: 'http' | 'connect';
+    }
+  | {
+      kind: 'aegis.denied';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      capability_hex: string;
+      trust_mask_hex: string;
+      reason: string;
     };
 
 /**

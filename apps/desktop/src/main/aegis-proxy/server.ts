@@ -36,6 +36,7 @@ import { pickAdapter } from './observer-dispatcher.js';
 import type { ObservedRequest, ProviderAdapter, ResponseObserver } from './observer-types.js';
 import { resolveAppId } from './app-identifier.js';
 import { AppsStore } from './apps-store.js';
+import { AegisGate, AegisLiteError } from './aegis-gate.js';
 
 /**
  * Start the aegis-proxy.
@@ -101,8 +102,14 @@ export async function startAegisProxy(
   const proxyPort = resolved.bindPort;
   const isBlocked = resolved.isBlocked ?? (async () => false);
 
+  // ASD-T-012: AEGIS lite gate — per-app trust_mask check on every observed
+  // request. P2 ASD-T-015 (TOFU) will populate non-default masks; for now
+  // every app gets DESKTOP_AGENT_MASK so the gate is a no-op in practice
+  // until the user explicitly downgrades.
+  const aegisGate = new AegisGate();
+
   const server = http.createServer((req, res) =>
-    handleHttpRequest(req, res, events, appsStore, proxyPort, isBlocked)
+    handleHttpRequest(req, res, events, appsStore, proxyPort, isBlocked, aegisGate)
   );
   server.on('connect', (req, socket, head) =>
     // Node types `socket` as Duplex on the connect event; in practice it's a
@@ -115,7 +122,8 @@ export async function startAegisProxy(
       events,
       appsStore,
       proxyPort,
-      isBlocked
+      isBlocked,
+      aegisGate
     )
   );
 
@@ -164,7 +172,8 @@ async function handleHttpRequest(
   events: AegisProxyEventBus,
   appsStore: AppsStore,
   proxyPort: number,
-  isBlocked: IsBlockedFn
+  isBlocked: IsBlockedFn,
+  aegisGate: AegisGate
 ): Promise<void> {
   const rawUrl = req.url ?? '';
   if (!/^https?:\/\//i.test(rawUrl)) {
@@ -215,6 +224,7 @@ async function handleHttpRequest(
     events,
     appsStore,
     proxyPort,
+    aegisGate,
   });
 }
 
@@ -244,7 +254,8 @@ async function handleHttpConnect(
   events: AegisProxyEventBus,
   appsStore: AppsStore,
   proxyPort: number,
-  isBlocked: IsBlockedFn
+  isBlocked: IsBlockedFn,
+  aegisGate: AegisGate
 ): Promise<void> {
   const target = parseConnectTarget(req.url ?? '');
   if (!target) {
@@ -314,6 +325,7 @@ async function handleHttpConnect(
         events,
         appsStore,
         proxyPort,
+        aegisGate,
       })
   );
 
@@ -352,6 +364,7 @@ interface ForwardArgs {
   events: AegisProxyEventBus;
   appsStore: AppsStore;
   proxyPort: number;
+  aegisGate: AegisGate;
 }
 
 /**
@@ -373,6 +386,7 @@ function forwardWithObservation(args: ForwardArgs): void {
     events,
     appsStore,
     proxyPort,
+    aegisGate,
   } = args;
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
@@ -384,34 +398,29 @@ function forwardWithObservation(args: ForwardArgs): void {
   req.on('end', () => {
     const requestBody = Buffer.concat(bodyChunks);
 
-    // ASD-T-006: resolve per-app identity from the socket. Best-effort, never throws.
+    // ASD-T-006 + T-007 + T-012: resolve identity → record → AEGIS gate → forward.
+    //
+    // P1 was fire-and-forget (observation only, upstream forwarded in parallel).
+    // P2 moves the upstream forward INSIDE the async block because we now
+    // enforce via AEGIS lite: a denied request must NOT reach the upstream.
+    // Cost: per-request latency rises by the ss lookup time (50-500 ms) — the
+    // user-visible response is delayed by that much. Acceptable trade-off
+    // because the alternative (allow-while-checking) is wrong for enforcement.
     void (async () => {
       const identity = await resolveAppId({ clientPort, proxyPort });
-
-      // ASD-T-007: record the request in apps registry (debounced flush to disk).
       appsStore.recordRequest(identity.appId, identity.executable);
 
-      // Emit request observation if an adapter matched.
+      // Parse request via adapter (if matched) — we need hasTools + isStreaming
+      // for the AEGIS capability mapping (resolveCapability).
+      let parsed: ReturnType<ProviderAdapter['parseRequest']> | null = null;
       if (adapter) {
         try {
-          const parsed = adapter.parseRequest({
+          parsed = adapter.parseRequest({
             hostname: upstreamHost,
             path: upstreamPath,
             method: req.method ?? 'GET',
             headers: req.headers,
             body: requestBody,
-          });
-          const observation: ObservedRequest = {
-            ...parsed,
-            appId: identity.appId,
-            pid: identity.pid,
-            executable: identity.executable,
-          };
-          events.emit({
-            kind: 'request.observed',
-            requestId,
-            timestamp: new Date().toISOString(),
-            observation,
           });
         } catch (err) {
           events.emit({
@@ -423,68 +432,125 @@ function forwardWithObservation(args: ForwardArgs): void {
             path: upstreamPath,
             error: err instanceof Error ? err.message : String(err),
           });
+          // Parse-failed requests still get the AEGIS gate check below
+          // (with conservative hasTools=false defaults).
         }
       }
-    })();
 
-    // Build outbound request (TLS or plaintext).
-    const httpModule = useTls ? https : http;
-    const upstream = httpModule.request(
-      {
-        host: upstreamHost,
-        port: upstreamPort,
-        method: req.method,
-        path: upstreamPath,
-        headers: stripHopByHopHeaders(req.headers),
-      },
-      (upstreamRes) => {
-        res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
-
-        // If an adapter matched, install its response observer.
-        const responseObserver: ResponseObserver | null = adapter
-          ? adapter.createResponseObserver()
-          : null;
-
-        upstreamRes.on('data', (chunk: Buffer) => {
-          if (responseObserver) responseObserver.tap(chunk);
-          res.write(chunk);
+      // ASD-T-012: AEGIS lite gate. O(1) bitmask check via vendored lite SDK.
+      try {
+        aegisGate.guard({
+          appId: identity.appId,
+          hasTools: parsed?.hasTools ?? false,
+          isStreaming: parsed?.isStreaming ?? false,
         });
-
-        upstreamRes.on('end', () => {
-          res.end();
-          if (responseObserver) {
-            const observation = responseObserver.finalize({
-              statusCode: upstreamRes.statusCode ?? 0,
-              latencyMs: Date.now() - startTime,
-            });
-            events.emit({
-              kind: 'response.observed',
-              requestId,
-              timestamp: new Date().toISOString(),
-              observation,
-            });
+      } catch (err) {
+        if (err instanceof AegisLiteError) {
+          events.emit({
+            kind: 'aegis.denied',
+            requestId,
+            timestamp: new Date().toISOString(),
+            appId: identity.appId,
+            hostname: upstreamHost,
+            capability_hex: `0x${err.capability.toString(16).padStart(8, '0')}`,
+            trust_mask_hex: `0x${err.trust_mask.toString(16).padStart(8, '0')}`,
+            reason: err.message,
+          });
+          if (!res.headersSent) {
+            res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
           }
-        });
+          res.end(
+            `aegis-proxy: ASD-004 — AEGIS gate denied request from ${identity.appId}.\n` +
+              `${err.message}\n`
+          );
+          return; // do NOT forward upstream
+        }
+        // Unknown error from gate — fail closed per ASD-004 (deny on error).
+        if (!res.headersSent) {
+          res.writeHead(503, { 'content-type': 'text/plain; charset=utf-8' });
+        }
+        res.end(
+          `aegis-proxy: AEGIS gate threw unexpected error; per ASD-004 the request is denied.\n` +
+            `${err instanceof Error ? err.message : String(err)}\n`
+        );
+        return;
+      }
 
-        upstreamRes.on('error', () => {
-          if (!res.writableEnded) res.end();
+      // Allow — emit request.observed (if adapter parsed) and forward upstream.
+      if (parsed) {
+        const observation: ObservedRequest = {
+          ...parsed,
+          appId: identity.appId,
+          pid: identity.pid,
+          executable: identity.executable,
+        };
+        events.emit({
+          kind: 'request.observed',
+          requestId,
+          timestamp: new Date().toISOString(),
+          observation,
         });
       }
-    );
 
-    upstream.on('error', (err) => {
-      if (!res.headersSent) {
-        res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
-      }
-      res.end(
-        useTls
-          ? `aegis-proxy upstream TLS error: ${err.message}\n`
-          : `aegis-proxy upstream error: ${err.message}\n`
+      // Build outbound request (TLS or plaintext).
+      const httpModule = useTls ? https : http;
+      const upstream = httpModule.request(
+        {
+          host: upstreamHost,
+          port: upstreamPort,
+          method: req.method,
+          path: upstreamPath,
+          headers: stripHopByHopHeaders(req.headers),
+        },
+        (upstreamRes) => {
+          res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
+
+          // If an adapter matched, install its response observer.
+          const responseObserver: ResponseObserver | null = adapter
+            ? adapter.createResponseObserver()
+            : null;
+
+          upstreamRes.on('data', (chunk: Buffer) => {
+            if (responseObserver) responseObserver.tap(chunk);
+            res.write(chunk);
+          });
+
+          upstreamRes.on('end', () => {
+            res.end();
+            if (responseObserver) {
+              const observation = responseObserver.finalize({
+                statusCode: upstreamRes.statusCode ?? 0,
+                latencyMs: Date.now() - startTime,
+              });
+              events.emit({
+                kind: 'response.observed',
+                requestId,
+                timestamp: new Date().toISOString(),
+                observation,
+              });
+            }
+          });
+
+          upstreamRes.on('error', () => {
+            if (!res.writableEnded) res.end();
+          });
+        }
       );
-    });
 
-    if (requestBody.length > 0) upstream.write(requestBody);
-    upstream.end();
+      upstream.on('error', (err) => {
+        if (!res.headersSent) {
+          res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
+        }
+        res.end(
+          useTls
+            ? `aegis-proxy upstream TLS error: ${err.message}\n`
+            : `aegis-proxy upstream error: ${err.message}\n`
+        );
+      });
+
+      if (requestBody.length > 0) upstream.write(requestBody);
+      upstream.end();
+    })();
   });
 
   req.on('error', () => {
