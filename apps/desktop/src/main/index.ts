@@ -11,7 +11,11 @@ import { setupAutoLaunch } from './auto-launch.js';
 import { setupAutoUpdater } from './updater.js';
 import { NotificationService } from './notifications.js';
 import { serviceManager } from './services/service-manager.js';
-import { startAegisProxy, type AegisProxyHandle } from './aegis-proxy/index.js';
+import {
+  startAegisProxy,
+  attachAegisProxyToRenderer,
+  type AegisProxyHandle,
+} from './aegis-proxy/index.js';
 
 // Enable sandbox bypass for development/testing (required when running as root)
 app.commandLine.appendSwitch('no-sandbox');
@@ -66,6 +70,8 @@ app.whenReady().then(async () => {
     //   etc.) are logged but non-fatal — privacy engine keeps running.
     try {
       aegisProxyHandle = await startAegisProxy();
+      // @rule:ASD-006 — proxy events bridged to renderer for AgentFeed (ASD-T-008).
+      attachAegisProxyToRenderer(aegisProxyHandle.events);
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

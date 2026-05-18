@@ -62,7 +62,79 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTrackerBlocked: (callback: (data: any) => void) => {
     ipcRenderer.on('tracker-blocked', (_event, data) => callback(data));
   },
+
+  // ─── Aegis Proxy (ASD-T-008) ─────────────────────────────────────────────
+  // Subscribe to live aegis-proxy events (request.observed, response.observed,
+  // request.parse_failed, tls.client_error). Returns an unsubscribe function.
+  //
+  // The event shape mirrors AegisProxyEvent in main/aegis-proxy/event-bus.ts.
+  // Renderer receives the event as plain JSON via structured clone.
+  onAegisProxyEvent: (callback: (event: AegisProxyEventPayload) => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, event: AegisProxyEventPayload) =>
+      callback(event);
+    ipcRenderer.on('aegis-proxy-event', handler);
+    return () => {
+      ipcRenderer.off('aegis-proxy-event', handler);
+    };
+  },
 });
+
+// ─── Aegis Proxy event payload (renderer-side mirror) ────────────────────────
+// Keep in sync with main/aegis-proxy/event-bus.ts AegisProxyEvent.
+
+export interface AegisProxyObservedRequest {
+  provider: 'anthropic' | 'openai' | 'unknown';
+  hostname: string;
+  path: string;
+  method: string;
+  model: string | null;
+  isStreaming: boolean;
+  promptText: string;
+  systemPrompt: string | null;
+  hasTools: boolean;
+  messageCount: number;
+  requestBytes: number;
+}
+
+export interface AegisProxyObservedResponse {
+  statusCode: number;
+  responseBytes: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  finishReason: string | null;
+  isStreaming: boolean;
+  latencyMs: number;
+}
+
+export type AegisProxyEventPayload =
+  | {
+      kind: 'request.observed';
+      requestId: string;
+      timestamp: string;
+      observation: AegisProxyObservedRequest;
+    }
+  | {
+      kind: 'response.observed';
+      requestId: string;
+      timestamp: string;
+      observation: AegisProxyObservedResponse;
+    }
+  | {
+      kind: 'request.parse_failed';
+      requestId: string;
+      timestamp: string;
+      provider: 'anthropic' | 'openai' | 'unknown';
+      hostname: string;
+      path: string;
+      error: string;
+    }
+  | {
+      kind: 'tls.client_error';
+      requestId: string;
+      timestamp: string;
+      hostname: string;
+      error: string;
+    };
 
 /**
  * Type definitions for renderer process
@@ -112,6 +184,9 @@ export interface ElectronAPI {
   onPrivacyScoreUpdate: (callback: (score: any) => void) => void;
   onProtectionToggled: (callback: (enabled: boolean) => void) => void;
   onTrackerBlocked: (callback: (data: any) => void) => void;
+
+  // Aegis Proxy (ASD-T-008)
+  onAegisProxyEvent: (callback: (event: AegisProxyEventPayload) => void) => () => void;
 }
 
 declare global {

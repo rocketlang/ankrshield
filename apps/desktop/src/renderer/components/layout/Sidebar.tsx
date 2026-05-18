@@ -15,6 +15,7 @@ const navItems: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', icon: '📊' },
   { to: '/analytics', label: 'Analytics', icon: '📈' },
   { to: '/devices', label: 'Devices', icon: '💻' },
+  { to: '/agents', label: 'Agents', icon: '🤖' },
   { to: '/settings', label: 'Settings', icon: '⚙️' },
 ];
 

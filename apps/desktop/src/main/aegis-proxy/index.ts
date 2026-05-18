@@ -30,6 +30,7 @@ export {
   type AegisProxyEvent,
   type AegisProxyEventListener,
 } from './event-bus.js';
+export { attachAegisProxyToRenderer, AEGIS_PROXY_IPC_CHANNEL } from './renderer-bridge.js';
 export {
   ensureRootCA,
   readRootCAPublic,
