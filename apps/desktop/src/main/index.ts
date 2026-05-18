@@ -14,6 +14,7 @@ import { serviceManager } from './services/service-manager.js';
 import {
   startAegisProxy,
   attachAegisProxyToRenderer,
+  registerAegisProxyIpcHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -93,6 +94,8 @@ app.whenReady().then(async () => {
       aegisProxyHandle = await startAegisProxy({ isBlocked });
       // @rule:ASD-006 — proxy events bridged to renderer for AgentFeed (ASD-T-008).
       attachAegisProxyToRenderer(aegisProxyHandle.events);
+      // ASD-T-003: IPC handlers for the /setup/root-ca consent ceremony.
+      registerAegisProxyIpcHandlers();
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

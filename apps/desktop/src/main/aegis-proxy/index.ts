@@ -44,6 +44,25 @@ export {
 } from './event-bus.js';
 export { attachAegisProxyToRenderer, AEGIS_PROXY_IPC_CHANNEL } from './renderer-bridge.js';
 export {
+  installRootCAToTrustStore,
+  getTrustStoreStatus,
+  LINUX_TRUST_STORE_PATH,
+  type TrustStoreInstallResult,
+  type TrustStoreStatus,
+} from './ca-truststore.js';
+export {
+  ConsentStore,
+  type ConsentRecord,
+  type ConsentDecision,
+  type ConsentStoreOptions,
+} from './consent-store.js';
+export {
+  registerAegisProxyIpcHandlers,
+  unregisterAegisProxyIpcHandlers,
+  ROOT_CA_CEREMONY,
+  type RootCASetupInfo,
+} from './ipc-handlers.js';
+export {
   ensureRootCA,
   readRootCAPublic,
   deleteRootCA,

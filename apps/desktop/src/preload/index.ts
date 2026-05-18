@@ -65,7 +65,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ─── Aegis Proxy (ASD-T-008) ─────────────────────────────────────────────
   // Subscribe to live aegis-proxy events (request.observed, response.observed,
-  // request.parse_failed, tls.client_error). Returns an unsubscribe function.
+  // request.parse_failed, tls.client_error, privacy.blocked). Returns an
+  // unsubscribe function.
   //
   // The event shape mirrors AegisProxyEvent in main/aegis-proxy/event-bus.ts.
   // Renderer receives the event as plain JSON via structured clone.
@@ -77,7 +78,39 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.off('aegis-proxy-event', handler);
     };
   },
+
+  // ─── Aegis Proxy CA setup (ASD-T-003) ────────────────────────────────────
+  // Drives the /setup/root-ca consent ceremony in the renderer.
+  aegisProxyGetRootCASetupInfo: () =>
+    ipcRenderer.invoke('aegis-proxy:get-root-ca-setup-info') as Promise<RootCASetupInfoPayload>,
+  aegisProxyRecordRootCAConsent: (decision: 'allow' | 'deny' | 'skip') =>
+    ipcRenderer.invoke('aegis-proxy:root-ca-consent', { decision }) as Promise<{
+      ok: true;
+      install?: { ok: boolean; error?: string; installedAt?: string };
+    }>,
 });
+
+// ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────
+
+export interface RootCASetupInfoPayload {
+  ca: {
+    fingerprintSha256: string;
+    generatedAt: string;
+    validUntil: string;
+  } | null;
+  trustStore: {
+    platformSupported: boolean;
+    installed: boolean;
+    installedAt?: string;
+    manualInstallCommand?: string;
+    manualRevokeCommand?: string;
+  };
+  consent: {
+    answered: boolean;
+    decision: 'allow' | 'deny' | 'skip' | null;
+    answeredAt: string | null;
+  };
+}
 
 // ─── Aegis Proxy event payload (renderer-side mirror) ────────────────────────
 // Keep in sync with main/aegis-proxy/event-bus.ts AegisProxyEvent.
@@ -198,6 +231,13 @@ export interface ElectronAPI {
 
   // Aegis Proxy (ASD-T-008)
   onAegisProxyEvent: (callback: (event: AegisProxyEventPayload) => void) => () => void;
+
+  // Aegis Proxy CA setup (ASD-T-003)
+  aegisProxyGetRootCASetupInfo: () => Promise<RootCASetupInfoPayload>;
+  aegisProxyRecordRootCAConsent: (decision: 'allow' | 'deny' | 'skip') => Promise<{
+    ok: true;
+    install?: { ok: boolean; error?: string; installedAt?: string };
+  }>;
 }
 
 declare global {

@@ -8,6 +8,7 @@
 // P1 scope: pure observation. No enforce/kill buttons here — those land in P3.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 // Event types mirror src/preload/index.ts AegisProxyEventPayload.
 type Provider = 'anthropic' | 'openai' | 'unknown';
@@ -205,9 +206,17 @@ export function AgentFeed() {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={10} className="text-center py-12 text-gray-500">
-                  Waiting for agent activity. Configure your LLM client to use
-                  <code className="mx-1 text-ankr-green">HTTPS_PROXY=http://127.0.0.1:4857</code>
-                  and trust <code className="mx-1 text-ankr-green">~/.ankrshield/ca.crt</code>.
+                  <div>
+                    Waiting for agent activity. Point your LLM client at
+                    <code className="mx-1 text-ankr-green">HTTPS_PROXY=http://127.0.0.1:4857</code>.
+                  </div>
+                  <div className="mt-3">
+                    First time?{' '}
+                    <Link to="/setup/root-ca" className="text-ankr-green hover:underline">
+                      Run the CA setup ceremony →
+                    </Link>{' '}
+                    so HTTPS CONNECT works.
+                  </div>
                 </td>
               </tr>
             ) : (

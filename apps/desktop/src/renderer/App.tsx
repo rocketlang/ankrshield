@@ -7,7 +7,7 @@ import { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Layout } from './components/layout';
-import { Dashboard, Analytics, Devices, Settings, AgentFeed } from './pages';
+import { Dashboard, Analytics, Devices, Settings, AgentFeed, SetupRootCA } from './pages';
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
 import './App.css';
@@ -65,6 +65,7 @@ function App() {
             <Route path="analytics" element={<Analytics />} />
             <Route path="devices" element={<Devices />} />
             <Route path="agents" element={<AgentFeed />} />
+            <Route path="setup/root-ca" element={<SetupRootCA />} />
             <Route path="settings" element={<Settings />} />
           </Route>
         </Routes>
