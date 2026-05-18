@@ -59,9 +59,24 @@ export {
 export {
   registerAegisProxyIpcHandlers,
   unregisterAegisProxyIpcHandlers,
+  registerTofuConsentHandlers,
   ROOT_CA_CEREMONY,
   type RootCASetupInfo,
 } from './ipc-handlers.js';
+export {
+  AppsPolicyStore,
+  type AppPolicy,
+  type PolicyMap,
+  type Decision,
+  type PiiPolicyChoice,
+  type DanCarrier,
+} from './apps-policy.js';
+export {
+  PendingConsentQueue,
+  type ConsentRequest,
+  type ConsentInput,
+  type ConsentOutcome,
+} from './pending-consent-queue.js';
 export {
   ensureRootCA,
   readRootCAPublic,

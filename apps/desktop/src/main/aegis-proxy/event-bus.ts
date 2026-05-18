@@ -103,6 +103,24 @@ export type AegisProxyEvent =
       costUsd: number;
       promptTokens: number | null;
       completionTokens: number | null;
+    }
+  | {
+      kind: 'consent.pending';
+      requestId: string;
+      timestamp: string;
+      pendingId: string;
+      appId: string;
+      hostname: string;
+      timeoutMs: number;
+    }
+  | {
+      kind: 'consent.resolved';
+      requestId: string;
+      timestamp: string;
+      pendingId: string;
+      appId: string;
+      decision: 'allow' | 'deny';
+      timedOut: boolean;
     };
 
 export type AegisProxyEventListener = (event: AegisProxyEvent) => void;

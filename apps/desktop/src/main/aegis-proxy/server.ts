@@ -40,6 +40,8 @@ import { AegisGate, AegisLiteError } from './aegis-gate.js';
 import { redactInJsonBody, PiiPolicyResolver } from './pii-boundary.js';
 import { BudgetLedger, BudgetConfigResolver, hourBucket } from './budget-ledger.js';
 import { computeCost } from './cost-rates.js';
+import { AppsPolicyStore } from './apps-policy.js';
+import { PendingConsentQueue } from './pending-consent-queue.js';
 
 /**
  * Start the aegis-proxy.
@@ -131,6 +133,51 @@ export async function startAegisProxy(
   }
   const budgetConfig = new BudgetConfigResolver();
 
+  // ASD-T-015 TOFU: per-app policy store (decision + budget + pii + dan) and
+  // the pending-consent queue used to hold first-request from unseen apps.
+  const appsPolicy = new AppsPolicyStore();
+  try {
+    await appsPolicy.load();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[aegis-proxy] apps-policy.json load failed; starting fresh:',
+      err instanceof Error ? err.message : err
+    );
+  }
+  // Hydrate budget + pii resolvers from any previously-stored policies.
+  for (const [appId, policy] of Object.entries(appsPolicy.getAll())) {
+    if (policy.decision === 'allow' && policy.hourly_limit_usd != null) {
+      budgetConfig.setOverride(appId, { hourly_limit_usd: policy.hourly_limit_usd });
+    }
+    piiPolicy.setOverride(appId, policy.pii_policy);
+  }
+
+  const pendingConsent = new PendingConsentQueue({
+    onPendingAdded: (req) => {
+      events.emit({
+        kind: 'consent.pending',
+        requestId: req.pendingId, // pendingId stands in here for paired requestId
+        timestamp: req.heldAt,
+        pendingId: req.pendingId,
+        appId: req.appId,
+        hostname: req.hostname,
+        timeoutMs: req.timeoutMs,
+      });
+    },
+    onResolved: (pendingId, outcome) => {
+      events.emit({
+        kind: 'consent.resolved',
+        requestId: pendingId,
+        timestamp: new Date().toISOString(),
+        pendingId,
+        appId: '', // filled by renderer-side via pendingId lookup
+        decision: outcome.decision,
+        timedOut: outcome.timedOut,
+      });
+    },
+  });
+
   const server = http.createServer((req, res) =>
     handleHttpRequest(
       req,
@@ -142,7 +189,9 @@ export async function startAegisProxy(
       aegisGate,
       piiPolicy,
       budgetLedger,
-      budgetConfig
+      budgetConfig,
+      appsPolicy,
+      pendingConsent
     )
   );
   server.on('connect', (req, socket, head) =>
@@ -158,7 +207,9 @@ export async function startAegisProxy(
       aegisGate,
       piiPolicy,
       budgetLedger,
-      budgetConfig
+      budgetConfig,
+      appsPolicy,
+      pendingConsent
     )
   );
 
@@ -179,12 +230,17 @@ export async function startAegisProxy(
       resolve({
         config: resolved,
         events,
+        appsPolicy,
+        pendingConsent,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {
-              // Final flush of apps registry + budget ledger on graceful stop.
+              // Final flush of apps registry + budget ledger + policy on graceful stop.
+              // Drain pending consents (timeout-deny each).
+              pendingConsent.drain();
               appsStore.stop().catch(() => {});
               budgetLedger.stop().catch(() => {});
+              appsPolicy.stop().catch(() => {});
               err ? rej(err) : res();
             })
           ),
@@ -212,7 +268,9 @@ async function handleHttpRequest(
   aegisGate: AegisGate,
   piiPolicy: PiiPolicyResolver,
   budgetLedger: BudgetLedger,
-  budgetConfig: BudgetConfigResolver
+  budgetConfig: BudgetConfigResolver,
+  appsPolicy: AppsPolicyStore,
+  pendingConsent: PendingConsentQueue
 ): Promise<void> {
   const rawUrl = req.url ?? '';
   if (!/^https?:\/\//i.test(rawUrl)) {
@@ -267,6 +325,8 @@ async function handleHttpRequest(
     piiPolicy,
     budgetLedger,
     budgetConfig,
+    appsPolicy,
+    pendingConsent,
   });
 }
 
@@ -300,7 +360,9 @@ async function handleHttpConnect(
   aegisGate: AegisGate,
   piiPolicy: PiiPolicyResolver,
   budgetLedger: BudgetLedger,
-  budgetConfig: BudgetConfigResolver
+  budgetConfig: BudgetConfigResolver,
+  appsPolicy: AppsPolicyStore,
+  pendingConsent: PendingConsentQueue
 ): Promise<void> {
   const target = parseConnectTarget(req.url ?? '');
   if (!target) {
@@ -374,6 +436,8 @@ async function handleHttpConnect(
         piiPolicy,
         budgetLedger,
         budgetConfig,
+        appsPolicy,
+        pendingConsent,
       })
   );
 
@@ -416,6 +480,8 @@ interface ForwardArgs {
   piiPolicy: PiiPolicyResolver;
   budgetLedger: BudgetLedger;
   budgetConfig: BudgetConfigResolver;
+  appsPolicy: AppsPolicyStore;
+  pendingConsent: PendingConsentQueue;
 }
 
 /**
@@ -441,6 +507,8 @@ function forwardWithObservation(args: ForwardArgs): void {
     piiPolicy,
     budgetLedger,
     budgetConfig,
+    appsPolicy,
+    pendingConsent,
   } = args;
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
@@ -463,6 +531,50 @@ function forwardWithObservation(args: ForwardArgs): void {
     void (async () => {
       const identity = await resolveAppId({ clientPort, proxyPort });
       appsStore.recordRequest(identity.appId, identity.executable);
+
+      // ASD-T-015 TOFU gate. Runs BEFORE AEGIS / PII / budget gates.
+      //   - If the app has a stored deny: 403 immediately.
+      //   - If the app has a stored allow: continue with its stored policy.
+      //   - If unseen: hold in pending queue → user decides via UI → continue or 403.
+      // Timed-out pending (60s default) treated as deny per INF-ASD-004.
+      let policy = appsPolicy.get(identity.appId);
+      if (!policy) {
+        const outcome = await pendingConsent.hold(identity.appId, upstreamHost);
+        if (outcome.decision === 'allow' && outcome.hourly_limit_usd != null) {
+          // Persist + hydrate resolvers.
+          appsPolicy.recordAllow(identity.appId, {
+            hourly_limit_usd: outcome.hourly_limit_usd,
+            pii_policy: outcome.pii_policy,
+            dan_carrier: outcome.dan_carrier,
+          });
+          budgetConfig.setOverride(identity.appId, {
+            hourly_limit_usd: outcome.hourly_limit_usd,
+          });
+          piiPolicy.setOverride(identity.appId, outcome.pii_policy);
+          policy = appsPolicy.get(identity.appId);
+        } else {
+          // Denied (explicit or timeout). Persist + 403.
+          appsPolicy.recordDeny(identity.appId);
+          piiPolicy.setOverride(identity.appId, 'block');
+          if (!res.headersSent) {
+            res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+          }
+          res.end(
+            `aegis-proxy: ASD-005-tofu-denied — ${identity.appId} ` +
+              `(${outcome.timedOut ? 'consent dialog timeout' : 'user denied'}).\n`
+          );
+          return;
+        }
+      } else if (policy.decision === 'deny') {
+        if (!res.headersSent) {
+          res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+        }
+        res.end(
+          `aegis-proxy: ASD-005-tofu-denied — ${identity.appId} (stored deny). ` +
+            `Revoke via Settings to re-prompt.\n`
+        );
+        return;
+      }
 
       // Parse request via adapter (if matched) — we need hasTools + isStreaming
       // for the AEGIS capability mapping (resolveCapability).

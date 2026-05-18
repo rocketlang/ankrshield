@@ -88,6 +88,44 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ok: true;
       install?: { ok: boolean; error?: string; installedAt?: string };
     }>,
+
+  // ─── TOFU consent (ASD-T-015) ─────────────────────────────────────────────
+  aegisProxyListPendingConsents: () =>
+    ipcRenderer.invoke('aegis-proxy:list-pending-consents') as Promise<
+      Array<{
+        pendingId: string;
+        appId: string;
+        hostname: string;
+        heldAt: string;
+        timeoutMs: number;
+      }>
+    >,
+  aegisProxyResolvePendingConsent: (input: {
+    pendingId: string;
+    decision: 'allow' | 'deny';
+    hourly_limit_usd?: number;
+    pii_policy?: 'redact' | 'block' | 'off';
+    dan_carrier?: 'os' | 'wa' | 'tg';
+  }) =>
+    ipcRenderer.invoke('aegis-proxy:resolve-pending-consent', input) as Promise<{
+      ok: boolean;
+      error?: string;
+    }>,
+  aegisProxyListAppPolicies: () =>
+    ipcRenderer.invoke('aegis-proxy:list-app-policies') as Promise<
+      Record<
+        string,
+        {
+          decision: 'allow' | 'deny';
+          decided_at: string;
+          hourly_limit_usd: number | null;
+          pii_policy: 'redact' | 'block' | 'off';
+          dan_carrier: 'os' | 'wa' | 'tg';
+        }
+      >
+    >,
+  aegisProxyForgetAppPolicy: (appId: string) =>
+    ipcRenderer.invoke('aegis-proxy:forget-app-policy', appId) as Promise<{ ok: boolean }>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────
@@ -226,6 +264,24 @@ export type AegisProxyEventPayload =
       costUsd: number;
       promptTokens: number | null;
       completionTokens: number | null;
+    }
+  | {
+      kind: 'consent.pending';
+      requestId: string;
+      timestamp: string;
+      pendingId: string;
+      appId: string;
+      hostname: string;
+      timeoutMs: number;
+    }
+  | {
+      kind: 'consent.resolved';
+      requestId: string;
+      timestamp: string;
+      pendingId: string;
+      appId: string;
+      decision: 'allow' | 'deny';
+      timedOut: boolean;
     };
 
 /**
@@ -286,6 +342,31 @@ export interface ElectronAPI {
     ok: true;
     install?: { ok: boolean; error?: string; installedAt?: string };
   }>;
+
+  // TOFU consent (ASD-T-015)
+  aegisProxyListPendingConsents: () => Promise<
+    Array<{ pendingId: string; appId: string; hostname: string; heldAt: string; timeoutMs: number }>
+  >;
+  aegisProxyResolvePendingConsent: (input: {
+    pendingId: string;
+    decision: 'allow' | 'deny';
+    hourly_limit_usd?: number;
+    pii_policy?: 'redact' | 'block' | 'off';
+    dan_carrier?: 'os' | 'wa' | 'tg';
+  }) => Promise<{ ok: boolean; error?: string }>;
+  aegisProxyListAppPolicies: () => Promise<
+    Record<
+      string,
+      {
+        decision: 'allow' | 'deny';
+        decided_at: string;
+        hourly_limit_usd: number | null;
+        pii_policy: 'redact' | 'block' | 'off';
+        dan_carrier: 'os' | 'wa' | 'tg';
+      }
+    >
+  >;
+  aegisProxyForgetAppPolicy: (appId: string) => Promise<{ ok: boolean }>;
 }
 
 declare global {

@@ -6,7 +6,7 @@ import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { BudgetLedger, BudgetConfigResolver, hourBucket } from '../aegis-proxy/budget-ledger.ts';
+import { BudgetLedger, BudgetConfigResolver, hourBucket } from '../aegis-proxy/budget-ledger.js';
 
 let tmpDir: string;
 let filePath: string;

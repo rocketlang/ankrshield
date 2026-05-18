@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { lookupRate, computeCost, getRateTable } from '../aegis-proxy/cost-rates.ts';
+import { lookupRate, computeCost, getRateTable } from '../aegis-proxy/cost-rates.js';
 
 describe('ASD-T-014 — lookupRate', () => {
   it('returns exact rate for declared Anthropic models', () => {

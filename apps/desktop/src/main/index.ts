@@ -15,6 +15,7 @@ import {
   startAegisProxy,
   attachAegisProxyToRenderer,
   registerAegisProxyIpcHandlers,
+  registerTofuConsentHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -96,6 +97,8 @@ app.whenReady().then(async () => {
       attachAegisProxyToRenderer(aegisProxyHandle.events);
       // ASD-T-003: IPC handlers for the /setup/root-ca consent ceremony.
       registerAegisProxyIpcHandlers();
+      // ASD-T-015: IPC handlers for TOFU consent (list pending + resolve + policy).
+      registerTofuConsentHandlers(aegisProxyHandle.pendingConsent, aegisProxyHandle.appsPolicy);
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

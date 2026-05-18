@@ -119,7 +119,33 @@ type AegisProxyEvent =
       costUsd: number;
       promptTokens: number | null;
       completionTokens: number | null;
+    }
+  | {
+      kind: 'consent.pending';
+      requestId: string;
+      timestamp: string;
+      pendingId: string;
+      appId: string;
+      hostname: string;
+      timeoutMs: number;
+    }
+  | {
+      kind: 'consent.resolved';
+      requestId: string;
+      timestamp: string;
+      pendingId: string;
+      appId: string;
+      decision: 'allow' | 'deny';
+      timedOut: boolean;
     };
+
+interface PendingConsent {
+  pendingId: string;
+  appId: string;
+  hostname: string;
+  heldAt: string;
+  timeoutMs: number;
+}
 
 /** Aggregated per-request view, built by pairing request/response by requestId. */
 interface FeedRow {
@@ -162,6 +188,14 @@ declare global {
   interface Window {
     electronAPI?: {
       onAegisProxyEvent?: (cb: (e: AegisProxyEvent) => void) => () => void;
+      aegisProxyListPendingConsents?: () => Promise<PendingConsent[]>;
+      aegisProxyResolvePendingConsent?: (input: {
+        pendingId: string;
+        decision: 'allow' | 'deny';
+        hourly_limit_usd?: number;
+        pii_policy?: 'redact' | 'block' | 'off';
+        dan_carrier?: 'os' | 'wa' | 'tg';
+      }) => Promise<{ ok: boolean; error?: string }>;
     };
   }
 }
@@ -174,6 +208,9 @@ export function AgentFeed() {
 
   const rowsByIdRef = useRef<Map<string, FeedRow>>(new Map());
 
+  // ASD-T-015 TOFU pending-consent dialog state.
+  const [pendingConsents, setPendingConsents] = useState<PendingConsent[]>([]);
+
   useEffect(() => {
     const api = window.electronAPI;
     if (!api?.onAegisProxyEvent) {
@@ -181,9 +218,30 @@ export function AgentFeed() {
       // empty state rather than crash.
       return;
     }
+    // Snapshot any pending consents at mount (covers renderer-reload while
+    // proxy was already holding requests).
+    void api.aegisProxyListPendingConsents?.().then((list) => {
+      if (list) setPendingConsents(list);
+    });
     const unsubscribe = api.onAegisProxyEvent((event) => {
-      if (pausedRef.current) return;
-      setRows((prev) => mergeEvent(prev, rowsByIdRef.current, event));
+      if (!pausedRef.current) {
+        setRows((prev) => mergeEvent(prev, rowsByIdRef.current, event));
+      }
+      // Pending-consent state is updated regardless of pause.
+      if (event.kind === 'consent.pending') {
+        setPendingConsents((prev) => [
+          ...prev,
+          {
+            pendingId: event.pendingId,
+            appId: event.appId,
+            hostname: event.hostname,
+            heldAt: event.timestamp,
+            timeoutMs: event.timeoutMs,
+          },
+        ]);
+      } else if (event.kind === 'consent.resolved') {
+        setPendingConsents((prev) => prev.filter((p) => p.pendingId !== event.pendingId));
+      }
     });
     return () => {
       unsubscribe();
@@ -194,6 +252,14 @@ export function AgentFeed() {
 
   return (
     <div className="p-6 space-y-4">
+      {pendingConsents.length > 0 ? (
+        <PendingConsentInbox
+          pending={pendingConsents}
+          onResolved={(pendingId) =>
+            setPendingConsents((prev) => prev.filter((p) => p.pendingId !== pendingId))
+          }
+        />
+      ) : null}
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">
@@ -801,4 +867,144 @@ function summariseFeed(rows: FeedRow[]) {
     totalCostUsd,
     avgLatencyMs: latencyCount > 0 ? Math.round(latencySum / latencyCount) : null,
   };
+}
+
+function PendingConsentInbox({
+  pending,
+  onResolved,
+}: {
+  pending: PendingConsent[];
+  onResolved: (pendingId: string) => void;
+}) {
+  return (
+    <section className="bg-yellow-900/40 border border-yellow-600 rounded-lg p-4 space-y-3">
+      <header>
+        <h2 className="font-semibold text-yellow-200">
+          🛂 {pending.length} pending consent{pending.length === 1 ? '' : 's'}
+        </h2>
+        <p className="text-xs text-yellow-300">
+          Apps below are blocked at the proxy waiting for your TOFU decision. Modal-until-decided
+          (ASD-005); a 60-second timeout treats no answer as deny.
+        </p>
+      </header>
+      {pending.map((p) => (
+        <PendingConsentForm key={p.pendingId} pending={p} onResolved={onResolved} />
+      ))}
+    </section>
+  );
+}
+
+function PendingConsentForm({
+  pending,
+  onResolved,
+}: {
+  pending: PendingConsent;
+  onResolved: (pendingId: string) => void;
+}) {
+  const [budget, setBudget] = useState<string>('');
+  const [piiPolicy, setPiiPolicy] = useState<'redact' | 'block' | 'off'>('redact');
+  const [danCarrier, setDanCarrier] = useState<'os' | 'wa' | 'tg'>('os');
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async (decision: 'allow' | 'deny') => {
+    const api = window.electronAPI;
+    if (!api?.aegisProxyResolvePendingConsent) return;
+    if (decision === 'allow') {
+      const n = Number(budget);
+      if (!Number.isFinite(n) || n <= 0) {
+        setErr('Hourly budget must be a positive number (USD). ASD-005: no unbounded allow.');
+        return;
+      }
+    }
+    setSubmitting(true);
+    setErr(null);
+    const r = await api.aegisProxyResolvePendingConsent({
+      pendingId: pending.pendingId,
+      decision,
+      hourly_limit_usd: decision === 'allow' ? Number(budget) : undefined,
+      pii_policy: piiPolicy,
+      dan_carrier: danCarrier,
+    });
+    setSubmitting(false);
+    if (!r.ok) {
+      setErr(r.error ?? 'Failed to resolve consent.');
+      return;
+    }
+    onResolved(pending.pendingId);
+  };
+
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded p-3 space-y-2">
+      <div className="flex items-baseline justify-between">
+        <div>
+          <span className="font-mono text-sm text-white">{pending.appId}</span>
+          <span className="ml-2 text-xs text-gray-400">→ {pending.hostname}</span>
+        </div>
+        <span className="text-xs text-gray-500">held {pending.heldAt.slice(11, 19)} UTC</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-sm">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-gray-400">
+            Hourly budget (USD) <span className="text-red-400">*</span>
+          </span>
+          <input
+            type="number"
+            min={0.01}
+            step={0.01}
+            value={budget}
+            onChange={(e) => setBudget(e.target.value)}
+            disabled={submitting}
+            className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
+            placeholder="e.g. 0.50"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-gray-400">PII policy</span>
+          <select
+            value={piiPolicy}
+            onChange={(e) => setPiiPolicy(e.target.value as 'redact' | 'block' | 'off')}
+            disabled={submitting}
+            className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
+          >
+            <option value="redact">Redact (default)</option>
+            <option value="block">Block on PII</option>
+            <option value="off">Off (no scanning)</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-gray-400">DAN carrier (P2 ASD-T-016+)</span>
+          <select
+            value={danCarrier}
+            onChange={(e) => setDanCarrier(e.target.value as 'os' | 'wa' | 'tg')}
+            disabled={submitting}
+            className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
+          >
+            <option value="os">OS notification (default)</option>
+            <option value="wa">WhatsApp</option>
+            <option value="tg">Telegram</option>
+          </select>
+        </label>
+      </div>
+      {err ? <div className="text-xs text-red-400">{err}</div> : null}
+      <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => submit('allow')}
+          className="px-3 py-1.5 rounded font-medium text-sm bg-ankr-green text-white hover:bg-green-600 disabled:opacity-50"
+        >
+          Allow with budget
+        </button>
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => submit('deny')}
+          className="px-3 py-1.5 rounded font-medium text-sm bg-red-700/70 text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          Deny
+        </button>
+      </div>
+    </div>
+  );
 }

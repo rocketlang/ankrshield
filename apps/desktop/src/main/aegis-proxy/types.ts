@@ -34,6 +34,10 @@ export interface AegisProxyHandle {
   config: Readonly<AegisProxyConfig>;
   /** Subscribe to live request/response observation events from the proxy. */
   events: import('./event-bus.js').AegisProxyEventBus;
+  /** Per-app TOFU policy store (decisions + budget + pii + dan). */
+  appsPolicy: import('./apps-policy.js').AppsPolicyStore;
+  /** Pending-consent queue for unseen-app first requests. */
+  pendingConsent: import('./pending-consent-queue.js').PendingConsentQueue;
   stop(): Promise<void>;
 }
 
