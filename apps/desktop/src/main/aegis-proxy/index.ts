@@ -9,6 +9,12 @@ export { startAegisProxy } from './server.js';
 export { validateBindAddress, isLoopbackAddress, AegisBindViolation } from './bind-validator.js';
 export { generateRootCA, type GenerateRootCAOptions } from './ca-generator.js';
 export {
+  mintLeafCert,
+  LeafCertCache,
+  type MintLeafCertOptions,
+  type LeafCertCacheOptions,
+} from './leaf-cert.js';
+export {
   ensureRootCA,
   readRootCAPublic,
   deleteRootCA,
@@ -24,4 +30,5 @@ export {
   type LoopbackAddress,
   type RootCA,
   type RootCAPublic,
+  type LeafCert,
 } from './types.js';

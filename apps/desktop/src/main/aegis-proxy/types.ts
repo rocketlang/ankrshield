@@ -41,3 +41,16 @@ export interface RootCA {
 
 /** Cert + metadata only; key stays in keychain. Returned by load operations. */
 export type RootCAPublic = Omit<RootCA, 'keyPem'>;
+
+// ─── Leaf certs (ASD-T-002b TLS termination) ──────────────────────────────────
+
+export interface LeafCert {
+  /** PEM-encoded X.509 cert for one hostname; signed by the install's root CA. */
+  certPem: string;
+  /** PEM-encoded RSA-2048 private key. Held in-memory only; never persisted. */
+  keyPem: string;
+  /** The hostname this cert covers (also in SAN). */
+  hostname: string;
+  /** ISO-8601 UTC; cert's notAfter. Leaf certs are short-lived (default 24h). */
+  validUntil: string;
+}
