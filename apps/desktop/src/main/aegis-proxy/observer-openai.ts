@@ -11,8 +11,8 @@
 // @rule:ASD-006 — observation only
 
 import type {
-  ObservedRequest,
   ObservedResponse,
+  ParsedRequest,
   ProviderAdapter,
   RawRequestSnapshot,
   ResponseObserver,
@@ -39,7 +39,7 @@ export const openaiAdapter: ProviderAdapter = {
     return OPENAI_PATHS.some((re) => re.test(path));
   },
 
-  parseRequest(snapshot: RawRequestSnapshot): ObservedRequest {
+  parseRequest(snapshot: RawRequestSnapshot): ParsedRequest {
     const bodyStr = snapshot.body.toString('utf8');
     const json = bodyStr.length > 0 ? (JSON.parse(bodyStr) as OpenAIRequestBody) : {};
 

@@ -26,6 +26,16 @@ export interface ObservedRequest {
   messageCount: number;
   /** Byte length of the original request body. */
   requestBytes: number;
+  /**
+   * Per-app identifier ("claude-desktop", "cursor", "unknown:<port>").
+   * Best-effort per ASD-YK-005 — guidance, not security. Resolved via
+   * OS-specific socket-to-PID lookup (ss/lsof/netstat).
+   */
+  appId: string;
+  /** Resolved PID of the originating process, if available. */
+  pid: number | null;
+  /** Resolved executable basename, if available. */
+  executable: string | null;
 }
 
 /** What the adapter learned from the upstream response (after it completed). */
@@ -54,13 +64,21 @@ export interface RawRequestSnapshot {
   body: Buffer;
 }
 
+/**
+ * What the adapter produces — everything EXCEPT app identity, which the
+ * server enriches at emission time using OS-specific socket lookup.
+ * Splitting the contract keeps adapter implementations focused on JSON
+ * parsing (no knowledge of host process introspection).
+ */
+export type ParsedRequest = Omit<ObservedRequest, 'appId' | 'pid' | 'executable'>;
+
 /** Pluggable provider adapter interface. */
 export interface ProviderAdapter {
   provider: Provider;
   /** Decide if this request is targeted at this provider. */
   matches(hostname: string, path: string): boolean;
   /** Parse a fully-buffered request body. Throw on malformed input. */
-  parseRequest(snapshot: RawRequestSnapshot): ObservedRequest;
+  parseRequest(snapshot: RawRequestSnapshot): ParsedRequest;
   /**
    * Build a response observer that watches each chunk. Returns a `tap()`
    * to feed chunks through and a `finalize()` to call when the stream ends.

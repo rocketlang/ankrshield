@@ -24,6 +24,10 @@ interface ObservedRequest {
   hasTools: boolean;
   messageCount: number;
   requestBytes: number;
+  // ASD-T-006: best-effort per-app identifier
+  appId: string;
+  pid: number | null;
+  executable: string | null;
 }
 
 interface ObservedResponse {
@@ -66,6 +70,7 @@ interface FeedRow {
   requestId: string;
   startedAt: string;
   provider: Provider | 'unknown';
+  appId: string;
   hostname: string;
   path: string;
   model: string | null;
@@ -173,6 +178,7 @@ export function AgentFeed() {
           <thead className="bg-gray-900 text-gray-400 text-xs uppercase tracking-wide">
             <tr>
               <th className="px-3 py-2 text-left">Time</th>
+              <th className="px-3 py-2 text-left">App</th>
               <th className="px-3 py-2 text-left">Provider</th>
               <th className="px-3 py-2 text-left">Model</th>
               <th className="px-3 py-2 text-left">Host / Path</th>
@@ -186,7 +192,7 @@ export function AgentFeed() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center py-12 text-gray-500">
+                <td colSpan={10} className="text-center py-12 text-gray-500">
                   Waiting for agent activity. Configure your LLM client to use
                   <code className="mx-1 text-ankr-green">HTTPS_PROXY=http://127.0.0.1:4857</code>
                   and trust <code className="mx-1 text-ankr-green">~/.ankrshield/ca.crt</code>.
@@ -230,6 +236,9 @@ function FeedRowView({ row }: { row: FeedRow }) {
   return (
     <tr className="border-t border-gray-700 hover:bg-gray-750">
       <td className="px-3 py-2 font-mono text-xs text-gray-400">{time}</td>
+      <td className="px-3 py-2 font-mono text-xs">
+        <span className={appBadgeClass(row.appId)}>{row.appId}</span>
+      </td>
       <td className="px-3 py-2">
         <span
           className={`px-2 py-0.5 rounded text-xs font-medium ${providerBadgeClass(row.provider)}`}
@@ -307,6 +316,12 @@ function providerBadgeClass(p: string) {
   return 'bg-gray-600/30 text-gray-300';
 }
 
+function appBadgeClass(appId: string) {
+  // Unknown apps render in dim grey; known apps get a stronger tone.
+  if (appId.startsWith('unknown:')) return 'text-gray-500';
+  return 'text-gray-200';
+}
+
 function formatTime(iso: string) {
   try {
     const d = new Date(iso);
@@ -333,6 +348,7 @@ function mergeEvent(
         requestId: event.requestId,
         startedAt: event.timestamp,
         provider: event.observation.provider,
+        appId: event.observation.appId,
         hostname: event.observation.hostname,
         path: event.observation.path,
         model: event.observation.model,
@@ -359,6 +375,7 @@ function mergeEvent(
             requestId: event.requestId,
             startedAt: event.timestamp,
             provider: 'unknown',
+            appId: 'unknown:?',
             hostname: '',
             path: '',
             model: null,
@@ -389,6 +406,7 @@ function mergeEvent(
           requestId: event.requestId,
           startedAt: event.timestamp,
           provider: event.provider,
+          appId: 'unknown:?',
           hostname: event.hostname,
           path: event.path,
           model: null,
@@ -417,6 +435,7 @@ function mergeEvent(
         requestId: event.requestId,
         startedAt: event.timestamp,
         provider: 'unknown',
+        appId: 'unknown:?',
         hostname: event.hostname,
         path: '(TLS handshake)',
         model: null,

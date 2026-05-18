@@ -94,6 +94,10 @@ export interface AegisProxyObservedRequest {
   hasTools: boolean;
   messageCount: number;
   requestBytes: number;
+  // ASD-T-006 + T-007: per-app identity enrichment
+  appId: string;
+  pid: number | null;
+  executable: string | null;
 }
 
 export interface AegisProxyObservedResponse {

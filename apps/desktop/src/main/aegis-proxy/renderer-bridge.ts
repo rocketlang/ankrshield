@@ -3,9 +3,14 @@
 //
 // @rule:ASD-006 — single Electron main process; renderer receives events via IPC
 
-import { BrowserWindow } from 'electron';
+// electron is a CommonJS module — use default-import + destructure so
+// the file is loadable under both Electron (real BrowserWindow) and
+// plain Node ESM (where the named-import form throws SyntaxError).
+import electron from 'electron';
 
 import type { AegisProxyEvent, AegisProxyEventBus } from './event-bus.js';
+
+const { BrowserWindow } = electron;
 
 export const AEGIS_PROXY_IPC_CHANNEL = 'aegis-proxy-event';
 

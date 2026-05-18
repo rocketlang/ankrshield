@@ -32,7 +32,9 @@ import { ensureRootCA } from './ca-store.js';
 import { LeafCertCache } from './leaf-cert.js';
 import { AegisProxyEventBus } from './event-bus.js';
 import { pickAdapter } from './observer-dispatcher.js';
-import type { ProviderAdapter, ResponseObserver } from './observer-types.js';
+import type { ObservedRequest, ProviderAdapter, ResponseObserver } from './observer-types.js';
+import { resolveAppId } from './app-identifier.js';
+import { AppsStore } from './apps-store.js';
 
 /**
  * Start the aegis-proxy.
@@ -82,11 +84,27 @@ export async function startAegisProxy(
 
   const events = new AegisProxyEventBus();
 
-  const server = http.createServer((req, res) => handleHttpRequest(req, res, events));
+  // ASD-T-007: load apps registry; observation-only in P1, written debounced.
+  const appsStore = new AppsStore();
+  try {
+    await appsStore.load();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[aegis-proxy] apps.json load failed; starting fresh:',
+      err instanceof Error ? err.message : err
+    );
+  }
+
+  const proxyPort = resolved.bindPort;
+
+  const server = http.createServer((req, res) =>
+    handleHttpRequest(req, res, events, appsStore, proxyPort)
+  );
   server.on('connect', (req, socket, head) =>
     // Node types `socket` as Duplex on the connect event; in practice it's a
     // net.Socket for TCP-served HTTP. Cast at the boundary.
-    handleHttpConnect(req, socket as net.Socket, head, leafCache, events)
+    handleHttpConnect(req, socket as net.Socket, head, leafCache, events, appsStore, proxyPort)
   );
 
   return new Promise<AegisProxyHandle>((resolve, reject) => {
@@ -107,7 +125,13 @@ export async function startAegisProxy(
         config: resolved,
         events,
         stop: () =>
-          new Promise<void>((res, rej) => server.close((err) => (err ? rej(err) : res()))),
+          new Promise<void>((res, rej) =>
+            server.close((err) => {
+              // Final flush of apps registry on graceful stop.
+              appsStore.stop().catch(() => {});
+              err ? rej(err) : res();
+            })
+          ),
       });
     };
     server.once('error', onErr);
@@ -125,7 +149,9 @@ export async function startAegisProxy(
 function handleHttpRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  events: AegisProxyEventBus
+  events: AegisProxyEventBus,
+  appsStore: AppsStore,
+  proxyPort: number
 ): void {
   const rawUrl = req.url ?? '';
   if (!/^https?:\/\//i.test(rawUrl)) {
@@ -165,6 +191,8 @@ function handleHttpRequest(
     upstreamPath: target.pathname + target.search,
     useTls: false,
     events,
+    appsStore,
+    proxyPort,
   });
 }
 
@@ -191,7 +219,9 @@ function handleHttpConnect(
   clientSocket: net.Socket,
   head: Buffer,
   leafCache: LeafCertCache | null,
-  events: AegisProxyEventBus
+  events: AegisProxyEventBus,
+  appsStore: AppsStore,
+  proxyPort: number
 ): void {
   const target = parseConnectTarget(req.url ?? '');
   if (!target) {
@@ -243,6 +273,8 @@ function handleHttpConnect(
         upstreamPath: req2.url ?? '/',
         useTls: true,
         events,
+        appsStore,
+        proxyPort,
       })
   );
 
@@ -279,6 +311,8 @@ interface ForwardArgs {
   upstreamPath: string;
   useTls: boolean;
   events: AegisProxyEventBus;
+  appsStore: AppsStore;
+  proxyPort: number;
 }
 
 /**
@@ -290,44 +324,69 @@ interface ForwardArgs {
  * desktop AEGIS proxy.
  */
 function forwardWithObservation(args: ForwardArgs): void {
-  const { req, res, upstreamHost, upstreamPort, upstreamPath, useTls, events } = args;
+  const {
+    req,
+    res,
+    upstreamHost,
+    upstreamPort,
+    upstreamPath,
+    useTls,
+    events,
+    appsStore,
+    proxyPort,
+  } = args;
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
   const adapter: ProviderAdapter | null = pickAdapter(upstreamHost, upstreamPath);
+  const clientPort = req.socket?.remotePort ?? 0;
 
   const bodyChunks: Buffer[] = [];
   req.on('data', (c: Buffer) => bodyChunks.push(c));
   req.on('end', () => {
     const requestBody = Buffer.concat(bodyChunks);
 
-    // Emit request observation if an adapter matched.
-    if (adapter) {
-      try {
-        const observation = adapter.parseRequest({
-          hostname: upstreamHost,
-          path: upstreamPath,
-          method: req.method ?? 'GET',
-          headers: req.headers,
-          body: requestBody,
-        });
-        events.emit({
-          kind: 'request.observed',
-          requestId,
-          timestamp: new Date().toISOString(),
-          observation,
-        });
-      } catch (err) {
-        events.emit({
-          kind: 'request.parse_failed',
-          requestId,
-          timestamp: new Date().toISOString(),
-          provider: adapter.provider,
-          hostname: upstreamHost,
-          path: upstreamPath,
-          error: err instanceof Error ? err.message : String(err),
-        });
+    // ASD-T-006: resolve per-app identity from the socket. Best-effort, never throws.
+    void (async () => {
+      const identity = await resolveAppId({ clientPort, proxyPort });
+
+      // ASD-T-007: record the request in apps registry (debounced flush to disk).
+      appsStore.recordRequest(identity.appId, identity.executable);
+
+      // Emit request observation if an adapter matched.
+      if (adapter) {
+        try {
+          const parsed = adapter.parseRequest({
+            hostname: upstreamHost,
+            path: upstreamPath,
+            method: req.method ?? 'GET',
+            headers: req.headers,
+            body: requestBody,
+          });
+          const observation: ObservedRequest = {
+            ...parsed,
+            appId: identity.appId,
+            pid: identity.pid,
+            executable: identity.executable,
+          };
+          events.emit({
+            kind: 'request.observed',
+            requestId,
+            timestamp: new Date().toISOString(),
+            observation,
+          });
+        } catch (err) {
+          events.emit({
+            kind: 'request.parse_failed',
+            requestId,
+            timestamp: new Date().toISOString(),
+            provider: adapter.provider,
+            hostname: upstreamHost,
+            path: upstreamPath,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
-    }
+    })();
 
     // Build outbound request (TLS or plaintext).
     const httpModule = useTls ? https : http;

@@ -10,8 +10,8 @@
 // @rule:ASD-006 — observation only; no modification of request or response
 
 import type {
-  ObservedRequest,
   ObservedResponse,
+  ParsedRequest,
   ProviderAdapter,
   RawRequestSnapshot,
   ResponseObserver,
@@ -35,7 +35,7 @@ export const anthropicAdapter: ProviderAdapter = {
     return ANTHROPIC_PATHS.some((re) => re.test(path));
   },
 
-  parseRequest(snapshot: RawRequestSnapshot): ObservedRequest {
+  parseRequest(snapshot: RawRequestSnapshot): ParsedRequest {
     const bodyStr = snapshot.body.toString('utf8');
     // Throw on malformed JSON — caller emits a parse_failed event.
     const json = bodyStr.length > 0 ? (JSON.parse(bodyStr) as AnthropicRequestBody) : {};

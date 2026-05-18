@@ -21,10 +21,22 @@ export type {
   Provider,
   ObservedRequest,
   ObservedResponse,
+  ParsedRequest,
   ProviderAdapter,
   ResponseObserver,
   RawRequestSnapshot,
 } from './observer-types.js';
+export {
+  resolveAppId,
+  normaliseAppId,
+  parseLinuxSsOutput,
+  parseMacLsofOutput,
+  parseWindowsNetstatForPid,
+  parseWindowsTasklistOutput,
+  type AppIdentity,
+  type ResolveAppIdOptions,
+} from './app-identifier.js';
+export { AppsStore, type AppRecord, type AppsMap, type AppsStoreOptions } from './apps-store.js';
 export {
   AegisProxyEventBus,
   type AegisProxyEvent,
