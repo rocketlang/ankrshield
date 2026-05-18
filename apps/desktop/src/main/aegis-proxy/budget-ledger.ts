@@ -101,6 +101,32 @@ export class BudgetLedger {
   }
 
   /**
+   * Sum spend over the last N hours (default 24) for an app. ASD-T-020
+   * BudgetPanel reads this to show "today's spend" alongside the
+   * current-hour cap. Walks the persisted hour buckets so it stays O(N) in
+   * the retention window (~168 hourly entries max per app).
+   */
+  recentSpend(appId: string, hours = 24, now: Date = new Date()): AppHourSpend {
+    let cost_usd = 0;
+    let request_count = 0;
+    const data = this.map[appId];
+    if (!data) return { cost_usd: 0, request_count: 0 };
+    for (let i = 0; i < hours; i++) {
+      const d = new Date(now.getTime() - i * 60 * 60 * 1000);
+      const e = data[hourBucket(d)];
+      if (!e) continue;
+      cost_usd += e.cost_usd;
+      request_count += e.request_count;
+    }
+    return { cost_usd, request_count };
+  }
+
+  /** List of appIds with any ledger activity in retention. */
+  knownAppIds(): string[] {
+    return Object.keys(this.map);
+  }
+
+  /**
    * Get the full per-hour breakdown for an app over the last N hours.
    * Used by UI to render budget panel + 7-day trend.
    */

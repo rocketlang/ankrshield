@@ -38,6 +38,10 @@ export interface AegisProxyHandle {
   appsPolicy: import('./apps-policy.js').AppsPolicyStore;
   /** Pending-consent queue for unseen-app first requests. */
   pendingConsent: import('./pending-consent-queue.js').PendingConsentQueue;
+  /** Per-app hourly budget ledger (ASD-T-014) — exposed for ASD-T-020 BudgetPanel. */
+  budgetLedger: import('./budget-ledger.js').BudgetLedger;
+  /** Per-app budget config (cap) resolver (ASD-T-014 / ASD-T-020). */
+  budgetConfig: import('./budget-ledger.js').BudgetConfigResolver;
   /** Pending-DAN queue for HIGH-category tool requests (ASD-T-016). */
   pendingDan: import('./pending-dan-queue.js').PendingDanQueue;
   /** Session-scoped DAN decision cache (ASD-T-016). */

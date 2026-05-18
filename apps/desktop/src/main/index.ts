@@ -20,6 +20,7 @@ import {
   registerDanCarrierCredsHandlers,
   registerDanTimeoutHandlers,
   registerConsentDialogHandlers,
+  registerBudgetPanelHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -111,6 +112,12 @@ app.whenReady().then(async () => {
       registerDanTimeoutHandlers(aegisProxyHandle.danTimeoutStore);
       // ASD-T-019: ConsentDialog → ConsentStore IPC (impression + decision PRAMANA records).
       registerConsentDialogHandlers();
+      // ASD-T-020: BudgetPanel IPC (per-app spend summary + cap edits).
+      registerBudgetPanelHandlers(
+        aegisProxyHandle.appsPolicy,
+        aegisProxyHandle.budgetLedger,
+        aegisProxyHandle.budgetConfig
+      );
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

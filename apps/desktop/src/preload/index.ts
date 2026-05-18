@@ -193,6 +193,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ok: true;
       consent_record_id: string;
     }>,
+
+  // ─── BudgetPanel (ASD-T-020 / FR-16) ──────────────────────────────────────
+  aegisProxyGetBudgetSummary: () =>
+    ipcRenderer.invoke('aegis-proxy:get-budget-summary') as Promise<
+      Array<{
+        appId: string;
+        hourly_limit_usd: number | null;
+        current_hour_usd: number;
+        current_hour_requests: number;
+        last_24h_usd: number;
+        last_24h_requests: number;
+      }>
+    >,
+  aegisProxySetBudgetCap: (input: { appId: string; hourly_limit_usd: number | null }) =>
+    ipcRenderer.invoke('aegis-proxy:set-budget-cap', input) as Promise<{
+      ok: boolean;
+      applied_usd: number | null;
+      error?: string;
+    }>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────
@@ -505,6 +524,22 @@ export interface ElectronAPI {
     context: { purpose: string; consequences: string; revocation_path: string };
     impression_consent_record_id?: string;
   }) => Promise<{ ok: true; consent_record_id: string }>;
+
+  // BudgetPanel (ASD-T-020)
+  aegisProxyGetBudgetSummary: () => Promise<
+    Array<{
+      appId: string;
+      hourly_limit_usd: number | null;
+      current_hour_usd: number;
+      current_hour_requests: number;
+      last_24h_usd: number;
+      last_24h_requests: number;
+    }>
+  >;
+  aegisProxySetBudgetCap: (input: {
+    appId: string;
+    hourly_limit_usd: number | null;
+  }) => Promise<{ ok: boolean; applied_usd: number | null; error?: string }>;
 }
 
 declare global {

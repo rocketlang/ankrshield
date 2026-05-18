@@ -296,6 +296,8 @@ export async function startAegisProxy(
         pendingDan,
         danDecisionCache,
         danTimeoutStore,
+        budgetLedger,
+        budgetConfig,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {

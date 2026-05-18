@@ -365,6 +365,12 @@ export function AgentFeed() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            to="/budget"
+            className="text-xs px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200"
+          >
+            Budget panel →
+          </Link>
           <span className="text-xs text-gray-400">
             {rows.length} / {MAX_ROWS} rows
           </span>

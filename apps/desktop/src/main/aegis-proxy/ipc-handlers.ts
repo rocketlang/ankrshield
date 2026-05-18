@@ -18,6 +18,7 @@ import type { PendingConsentQueue, ConsentRequest } from './pending-consent-queu
 import type { PendingDanQueue, DanRequest } from './pending-dan-queue.js';
 import type { DanDecisionCache } from './dan-decision-cache.js';
 import type { DanTimeoutStore } from './dan-timeout-config.js';
+import type { BudgetLedger, BudgetConfigResolver } from './budget-ledger.js';
 import {
   DAN_TIMEOUT_DEFAULT_MS,
   DAN_TIMEOUT_MIN_MS,
@@ -316,6 +317,105 @@ export function registerDanCarrierCredsHandlers(): () => void {
     ipcMain.removeHandler('aegis-proxy:clear-whatsapp-creds');
     ipcMain.removeHandler('aegis-proxy:set-telegram-creds');
     ipcMain.removeHandler('aegis-proxy:clear-telegram-creds');
+  };
+}
+
+/**
+ * BudgetPanel summary row, one per known app. ASD-T-020 — combines
+ * ledger spend (current-hour + last-24h) with the cap from AppsPolicyStore
+ * via BudgetConfigResolver. apps with no ledger activity and no policy
+ * decision are skipped (not interesting to the panel).
+ */
+export interface BudgetSummaryRow {
+  appId: string;
+  hourly_limit_usd: number | null;
+  current_hour_usd: number;
+  current_hour_requests: number;
+  last_24h_usd: number;
+  last_24h_requests: number;
+}
+
+/**
+ * Wire BudgetPanel IPC (ASD-T-020). Reads the merged AppsPolicy +
+ * BudgetLedger + BudgetConfig view; writes cap changes back to both
+ * AppsPolicyStore (durable per-app decision) AND BudgetConfigResolver
+ * (in-memory live resolver) so the next request honours the new cap
+ * without a proxy restart.
+ *
+ * Cap-change writes validate hourly_limit_usd > 0 per ASD-005 (no
+ * unbounded allow); pass null to clear the cap (revert to unlimited).
+ */
+export function registerBudgetPanelHandlers(
+  appsPolicy: AppsPolicyStore,
+  budgetLedger: BudgetLedger,
+  budgetConfig: BudgetConfigResolver
+): () => void {
+  ipcMain.handle('aegis-proxy:get-budget-summary', (): BudgetSummaryRow[] => {
+    const seen = new Set<string>();
+    // Union: every app with a policy OR any ledger activity.
+    for (const id of Object.keys(appsPolicy.getAll())) seen.add(id);
+    for (const id of budgetLedger.knownAppIds()) seen.add(id);
+    const out: BudgetSummaryRow[] = [];
+    for (const appId of seen) {
+      const cap = budgetConfig.resolve(appId).hourly_limit_usd;
+      const hour = budgetLedger.currentHourSpend(appId);
+      const day = budgetLedger.recentSpend(appId, 24);
+      out.push({
+        appId,
+        hourly_limit_usd: cap,
+        current_hour_usd: hour.cost_usd,
+        current_hour_requests: hour.request_count,
+        last_24h_usd: day.cost_usd,
+        last_24h_requests: day.request_count,
+      });
+    }
+    // Sort: apps over cap first, then by 24h spend descending — surfaces
+    // problems near the top of the panel.
+    out.sort((a, b) => {
+      const aOver = a.hourly_limit_usd != null && a.current_hour_usd >= a.hourly_limit_usd ? 1 : 0;
+      const bOver = b.hourly_limit_usd != null && b.current_hour_usd >= b.hourly_limit_usd ? 1 : 0;
+      if (aOver !== bOver) return bOver - aOver;
+      return b.last_24h_usd - a.last_24h_usd;
+    });
+    return out;
+  });
+
+  ipcMain.handle(
+    'aegis-proxy:set-budget-cap',
+    (
+      _e,
+      input: { appId: string; hourly_limit_usd: number | null }
+    ): { ok: boolean; applied_usd: number | null; error?: string } => {
+      if (input.hourly_limit_usd != null) {
+        if (!Number.isFinite(input.hourly_limit_usd) || input.hourly_limit_usd <= 0) {
+          return {
+            ok: false,
+            applied_usd: null,
+            error: 'ASD-005: cap must be > 0 (use null to clear; no unbounded allow when set).',
+          };
+        }
+      }
+      // Update the live resolver so the NEXT request sees the change.
+      budgetConfig.setOverride(input.appId, { hourly_limit_usd: input.hourly_limit_usd });
+      // Update durable policy too — but only if the app already has one
+      // (BudgetPanel must not synthesise TOFU decisions). If no policy,
+      // the resolver-only update is the panel's contribution; next TOFU
+      // round will pick up the resolver value as a hint.
+      const current = appsPolicy.get(input.appId);
+      if (current && current.decision === 'allow' && input.hourly_limit_usd != null) {
+        appsPolicy.recordAllow(input.appId, {
+          hourly_limit_usd: input.hourly_limit_usd,
+          pii_policy: current.pii_policy,
+          dan_carrier: current.dan_carrier,
+        });
+      }
+      return { ok: true, applied_usd: input.hourly_limit_usd };
+    }
+  );
+
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:get-budget-summary');
+    ipcMain.removeHandler('aegis-proxy:set-budget-cap');
   };
 }
 

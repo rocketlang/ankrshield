@@ -117,7 +117,17 @@ export {
   registerDanCarrierCredsHandlers,
   registerDanTimeoutHandlers,
   registerConsentDialogHandlers,
+  registerBudgetPanelHandlers,
+  type BudgetSummaryRow,
 } from './ipc-handlers.js';
+export {
+  BudgetLedger,
+  BudgetConfigResolver,
+  hourBucket,
+  type AppHourSpend,
+  type BudgetConfig,
+  type LedgerMap,
+} from './budget-ledger.js';
 export {
   DanTimeoutStore,
   DAN_TIMEOUT_DEFAULT_MS,
