@@ -20,3 +20,24 @@ export interface AegisProxyHandle {
   config: Readonly<AegisProxyConfig>;
   stop(): Promise<void>;
 }
+
+// ─── Root CA (ASD-002, ASD-003) ───────────────────────────────────────────────
+
+export const ASD_CA_KEYCHAIN_SERVICE = 'ankrshield-ca';
+export const ASD_CA_KEYCHAIN_ACCOUNT = 'root-key';
+
+export interface RootCA {
+  /** PEM-encoded X.509 cert. Public. Safe to write to disk. */
+  certPem: string;
+  /** PEM-encoded private key. SENSITIVE — only ever lives in OS keychain. */
+  keyPem: string;
+  /** Lowercase hex SHA-256 fingerprint of the DER cert (colon-free). */
+  fingerprintSha256: string;
+  /** ISO-8601 UTC. */
+  generatedAt: string;
+  /** ISO-8601 UTC; cert's notAfter. */
+  validUntil: string;
+}
+
+/** Cert + metadata only; key stays in keychain. Returned by load operations. */
+export type RootCAPublic = Omit<RootCA, 'keyPem'>;

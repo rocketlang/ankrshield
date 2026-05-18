@@ -17,6 +17,7 @@ import { URL } from 'node:url';
 
 import { ASD_PROXY_DEFAULT_PORT, type AegisProxyConfig, type AegisProxyHandle } from './types.js';
 import { validateBindAddress } from './bind-validator.js';
+import { ensureRootCA } from './ca-store.js';
 
 /**
  * Start the aegis-proxy HTTP forward proxy.
@@ -41,6 +42,12 @@ export function startAegisProxy(config: Partial<AegisProxyConfig> = {}): Promise
     // Tests stub process.exit; production hits this path and dies.
     process.exit(78);
   }
+
+  // ASD-002 / ASD-T-002: ensure the per-install root CA exists. Result is not
+  // wired into TLS termination yet (that's the next subtask); for now we just
+  // load-or-generate so first-run cost is paid early and the fingerprint is
+  // visible in logs for the upcoming consent ceremony (ASD-T-003).
+  void ensureRootCAAtStartup();
 
   const server = http.createServer(handleHttpRequest);
   server.on('connect', handleHttpConnect);
@@ -67,6 +74,30 @@ export function startAegisProxy(config: Partial<AegisProxyConfig> = {}): Promise
     server.once('listening', onListen);
     server.listen(resolved.bindPort, resolved.bindAddress);
   });
+}
+
+/**
+ * Load-or-generate the root CA. Non-fatal on failure (HTTP forwarding still
+ * works without TLS termination); per ASD-004 we deny the TLS-termination
+ * code path specifically when CA is unavailable, but the rest of the proxy
+ * keeps serving.
+ */
+async function ensureRootCAAtStartup(): Promise<void> {
+  try {
+    const { ca, freshlyGenerated } = await ensureRootCA();
+    // eslint-disable-next-line no-console
+    console.log(
+      `[aegis-proxy] root CA ${freshlyGenerated ? 'generated' : 'loaded'} ` +
+        `(sha256: ${ca.fingerprintSha256.slice(0, 16)}…${ca.fingerprintSha256.slice(-8)}, ` +
+        `valid until ${ca.validUntil.slice(0, 10)})`
+    );
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[aegis-proxy] root CA not ready (HTTPS CONNECT will continue to 501):',
+      err instanceof Error ? err.message : err
+    );
+  }
 }
 
 /**

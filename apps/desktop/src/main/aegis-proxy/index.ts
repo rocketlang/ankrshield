@@ -7,10 +7,21 @@
 
 export { startAegisProxy } from './server.js';
 export { validateBindAddress, isLoopbackAddress, AegisBindViolation } from './bind-validator.js';
+export { generateRootCA, type GenerateRootCAOptions } from './ca-generator.js';
+export {
+  ensureRootCA,
+  readRootCAPublic,
+  deleteRootCA,
+  type EnsureRootCAResult,
+} from './ca-store.js';
 export {
   ASD_PROXY_DEFAULT_PORT,
   ASD_PROXY_LOOPBACK_ADDRESSES,
+  ASD_CA_KEYCHAIN_SERVICE,
+  ASD_CA_KEYCHAIN_ACCOUNT,
   type AegisProxyConfig,
   type AegisProxyHandle,
   type LoopbackAddress,
+  type RootCA,
+  type RootCAPublic,
 } from './types.js';
