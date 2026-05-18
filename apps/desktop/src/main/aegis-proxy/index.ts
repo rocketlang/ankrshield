@@ -122,8 +122,16 @@ export {
   registerReportCardHandlers,
   registerKillSwitchHandlers,
   registerAuditRetentionHandlers,
+  registerAuditExportHandlers,
   type BudgetSummaryRow,
 } from './ipc-handlers.js';
+export {
+  exportAuditZip,
+  type ExportRange,
+  type ExportOptions,
+  type ExportResult,
+} from './audit-export.js';
+export { ZipWriter, crc32, toDosTime, type ZipEntry, type ZipWriterOptions } from './zip-writer.js';
 export {
   AuditRetentionStore,
   RETENTION_DAYS_DEFAULT,

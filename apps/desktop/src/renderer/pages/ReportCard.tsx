@@ -86,6 +86,20 @@ declare global {
       aegisProxyKillSwitchSetApp?: (input: { appId: string; state: KillState }) => Promise<unknown>;
       aegisProxyKillSwitchSetGlobal?: (input: { state: KillState }) => Promise<unknown>;
       aegisProxyKillSwitchCloseAppInFlight?: (appId: string) => Promise<{ closed: number }>;
+      aegisProxyAuditExportPickPath?: (input?: { defaultName?: string }) => Promise<{
+        canceled: boolean;
+        path: string | null;
+      }>;
+      aegisProxyAuditExportRun?: (input: {
+        outputPath: string;
+        range?: { from?: string; to?: string };
+      }) => Promise<{
+        outputPath: string;
+        byteLength: number;
+        entryCount: number;
+        daysCovered: string[];
+        digestsIncluded: string[];
+      }>;
     };
   }
 }
@@ -179,6 +193,7 @@ export function ReportCard() {
           >
             Budget panel
           </Link>
+          <AuditExportButton />
         </div>
       </header>
 
@@ -530,4 +545,60 @@ function formatUsd(v: number): string {
   if (v === 0) return '$0';
   if (v < 0.01) return `$${v.toFixed(4)}`;
   return `$${v.toFixed(2)}`;
+}
+
+function AuditExportButton() {
+  const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async () => {
+    const api = window.electronAPI;
+    if (!api?.aegisProxyAuditExportPickPath || !api.aegisProxyAuditExportRun) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const pick = await api.aegisProxyAuditExportPickPath({
+        defaultName: `ankrshield-audit-${new Date().toISOString().slice(0, 10)}.zip`,
+      });
+      if (pick.canceled || !pick.path) {
+        setStatus('Cancelled.');
+        return;
+      }
+      setStatus('Exporting…');
+      const r = await api.aegisProxyAuditExportRun({ outputPath: pick.path });
+      const kb = (r.byteLength / 1024).toFixed(1);
+      setStatus(`✓ ${r.entryCount} entries · ${kb} KB · ${r.daysCovered.length} days`);
+    } catch (err) {
+      setStatus(`✗ ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setBusy(false);
+      setTimeout(() => setStatus(null), 6000);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <button
+        type="button"
+        onClick={run}
+        disabled={busy}
+        className="text-xs px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200 disabled:opacity-50"
+      >
+        {busy ? 'Exporting…' : 'Export audit ZIP'}
+      </button>
+      {status ? (
+        <span
+          className={`text-xs ${
+            status.startsWith('✗')
+              ? 'text-red-300'
+              : status.startsWith('✓')
+                ? 'text-emerald-300'
+                : 'text-gray-400'
+          }`}
+        >
+          {status}
+        </span>
+      ) : null}
+    </div>
+  );
 }

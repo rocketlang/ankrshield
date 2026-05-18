@@ -25,6 +25,7 @@ import {
   registerReportCardHandlers,
   registerKillSwitchHandlers,
   registerAuditRetentionHandlers,
+  registerAuditExportHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -134,6 +135,8 @@ app.whenReady().then(async () => {
       registerKillSwitchHandlers(aegisProxyHandle.killSwitch);
       // ASD-T-028: audit retention IPC + worker tick (FR-14, Vivechana Decision 4).
       registerAuditRetentionHandlers(aegisProxyHandle.auditRetention, aegisProxyHandle.auditWorker);
+      // ASD-T-029: audit export ZIP IPC (FR-20).
+      registerAuditExportHandlers();
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

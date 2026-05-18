@@ -25,6 +25,7 @@ import { buildAllReportCards, buildReportCard, type ReportCardRow } from './repo
 import type { KillSwitch, KillState, KillStateSnapshot } from './kill-switch.js';
 import type { AuditRetentionStore, AuditRetentionConfig } from './audit-retention-config.js';
 import type { AuditRetentionWorker } from './audit-retention-worker.js';
+import { exportAuditZip, type ExportRange } from './audit-export.js';
 import {
   RETENTION_DAYS_DEFAULT,
   RETENTION_DAYS_MIN,
@@ -568,6 +569,45 @@ export function registerAuditRetentionHandlers(
     ipcMain.removeHandler('aegis-proxy:audit-retention-get');
     ipcMain.removeHandler('aegis-proxy:audit-retention-set');
     ipcMain.removeHandler('aegis-proxy:audit-retention-run-now');
+  };
+}
+
+/**
+ * Wire audit-export IPC (ASD-T-029 / FR-20). Two operations:
+ *   - pick-output-path: shows Electron save-file dialog, returns chosen path
+ *     or null on cancel.
+ *   - run: kicks off exportAuditZip(outputPath, range) and returns the
+ *     result blob (path + bytes + entry count) for the renderer.
+ *
+ * Split so the renderer can show a "preparing…" state between dialog
+ * dismissal and ZIP completion.
+ */
+export function registerAuditExportHandlers(): () => void {
+  ipcMain.handle(
+    'aegis-proxy:audit-export-pick-path',
+    async (_e, input?: { defaultName?: string }) => {
+      // dialog lives on the same electron default-import already destructured.
+      const dialog = (electron as { dialog: typeof import('electron').dialog }).dialog;
+      const r = await dialog.showSaveDialog({
+        title: 'Export audit archive',
+        defaultPath:
+          input?.defaultName ?? `ankrshield-audit-${new Date().toISOString().slice(0, 10)}.zip`,
+        filters: [{ name: 'ZIP archives', extensions: ['zip'] }],
+      });
+      return { canceled: r.canceled, path: r.canceled ? null : (r.filePath ?? null) };
+    }
+  );
+
+  ipcMain.handle(
+    'aegis-proxy:audit-export-run',
+    async (_e, input: { outputPath: string; range?: ExportRange }) => {
+      return await exportAuditZip(input.outputPath, input.range ?? {});
+    }
+  );
+
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:audit-export-pick-path');
+    ipcMain.removeHandler('aegis-proxy:audit-export-run');
   };
 }
 

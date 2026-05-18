@@ -264,6 +264,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
       gzipped: number;
       digestsWritten: number;
     }>,
+
+  // ─── Audit export (ASD-T-029 / FR-20) ─────────────────────────────────────
+  aegisProxyAuditExportPickPath: (input?: { defaultName?: string }) =>
+    ipcRenderer.invoke('aegis-proxy:audit-export-pick-path', input ?? {}) as Promise<{
+      canceled: boolean;
+      path: string | null;
+    }>,
+  aegisProxyAuditExportRun: (input: {
+    outputPath: string;
+    range?: { from?: string; to?: string };
+  }) =>
+    ipcRenderer.invoke('aegis-proxy:audit-export-run', input) as Promise<{
+      outputPath: string;
+      byteLength: number;
+      entryCount: number;
+      daysCovered: string[];
+      digestsIncluded: string[];
+    }>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────
@@ -652,6 +670,22 @@ export interface ElectronAPI {
     pruned: number;
     gzipped: number;
     digestsWritten: number;
+  }>;
+
+  // Audit export (ASD-T-029)
+  aegisProxyAuditExportPickPath: (input?: { defaultName?: string }) => Promise<{
+    canceled: boolean;
+    path: string | null;
+  }>;
+  aegisProxyAuditExportRun: (input: {
+    outputPath: string;
+    range?: { from?: string; to?: string };
+  }) => Promise<{
+    outputPath: string;
+    byteLength: number;
+    entryCount: number;
+    daysCovered: string[];
+    digestsIncluded: string[];
   }>;
 }
 
