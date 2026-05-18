@@ -24,6 +24,7 @@ import {
   registerAegisLatencyHandlers,
   registerReportCardHandlers,
   registerKillSwitchHandlers,
+  registerAuditRetentionHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -131,6 +132,8 @@ app.whenReady().then(async () => {
       });
       // ASD-T-026 + T-027: kill switch IPC (PAUSE/THROTTLE/LOCK per-app + global).
       registerKillSwitchHandlers(aegisProxyHandle.killSwitch);
+      // ASD-T-028: audit retention IPC + worker tick (FR-14, Vivechana Decision 4).
+      registerAuditRetentionHandlers(aegisProxyHandle.auditRetention, aegisProxyHandle.auditWorker);
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

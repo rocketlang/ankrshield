@@ -54,6 +54,10 @@ export interface AegisProxyHandle {
   eventTally: import('./event-tally-store.js').EventTallyStore;
   /** Per-app + global PAUSE/THROTTLE/LOCK state machine (ASD-T-026 + T-027). */
   killSwitch: import('./kill-switch.js').KillSwitch;
+  /** Audit retention config store (ASD-T-028). */
+  auditRetention: import('./audit-retention-config.js').AuditRetentionStore;
+  /** Audit retention worker — prune + gzip + weekly digest (ASD-T-028). */
+  auditWorker: import('./audit-retention-worker.js').AuditRetentionWorker;
   stop(): Promise<void>;
 }
 

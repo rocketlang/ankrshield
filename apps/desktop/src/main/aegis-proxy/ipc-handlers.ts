@@ -23,6 +23,13 @@ import type { LatencyTracker } from './latency-tracker.js';
 import type { EventTallyStore } from './event-tally-store.js';
 import { buildAllReportCards, buildReportCard, type ReportCardRow } from './report-card.js';
 import type { KillSwitch, KillState, KillStateSnapshot } from './kill-switch.js';
+import type { AuditRetentionStore, AuditRetentionConfig } from './audit-retention-config.js';
+import type { AuditRetentionWorker } from './audit-retention-worker.js';
+import {
+  RETENTION_DAYS_DEFAULT,
+  RETENTION_DAYS_MIN,
+  RETENTION_DAYS_MAX,
+} from './audit-retention-config.js';
 import {
   DAN_TIMEOUT_DEFAULT_MS,
   DAN_TIMEOUT_MIN_MS,
@@ -521,6 +528,46 @@ export function registerKillSwitchHandlers(killSwitch: KillSwitch): () => void {
     ipcMain.removeHandler('aegis-proxy:kill-switch-set-app');
     ipcMain.removeHandler('aegis-proxy:kill-switch-set-global');
     ipcMain.removeHandler('aegis-proxy:kill-switch-close-app-in-flight');
+  };
+}
+
+/**
+ * Wire audit retention IPC (ASD-T-028 / FR-14). Three operations:
+ *   - get: current config + limits + last-digest list
+ *   - set: partial config update (retention_days, keep_weekly_digests,
+ *     compress_prior_day); applies clamping
+ *   - run-now: force a heavy-pass tick (for Settings → "Run digest now")
+ */
+export function registerAuditRetentionHandlers(
+  store: AuditRetentionStore,
+  worker: AuditRetentionWorker
+): () => void {
+  ipcMain.handle('aegis-proxy:audit-retention-get', async () => ({
+    config: store.get(),
+    limits: {
+      retention_days_default: RETENTION_DAYS_DEFAULT,
+      retention_days_min: RETENTION_DAYS_MIN,
+      retention_days_max: RETENTION_DAYS_MAX,
+    },
+    digests: await worker.listDigests(),
+  }));
+
+  ipcMain.handle(
+    'aegis-proxy:audit-retention-set',
+    (_e, input: Partial<AuditRetentionConfig>): { ok: boolean; applied: AuditRetentionConfig } => ({
+      ok: true,
+      applied: store.set(input),
+    })
+  );
+
+  ipcMain.handle('aegis-proxy:audit-retention-run-now', async () => {
+    return await worker.runHeavyPass();
+  });
+
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:audit-retention-get');
+    ipcMain.removeHandler('aegis-proxy:audit-retention-set');
+    ipcMain.removeHandler('aegis-proxy:audit-retention-run-now');
   };
 }
 

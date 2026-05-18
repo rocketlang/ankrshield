@@ -121,8 +121,23 @@ export {
   registerAegisLatencyHandlers,
   registerReportCardHandlers,
   registerKillSwitchHandlers,
+  registerAuditRetentionHandlers,
   type BudgetSummaryRow,
 } from './ipc-handlers.js';
+export {
+  AuditRetentionStore,
+  RETENTION_DAYS_DEFAULT,
+  RETENTION_DAYS_MIN,
+  RETENTION_DAYS_MAX,
+  type AuditRetentionConfig,
+  type AuditRetentionStoreOptions,
+} from './audit-retention-config.js';
+export {
+  AuditRetentionWorker,
+  isoWeekKey,
+  type AuditRetentionWorkerOptions,
+  type RetentionStats,
+} from './audit-retention-worker.js';
 export {
   KillSwitch,
   type KillState,

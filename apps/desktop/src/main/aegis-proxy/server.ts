@@ -55,6 +55,9 @@ import {
 import { LatencyTracker, nowMs } from './latency-tracker.js';
 import { EventTallyStore } from './event-tally-store.js';
 import { KillSwitch } from './kill-switch.js';
+import { AuditRetentionStore } from './audit-retention-config.js';
+import { AuditRetentionWorker } from './audit-retention-worker.js';
+import { ConsentStore } from './consent-store.js';
 
 /**
  * Start the aegis-proxy.
@@ -140,6 +143,26 @@ export async function startAegisProxy(
   // upstream sockets. Atomic in-memory state → IPC handler is non-blocking,
   // satisfies FR-15 "doesn't share the request-processing queue".
   const killSwitch = new KillSwitch();
+
+  // ASD-T-028: audit retention worker — hourly tick, daily heavy pass
+  // (prune > retention_days, gzip prior day, write weekly digest). Default
+  // 90d per Vivechana Decision 4; digests preserved indefinitely.
+  const auditRetention = new AuditRetentionStore();
+  try {
+    await auditRetention.load();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[aegis-proxy] audit-retention.json load failed; using defaults:',
+      err instanceof Error ? err.message : err
+    );
+  }
+  const auditWorker = new AuditRetentionWorker({
+    retention: auditRetention,
+    tally: eventTally,
+    consents: new ConsentStore(),
+  });
+  auditWorker.start();
 
   // ASD-T-013 (doctrine-corrected — see vivechana Part 2): per-request PII
   // boundary. Default policy = 'redact' for all apps; P2 ASD-T-015 (TOFU)
@@ -328,6 +351,8 @@ export async function startAegisProxy(
         aegisLatency,
         eventTally,
         killSwitch,
+        auditRetention,
+        auditWorker,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {
@@ -336,10 +361,12 @@ export async function startAegisProxy(
               pendingConsent.drain();
               pendingDan.drain();
               eventTally.detach();
+              auditWorker.stop();
               appsStore.stop().catch(() => {});
               budgetLedger.stop().catch(() => {});
               appsPolicy.stop().catch(() => {});
               danTimeoutStore.stop().catch(() => {});
+              auditRetention.stop().catch(() => {});
               err ? rej(err) : res();
             })
           ),

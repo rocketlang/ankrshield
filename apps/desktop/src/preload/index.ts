@@ -249,6 +249,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('aegis-proxy:kill-switch-close-app-in-flight', appId) as Promise<{
       closed: number;
     }>,
+
+  // ─── Audit retention (ASD-T-028 / FR-14) ──────────────────────────────────
+  aegisProxyAuditRetentionGet: () =>
+    ipcRenderer.invoke('aegis-proxy:audit-retention-get') as Promise<unknown>,
+  aegisProxyAuditRetentionSet: (input: {
+    retention_days?: number | null;
+    keep_weekly_digests?: boolean;
+    compress_prior_day?: boolean;
+  }) => ipcRenderer.invoke('aegis-proxy:audit-retention-set', input) as Promise<unknown>,
+  aegisProxyAuditRetentionRunNow: () =>
+    ipcRenderer.invoke('aegis-proxy:audit-retention-run-now') as Promise<{
+      pruned: number;
+      gzipped: number;
+      digestsWritten: number;
+    }>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────
@@ -625,6 +640,19 @@ export interface ElectronAPI {
     state: 'normal' | 'paused' | 'throttled' | 'locked';
   }) => Promise<unknown>;
   aegisProxyKillSwitchCloseAppInFlight: (appId: string) => Promise<{ closed: number }>;
+
+  // Audit retention (ASD-T-028)
+  aegisProxyAuditRetentionGet: () => Promise<unknown>;
+  aegisProxyAuditRetentionSet: (input: {
+    retention_days?: number | null;
+    keep_weekly_digests?: boolean;
+    compress_prior_day?: boolean;
+  }) => Promise<unknown>;
+  aegisProxyAuditRetentionRunNow: () => Promise<{
+    pruned: number;
+    gzipped: number;
+    digestsWritten: number;
+  }>;
 }
 
 declare global {
