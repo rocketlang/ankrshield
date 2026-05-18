@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// ankrshield-desktop / aegis-proxy — typed event bus for proxy observation events
+//
+// @rule:ASD-006 — single Electron main process; events flow to renderer via IPC
+
+import { EventEmitter } from 'node:events';
+
+import type { ObservedRequest, ObservedResponse, Provider } from './observer-types.js';
+
+/**
+ * Events fired by the proxy during a request lifecycle. Subscribers (renderer
+ * IPC, audit log writer, future AEGIS lite gate) consume the same stream.
+ *
+ * `requestId` ties paired request/response events together. Generated on the
+ * first event of a request.
+ */
+export type AegisProxyEvent =
+  | {
+      kind: 'request.observed';
+      requestId: string;
+      timestamp: string;
+      observation: ObservedRequest;
+    }
+  | {
+      kind: 'response.observed';
+      requestId: string;
+      timestamp: string;
+      observation: ObservedResponse;
+    }
+  | {
+      kind: 'request.parse_failed';
+      requestId: string;
+      timestamp: string;
+      provider: Provider;
+      hostname: string;
+      path: string;
+      error: string;
+    }
+  | {
+      kind: 'tls.client_error';
+      requestId: string;
+      timestamp: string;
+      hostname: string;
+      error: string;
+    };
+
+export type AegisProxyEventListener = (event: AegisProxyEvent) => void;
+
+/**
+ * Single-channel typed event bus. Wraps EventEmitter so callers don't have to
+ * stringify event names. One bus per proxy instance — passed in startAegisProxy.
+ */
+export class AegisProxyEventBus {
+  private readonly emitter = new EventEmitter();
+
+  constructor() {
+    // Lift the default cap; renderer + audit-log + AEGIS gate will all subscribe.
+    this.emitter.setMaxListeners(32);
+  }
+
+  emit(event: AegisProxyEvent): void {
+    this.emitter.emit('aegis-proxy', event);
+  }
+
+  on(listener: AegisProxyEventListener): () => void {
+    this.emitter.on('aegis-proxy', listener);
+    return () => this.emitter.off('aegis-proxy', listener);
+  }
+
+  /** Number of subscribers — for diagnostics. */
+  listenerCount(): number {
+    return this.emitter.listenerCount('aegis-proxy');
+  }
+
+  removeAllListeners(): void {
+    this.emitter.removeAllListeners('aegis-proxy');
+  }
+}

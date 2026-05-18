@@ -18,6 +18,8 @@ export interface AegisProxyConfig {
 
 export interface AegisProxyHandle {
   config: Readonly<AegisProxyConfig>;
+  /** Subscribe to live request/response observation events from the proxy. */
+  events: import('./event-bus.js').AegisProxyEventBus;
   stop(): Promise<void>;
 }
 

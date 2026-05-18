@@ -14,6 +14,22 @@ export {
   type MintLeafCertOptions,
   type LeafCertCacheOptions,
 } from './leaf-cert.js';
+export { anthropicAdapter } from './observer-anthropic.js';
+export { openaiAdapter } from './observer-openai.js';
+export { pickAdapter, ALL_ADAPTERS } from './observer-dispatcher.js';
+export type {
+  Provider,
+  ObservedRequest,
+  ObservedResponse,
+  ProviderAdapter,
+  ResponseObserver,
+  RawRequestSnapshot,
+} from './observer-types.js';
+export {
+  AegisProxyEventBus,
+  type AegisProxyEvent,
+  type AegisProxyEventListener,
+} from './event-bus.js';
 export {
   ensureRootCA,
   readRootCAPublic,

@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// ankrshield-desktop / aegis-proxy — HTTP/HTTPS forward proxy with TLS termination
+// ankrshield-desktop / aegis-proxy — HTTP/HTTPS forward proxy with TLS termination + observers
 //
 // P1 scope:
 //   - ASD-T-001: loopback bind + plain-HTTP forwarding + bind validator
 //   - ASD-T-002: per-install root CA in OS keychain
-//   - ASD-T-002b (this file's retrofit): HTTPS CONNECT → real TLS termination
-//     via per-host leaf cert minting + LeafCertCache, decrypted requests
-//     forwarded to upstream over a fresh outbound TLS connection.
+//   - ASD-T-002b: HTTPS CONNECT → real TLS termination via per-host leaf certs
+//   - ASD-T-004: Anthropic Messages API observer (this commit)
+//   - ASD-T-005: OpenAI Chat Completions observer (this commit)
 //
-// @rule:ASD-001 — loopback bind only (delegated to bind-validator)
-// @rule:ASD-002 — per-install root CA signs leaf certs (delegated to leaf-cert)
-// @rule:ASD-004 — failure mode is deny (proxy errors → 502/501, no upstream call)
-// @rule:ASD-006 — single Electron main process (this module runs inside it)
-// @rule:ASD-YK-004 — one proxy, multiple provider adapters (T-004/T-005)
+// @rule:ASD-001 — loopback bind only
+// @rule:ASD-002 — per-install root CA signs leaf certs
+// @rule:ASD-004 — failure mode is deny
+// @rule:ASD-006 — single Electron main process
+// @rule:ASD-YK-004 — one proxy, multiple provider adapters
 // @rule:INF-ASD-010 — TLS handshake failure on tunnel → cert-pinning signal
 
+import crypto from 'node:crypto';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
@@ -29,15 +30,17 @@ import {
 import { validateBindAddress } from './bind-validator.js';
 import { ensureRootCA } from './ca-store.js';
 import { LeafCertCache } from './leaf-cert.js';
+import { AegisProxyEventBus } from './event-bus.js';
+import { pickAdapter } from './observer-dispatcher.js';
+import type { ProviderAdapter, ResponseObserver } from './observer-types.js';
 
 /**
  * Start the aegis-proxy.
  *
- * Bind-address violations are fatal: the process exits with code 78 (EX_CONFIG)
- * per ASD-001 / INF-ASD-001. The root CA is loaded synchronously at startup so
- * the CONNECT handler can mint leaf certs without async fetches in the hot path.
- * Other startup errors (port in use, etc.) surface via the rejected Promise so
- * the caller can decide whether to continue without the proxy.
+ * Bind-address violations are fatal: exits with code 78 (EX_CONFIG) per
+ * ASD-001 / INF-ASD-001. Root CA loaded synchronously at startup so CONNECT
+ * has a signer ready. Other startup errors (port in use, etc.) surface via
+ * rejected Promise.
  */
 export async function startAegisProxy(
   config: Partial<AegisProxyConfig> = {}
@@ -56,8 +59,7 @@ export async function startAegisProxy(
     process.exit(78);
   }
 
-  // ASD-002 / ASD-T-002: load the per-install root CA before opening the socket
-  // so TLS-termination of HTTPS CONNECT has a signer ready.
+  // ASD-002 / ASD-T-002: load the per-install root CA before opening the socket.
   let rootCA: RootCA | null = null;
   let leafCache: LeafCertCache | null = null;
   try {
@@ -71,7 +73,6 @@ export async function startAegisProxy(
         `valid until ${rootCA.validUntil.slice(0, 10)})`
     );
   } catch (err) {
-    // Non-fatal: HTTP forwarding still works without TLS termination per ASD-006.
     // eslint-disable-next-line no-console
     console.warn(
       '[aegis-proxy] root CA unavailable; HTTPS CONNECT will refuse with 502:',
@@ -79,11 +80,13 @@ export async function startAegisProxy(
     );
   }
 
-  const server = http.createServer(handleHttpRequest);
+  const events = new AegisProxyEventBus();
+
+  const server = http.createServer((req, res) => handleHttpRequest(req, res, events));
   server.on('connect', (req, socket, head) =>
-    // Node types `socket` as Duplex on the connect event but in practice it's
-    // a net.Socket for TCP/IP-served HTTP; cast at the boundary.
-    handleHttpConnect(req, socket as net.Socket, head, leafCache)
+    // Node types `socket` as Duplex on the connect event; in practice it's a
+    // net.Socket for TCP-served HTTP. Cast at the boundary.
+    handleHttpConnect(req, socket as net.Socket, head, leafCache, events)
   );
 
   return new Promise<AegisProxyHandle>((resolve, reject) => {
@@ -97,10 +100,12 @@ export async function startAegisProxy(
       // eslint-disable-next-line no-console
       console.log(
         `[aegis-proxy] listening on ${resolved.bindAddress}:${resolved.bindPort} ` +
-          `(HTTP forward + ${tlsReady ? 'HTTPS terminated via per-install CA' : 'HTTPS CONNECT disabled (no CA)'})`
+          `(HTTP forward + ${tlsReady ? 'HTTPS terminated via per-install CA' : 'HTTPS CONNECT disabled (no CA)'}` +
+          `, observers: anthropic+openai)`
       );
       resolve({
         config: resolved,
+        events,
         stop: () =>
           new Promise<void>((res, rej) => server.close((err) => (err ? rej(err) : res()))),
       });
@@ -115,12 +120,15 @@ export async function startAegisProxy(
 
 /**
  * Plain-HTTP forward handler. Client sends `GET http://host/path HTTP/1.1`
- * with the absolute-form request URI typical of HTTP forward proxies.
+ * (absolute-form request URI per RFC 7230 §5.3.2).
  */
-function handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
+function handleHttpRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  events: AegisProxyEventBus
+): void {
   const rawUrl = req.url ?? '';
   if (!/^https?:\/\//i.test(rawUrl)) {
-    // Per RFC 7230 §5.3.2 — absolute-form is required for proxies.
     res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
     res.end(
       'aegis-proxy expects absolute-form request URI (HTTP forward proxy). ' +
@@ -140,7 +148,7 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
   }
 
   if (target.protocol !== 'http:') {
-    // ASD-004: deny by default — if not plain HTTP, refuse rather than fall through.
+    // ASD-004: deny by default.
     res.writeHead(501, { 'content-type': 'text/plain; charset=utf-8' });
     res.end(
       'aegis-proxy: HTTP forward handler only supports http: targets. ' +
@@ -149,28 +157,15 @@ function handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
     return;
   }
 
-  const upstream = http.request(
-    {
-      host: target.hostname,
-      port: target.port || 80,
-      method: req.method,
-      path: target.pathname + target.search,
-      headers: stripHopByHopHeaders(req.headers),
-    },
-    (upstreamRes) => {
-      res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
-      upstreamRes.pipe(res);
-    }
-  );
-
-  upstream.on('error', (err) => {
-    if (!res.headersSent) {
-      res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
-    }
-    res.end('aegis-proxy upstream error: ' + err.message);
+  forwardWithObservation({
+    req,
+    res,
+    upstreamHost: target.hostname,
+    upstreamPort: target.port ? Number(target.port) : 80,
+    upstreamPath: target.pathname + target.search,
+    useTls: false,
+    events,
   });
-
-  req.pipe(upstream);
 }
 
 // ─── HTTPS CONNECT — real TLS termination (ASD-T-002b) ────────────────────────
@@ -181,8 +176,6 @@ interface ConnectTarget {
 }
 
 function parseConnectTarget(raw: string): ConnectTarget | null {
-  // RFC 7230 §4.3.6: authority-form `host:port`.
-  // Handles IPv6 bracket form too: `[::1]:443`.
   if (!raw) return null;
   const ipv6 = raw.match(/^\[([^\]]+)\]:(\d+)$/);
   if (ipv6) return { host: ipv6[1]!, port: Number(ipv6[2]) };
@@ -193,24 +186,12 @@ function parseConnectTarget(raw: string): ConnectTarget | null {
   return { host: m[1]!, port };
 }
 
-/**
- * Terminate TLS for an HTTPS CONNECT, then forward decrypted requests
- * to the real upstream over a fresh outbound TLS connection.
- *
- * Flow:
- *   1. Client → CONNECT api.example.com:443
- *   2. We mint a leaf cert for api.example.com (signed by our root CA)
- *   3. We respond 200 Connection Established
- *   4. We wrap the now-tunneled socket as a TLS server using the leaf cert
- *   5. Client TLS-handshakes against our cert (succeeds iff client trusts our root)
- *   6. Decrypted HTTP requests are handed to handleDecryptedHttps()
- *   7. handleDecryptedHttps re-encrypts via https.request to the real upstream
- */
 function handleHttpConnect(
   req: IncomingMessage,
   clientSocket: net.Socket,
   head: Buffer,
-  leafCache: LeafCertCache | null
+  leafCache: LeafCertCache | null,
+  events: AegisProxyEventBus
 ): void {
   const target = parseConnectTarget(req.url ?? '');
   if (!target) {
@@ -220,7 +201,6 @@ function handleHttpConnect(
   }
 
   if (!leafCache) {
-    // CA failed to load at startup; refuse cleanly per ASD-004.
     clientSocket.write(
       'HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n' +
         'aegis-proxy: root CA unavailable; cannot terminate TLS for CONNECT.\n'
@@ -243,30 +223,37 @@ function handleHttpConnect(
     return;
   }
 
-  // Accept the tunnel. From here the client begins TLS handshake on this socket.
   clientSocket.write('HTTP/1.1 200 Connection Established\r\nProxy-Agent: aegis-proxy\r\n\r\n');
-
-  // Some clients send TLS ClientHello bytes alongside CONNECT headers — those
-  // arrive in `head`. Replay them onto the socket so the TLS server sees them.
   if (head && head.length > 0) {
     clientSocket.unshift(head);
   }
 
-  // Per-CONNECT https.Server. Slightly wasteful vs a long-lived TLS server with
-  // SNI dispatch, but vastly simpler and correct. Performance can come later.
   const innerServer = https.createServer(
     {
       cert: leaf.certPem,
       key: leaf.keyPem,
-      // Restrict ALPN to http/1.1; our outbound is http/1.1 (node `https.request`).
-      // HTTP/2 upstream would require http2 module wiring — out of P1 scope.
       ALPNProtocols: ['http/1.1'],
     },
-    (req2, res2) => handleDecryptedHttps(req2, res2, target)
+    (req2, res2) =>
+      forwardWithObservation({
+        req: req2,
+        res: res2,
+        upstreamHost: target.host,
+        upstreamPort: target.port,
+        upstreamPath: req2.url ?? '/',
+        useTls: true,
+        events,
+      })
   );
 
   innerServer.on('tlsClientError', (err, sock) => {
-    // INF-ASD-010 — client refused our cert (most common: cert pinning).
+    events.emit({
+      kind: 'tls.client_error',
+      requestId: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      hostname: target.host,
+      error: err.message,
+    });
     // eslint-disable-next-line no-console
     console.warn(
       `[aegis-proxy] TLS client error on tunnel to ${target.host} ` +
@@ -282,48 +269,133 @@ function handleHttpConnect(
   innerServer.emit('connection', clientSocket);
 }
 
-/**
- * Forward a decrypted HTTPS request to the real upstream over a fresh outbound
- * TLS connection. Streaming pass-through for SSE / streaming completions.
- */
-function handleDecryptedHttps(
-  req: IncomingMessage,
-  res: ServerResponse,
-  target: ConnectTarget
-): void {
-  const upstream = https.request(
-    {
-      host: target.host,
-      port: target.port,
-      method: req.method,
-      // Inside a TLS-terminated tunnel the proxy is acting as origin server,
-      // so the request URL arrives in origin-form (/path?qs). Pass through.
-      path: req.url,
-      headers: stripHopByHopHeaders(req.headers),
-      // Default: verify against system trust store. We deliberately do NOT
-      // downgrade verification — upstream certs must be real per ASD-004.
-    },
-    (upstreamRes) => {
-      res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
-      upstreamRes.pipe(res);
-    }
-  );
+// ─── Shared forward + observation path (ASD-T-004 / ASD-T-005) ────────────────
 
-  upstream.on('error', (err) => {
-    if (!res.headersSent) {
-      res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
+interface ForwardArgs {
+  req: IncomingMessage;
+  res: ServerResponse;
+  upstreamHost: string;
+  upstreamPort: number;
+  upstreamPath: string;
+  useTls: boolean;
+  events: AegisProxyEventBus;
+}
+
+/**
+ * Forward a single request (HTTP or decrypted HTTPS) to the upstream while
+ * emitting observation events at request-parsed and response-complete points.
+ *
+ * Buffers the request body so the provider adapter can parse it. AI requests
+ * are typically < 100 KB; large uploads aren't a target use case for the
+ * desktop AEGIS proxy.
+ */
+function forwardWithObservation(args: ForwardArgs): void {
+  const { req, res, upstreamHost, upstreamPort, upstreamPath, useTls, events } = args;
+  const requestId = crypto.randomUUID();
+  const startTime = Date.now();
+  const adapter: ProviderAdapter | null = pickAdapter(upstreamHost, upstreamPath);
+
+  const bodyChunks: Buffer[] = [];
+  req.on('data', (c: Buffer) => bodyChunks.push(c));
+  req.on('end', () => {
+    const requestBody = Buffer.concat(bodyChunks);
+
+    // Emit request observation if an adapter matched.
+    if (adapter) {
+      try {
+        const observation = adapter.parseRequest({
+          hostname: upstreamHost,
+          path: upstreamPath,
+          method: req.method ?? 'GET',
+          headers: req.headers,
+          body: requestBody,
+        });
+        events.emit({
+          kind: 'request.observed',
+          requestId,
+          timestamp: new Date().toISOString(),
+          observation,
+        });
+      } catch (err) {
+        events.emit({
+          kind: 'request.parse_failed',
+          requestId,
+          timestamp: new Date().toISOString(),
+          provider: adapter.provider,
+          hostname: upstreamHost,
+          path: upstreamPath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
-    res.end(`aegis-proxy upstream TLS error: ${err.message}\n`);
+
+    // Build outbound request (TLS or plaintext).
+    const httpModule = useTls ? https : http;
+    const upstream = httpModule.request(
+      {
+        host: upstreamHost,
+        port: upstreamPort,
+        method: req.method,
+        path: upstreamPath,
+        headers: stripHopByHopHeaders(req.headers),
+      },
+      (upstreamRes) => {
+        res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
+
+        // If an adapter matched, install its response observer.
+        const responseObserver: ResponseObserver | null = adapter
+          ? adapter.createResponseObserver()
+          : null;
+
+        upstreamRes.on('data', (chunk: Buffer) => {
+          if (responseObserver) responseObserver.tap(chunk);
+          res.write(chunk);
+        });
+
+        upstreamRes.on('end', () => {
+          res.end();
+          if (responseObserver) {
+            const observation = responseObserver.finalize({
+              statusCode: upstreamRes.statusCode ?? 0,
+              latencyMs: Date.now() - startTime,
+            });
+            events.emit({
+              kind: 'response.observed',
+              requestId,
+              timestamp: new Date().toISOString(),
+              observation,
+            });
+          }
+        });
+
+        upstreamRes.on('error', () => {
+          if (!res.writableEnded) res.end();
+        });
+      }
+    );
+
+    upstream.on('error', (err) => {
+      if (!res.headersSent) {
+        res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
+      }
+      res.end(
+        useTls
+          ? `aegis-proxy upstream TLS error: ${err.message}\n`
+          : `aegis-proxy upstream error: ${err.message}\n`
+      );
+    });
+
+    if (requestBody.length > 0) upstream.write(requestBody);
+    upstream.end();
   });
 
-  req.pipe(upstream);
+  req.on('error', () => {
+    // client aborted; nothing to do.
+  });
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Hop-by-hop headers should not be forwarded by a proxy (RFC 7230 §6.1).
- */
 function stripHopByHopHeaders(headers: IncomingMessage['headers']): IncomingMessage['headers'] {
   const drop = new Set([
     'connection',
@@ -343,5 +415,4 @@ function stripHopByHopHeaders(headers: IncomingMessage['headers']): IncomingMess
   return out;
 }
 
-// Re-export for tests + future modules that need direct parsing.
 export const __testHooks = { parseConnectTarget };
