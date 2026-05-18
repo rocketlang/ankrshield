@@ -22,6 +22,7 @@ import type { BudgetLedger, BudgetConfigResolver } from './budget-ledger.js';
 import type { LatencyTracker } from './latency-tracker.js';
 import type { EventTallyStore } from './event-tally-store.js';
 import { buildAllReportCards, buildReportCard, type ReportCardRow } from './report-card.js';
+import type { KillSwitch, KillState, KillStateSnapshot } from './kill-switch.js';
 import {
   DAN_TIMEOUT_DEFAULT_MS,
   DAN_TIMEOUT_MIN_MS,
@@ -474,6 +475,52 @@ export function registerReportCardHandlers(stores: {
   return () => {
     ipcMain.removeHandler('aegis-proxy:get-report-card-all');
     ipcMain.removeHandler('aegis-proxy:get-report-card-app');
+  };
+}
+
+/**
+ * Wire kill-switch IPC (ASD-T-026 + T-027 / FR-15 / ASD-009).
+ * State changes propagate the killswitch.changed event via the bus emitter
+ * the caller already owns; this handler set just exposes set/get plus a
+ * list-in-flight diagnostic.
+ *
+ * Pure-getter and pure-setter — IPC handler never awaits per-request work
+ * so it can never starve the request hot path (FR-15 "doesn't share the
+ * request-processing queue" interpretation; documented in kill-switch.ts).
+ */
+export function registerKillSwitchHandlers(killSwitch: KillSwitch): () => void {
+  ipcMain.handle('aegis-proxy:kill-switch-get', () => ({
+    global: killSwitch.globalSnapshot(),
+    perApp: killSwitch.snapshotAll(),
+  }));
+
+  ipcMain.handle(
+    'aegis-proxy:kill-switch-set-app',
+    (_e, input: { appId: string; state: KillState }): KillStateSnapshot => {
+      return killSwitch.setAppState(input.appId, input.state);
+    }
+  );
+
+  ipcMain.handle(
+    'aegis-proxy:kill-switch-set-global',
+    (_e, input: { state: KillState }): { state: KillState; changedAt: string } => {
+      killSwitch.setGlobalState(input.state);
+      return killSwitch.globalSnapshot();
+    }
+  );
+
+  ipcMain.handle(
+    'aegis-proxy:kill-switch-close-app-in-flight',
+    (_e, appId: string): { closed: number } => {
+      return { closed: killSwitch.closeInFlightFor(appId) };
+    }
+  );
+
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:kill-switch-get');
+    ipcMain.removeHandler('aegis-proxy:kill-switch-set-app');
+    ipcMain.removeHandler('aegis-proxy:kill-switch-set-global');
+    ipcMain.removeHandler('aegis-proxy:kill-switch-close-app-in-flight');
   };
 }
 

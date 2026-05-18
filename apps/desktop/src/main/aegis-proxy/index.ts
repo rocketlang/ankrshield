@@ -120,8 +120,17 @@ export {
   registerBudgetPanelHandlers,
   registerAegisLatencyHandlers,
   registerReportCardHandlers,
+  registerKillSwitchHandlers,
   type BudgetSummaryRow,
 } from './ipc-handlers.js';
+export {
+  KillSwitch,
+  type KillState,
+  type KillStateSnapshot,
+  type KillSwitchOptions,
+  type InFlightSocket,
+  type ThrottleConfig,
+} from './kill-switch.js';
 export {
   EventTallyStore,
   type DayBucket,

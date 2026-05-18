@@ -54,6 +54,7 @@ import {
 } from './pii-stream-rewriter.js';
 import { LatencyTracker, nowMs } from './latency-tracker.js';
 import { EventTallyStore } from './event-tally-store.js';
+import { KillSwitch } from './kill-switch.js';
 
 /**
  * Start the aegis-proxy.
@@ -130,9 +131,15 @@ export async function startAegisProxy(
 
   // ASD-T-024: in-memory per-app per-day tally for the HanumanG report card.
   // Subscribes to the event bus AFTER both are constructed; no persistence
-  // yet (audit/ dir handles long-horizon storage in P3 ASD-T-027).
+  // yet (audit/ dir handles long-horizon storage in P3 ASD-T-028).
   const eventTally = new EventTallyStore({ retentionDays: 7 });
   eventTally.attach(events);
+
+  // ASD-T-026 + T-027: kill switch — per-app + global PAUSE/THROTTLE/LOCK.
+  // Pre-flight check on every request; LOCK transition force-closes in-flight
+  // upstream sockets. Atomic in-memory state → IPC handler is non-blocking,
+  // satisfies FR-15 "doesn't share the request-processing queue".
+  const killSwitch = new KillSwitch();
 
   // ASD-T-013 (doctrine-corrected — see vivechana Part 2): per-request PII
   // boundary. Default policy = 'redact' for all apps; P2 ASD-T-015 (TOFU)
@@ -265,7 +272,8 @@ export async function startAegisProxy(
       danDecisionCache,
       danCarrierRouter,
       danTimeoutStore,
-      aegisLatency
+      aegisLatency,
+      killSwitch
     )
   );
   server.on('connect', (req, socket, head) =>
@@ -288,7 +296,8 @@ export async function startAegisProxy(
       danDecisionCache,
       danCarrierRouter,
       danTimeoutStore,
-      aegisLatency
+      aegisLatency,
+      killSwitch
     )
   );
 
@@ -318,6 +327,7 @@ export async function startAegisProxy(
         budgetConfig,
         aegisLatency,
         eventTally,
+        killSwitch,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {
@@ -364,7 +374,8 @@ async function handleHttpRequest(
   danDecisionCache: DanDecisionCache,
   danCarrierRouter: DanCarrierRouter,
   danTimeoutStore: DanTimeoutStore,
-  aegisLatency: LatencyTracker
+  aegisLatency: LatencyTracker,
+  killSwitch: KillSwitch
 ): Promise<void> {
   const rawUrl = req.url ?? '';
   if (!/^https?:\/\//i.test(rawUrl)) {
@@ -426,6 +437,7 @@ async function handleHttpRequest(
     danCarrierRouter,
     danTimeoutStore,
     aegisLatency,
+    killSwitch,
   });
 }
 
@@ -466,7 +478,8 @@ async function handleHttpConnect(
   danDecisionCache: DanDecisionCache,
   danCarrierRouter: DanCarrierRouter,
   danTimeoutStore: DanTimeoutStore,
-  aegisLatency: LatencyTracker
+  aegisLatency: LatencyTracker,
+  killSwitch: KillSwitch
 ): Promise<void> {
   const target = parseConnectTarget(req.url ?? '');
   if (!target) {
@@ -547,6 +560,7 @@ async function handleHttpConnect(
         danCarrierRouter,
         danTimeoutStore,
         aegisLatency,
+        killSwitch,
       })
   );
 
@@ -596,6 +610,7 @@ interface ForwardArgs {
   danCarrierRouter: DanCarrierRouter;
   danTimeoutStore: DanTimeoutStore;
   aegisLatency: LatencyTracker;
+  killSwitch: KillSwitch;
 }
 
 /**
@@ -628,6 +643,7 @@ function forwardWithObservation(args: ForwardArgs): void {
     danCarrierRouter,
     danTimeoutStore,
     aegisLatency,
+    killSwitch,
   } = args;
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
@@ -650,6 +666,36 @@ function forwardWithObservation(args: ForwardArgs): void {
     void (async () => {
       const identity = await resolveAppId({ clientPort, proxyPort });
       appsStore.recordRequest(identity.appId, identity.executable);
+
+      // ASD-T-026 + T-027 kill-switch pre-flight. Runs BEFORE TOFU so a
+      // PAUSED / LOCKED app never even reaches the consent dialog. THROTTLED
+      // is a soft cap — returns 429 with a Retry-After hint.
+      const kill = killSwitch.preflight(identity.appId);
+      if (!kill.allow) {
+        const status = kill.state === 'throttled' ? 429 : 503;
+        // preflight() only returns allow=false when state is paused/throttled/locked,
+        // never 'normal' — narrow the type for the event payload.
+        const blockedState = kill.state as 'paused' | 'throttled' | 'locked';
+        events.emit({
+          kind: 'kill_switch.blocked',
+          requestId,
+          timestamp: new Date().toISOString(),
+          appId: identity.appId,
+          hostname: upstreamHost,
+          state: blockedState,
+        });
+        if (!res.headersSent) {
+          const headers: Record<string, string> = {
+            'content-type': 'text/plain; charset=utf-8',
+          };
+          if (kill.state === 'throttled') headers['retry-after'] = '5';
+          res.writeHead(status, headers);
+        }
+        res.end(
+          `aegis-proxy: ${kill.reason ?? 'ASD-009-killed'} — app ${identity.appId} ${kill.state}.\n`
+        );
+        return;
+      }
 
       // ASD-T-015 TOFU gate. Runs BEFORE AEGIS / PII / budget gates.
       //   - If the app has a stored deny: 403 immediately.
@@ -964,6 +1010,12 @@ function forwardWithObservation(args: ForwardArgs): void {
         (upstreamRes) => {
           res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
 
+          // ASD-T-027: register the upstream request as in-flight so a
+          // LOCKED transition can force-close it. Destroy the ClientRequest
+          // (which closes the socket); the upstream.on('error') handler
+          // catches the resulting abort and ends the client response.
+          const unregisterInFlight = killSwitch.registerInFlight(identity.appId, upstream);
+
           // If an adapter matched, install its response observer.
           const responseObserver: ResponseObserver | null = adapter
             ? adapter.createResponseObserver()
@@ -990,6 +1042,7 @@ function forwardWithObservation(args: ForwardArgs): void {
             const tail = streamRewriter.finalize();
             if (tail.length > 0) res.write(tail);
             res.end();
+            unregisterInFlight();
             if (streamRewriter.totalMatches() > 0) {
               events.emit({
                 kind: 'pii.stream.redacted',
@@ -1054,7 +1107,7 @@ function forwardWithObservation(args: ForwardArgs): void {
         }
       );
 
-      upstream.on('error', (err) => {
+      const onUpstreamErr = (err: Error) => {
         if (!res.headersSent) {
           res.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' });
         }
@@ -1063,7 +1116,8 @@ function forwardWithObservation(args: ForwardArgs): void {
             ? `aegis-proxy upstream TLS error: ${err.message}\n`
             : `aegis-proxy upstream error: ${err.message}\n`
         );
-      });
+      };
+      upstream.on('error', onUpstreamErr);
 
       if (bodyToForward.length > 0) upstream.write(bodyToForward);
       upstream.end();

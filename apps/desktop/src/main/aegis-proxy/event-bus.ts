@@ -160,6 +160,15 @@ export type AegisProxyEvent =
       hostname: string;
       /** 'cached' = decision-cache hit; 'no-high-tools' = nothing to gate. */
       reason: 'cached-allow' | 'cached-deny' | 'no-high-tools';
+    }
+  | {
+      kind: 'kill_switch.blocked';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      /** Effective state at the moment of the block. */
+      state: 'paused' | 'throttled' | 'locked';
     };
 
 export type AegisProxyEventListener = (event: AegisProxyEvent) => void;

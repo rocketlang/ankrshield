@@ -235,6 +235,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('aegis-proxy:get-report-card-all', input ?? {}) as Promise<unknown>,
   aegisProxyGetReportCardApp: (input: { appId: string; windowDays?: number }) =>
     ipcRenderer.invoke('aegis-proxy:get-report-card-app', input) as Promise<unknown>,
+
+  // ─── Kill switch (ASD-T-026 + T-027 / FR-15) ──────────────────────────────
+  aegisProxyKillSwitchGet: () =>
+    ipcRenderer.invoke('aegis-proxy:kill-switch-get') as Promise<unknown>,
+  aegisProxyKillSwitchSetApp: (input: {
+    appId: string;
+    state: 'normal' | 'paused' | 'throttled' | 'locked';
+  }) => ipcRenderer.invoke('aegis-proxy:kill-switch-set-app', input) as Promise<unknown>,
+  aegisProxyKillSwitchSetGlobal: (input: { state: 'normal' | 'paused' | 'throttled' | 'locked' }) =>
+    ipcRenderer.invoke('aegis-proxy:kill-switch-set-global', input) as Promise<unknown>,
+  aegisProxyKillSwitchCloseAppInFlight: (appId: string) =>
+    ipcRenderer.invoke('aegis-proxy:kill-switch-close-app-in-flight', appId) as Promise<{
+      closed: number;
+    }>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────
@@ -427,6 +441,14 @@ export type AegisProxyEventPayload =
       appId: string;
       hostname: string;
       reason: 'cached-allow' | 'cached-deny' | 'no-high-tools';
+    }
+  | {
+      kind: 'kill_switch.blocked';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      state: 'paused' | 'throttled' | 'locked';
     };
 
 /**
@@ -592,6 +614,17 @@ export interface ElectronAPI {
   // HanumanG report card (ASD-T-024)
   aegisProxyGetReportCardAll: (input?: { windowDays?: number }) => Promise<unknown>;
   aegisProxyGetReportCardApp: (input: { appId: string; windowDays?: number }) => Promise<unknown>;
+
+  // Kill switch (ASD-T-026 + T-027)
+  aegisProxyKillSwitchGet: () => Promise<unknown>;
+  aegisProxyKillSwitchSetApp: (input: {
+    appId: string;
+    state: 'normal' | 'paused' | 'throttled' | 'locked';
+  }) => Promise<unknown>;
+  aegisProxyKillSwitchSetGlobal: (input: {
+    state: 'normal' | 'paused' | 'throttled' | 'locked';
+  }) => Promise<unknown>;
+  aegisProxyKillSwitchCloseAppInFlight: (appId: string) => Promise<{ closed: number }>;
 }
 
 declare global {

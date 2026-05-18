@@ -23,6 +23,7 @@ import {
   registerBudgetPanelHandlers,
   registerAegisLatencyHandlers,
   registerReportCardHandlers,
+  registerKillSwitchHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -128,6 +129,8 @@ app.whenReady().then(async () => {
         ledger: aegisProxyHandle.budgetLedger,
         appsPolicy: aegisProxyHandle.appsPolicy,
       });
+      // ASD-T-026 + T-027: kill switch IPC (PAUSE/THROTTLE/LOCK per-app + global).
+      registerKillSwitchHandlers(aegisProxyHandle.killSwitch);
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

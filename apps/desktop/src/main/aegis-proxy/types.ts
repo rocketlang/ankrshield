@@ -52,6 +52,8 @@ export interface AegisProxyHandle {
   aegisLatency: import('./latency-tracker.js').LatencyTracker;
   /** Per-app per-day event tally for the HanumanG report card (ASD-T-024). */
   eventTally: import('./event-tally-store.js').EventTallyStore;
+  /** Per-app + global PAUSE/THROTTLE/LOCK state machine (ASD-T-026 + T-027). */
+  killSwitch: import('./kill-switch.js').KillSwitch;
   stop(): Promise<void>;
 }
 

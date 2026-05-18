@@ -62,10 +62,30 @@ interface ReportRow {
   posture: PostureScore;
 }
 
+type KillState = 'normal' | 'paused' | 'throttled' | 'locked';
+
+interface KillSnapshot {
+  global: { state: KillState; changedAt: string };
+  perApp: Record<
+    string,
+    {
+      effective: KillState;
+      appLevel: KillState;
+      globalLevel: KillState;
+      inFlight: number;
+      changedAt: string;
+    }
+  >;
+}
+
 declare global {
   interface Window {
     electronAPI?: {
       aegisProxyGetReportCardAll?: (input?: { windowDays?: number }) => Promise<ReportRow[]>;
+      aegisProxyKillSwitchGet?: () => Promise<KillSnapshot>;
+      aegisProxyKillSwitchSetApp?: (input: { appId: string; state: KillState }) => Promise<unknown>;
+      aegisProxyKillSwitchSetGlobal?: (input: { state: KillState }) => Promise<unknown>;
+      aegisProxyKillSwitchCloseAppInFlight?: (appId: string) => Promise<{ closed: number }>;
     };
   }
 }
@@ -75,6 +95,7 @@ export function ReportCard() {
   const [windowDays, setWindowDays] = useState<number>(1);
   const [expandedAppId, setExpandedAppId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [killSnap, setKillSnap] = useState<KillSnapshot | null>(null);
 
   const refresh = useCallback(async () => {
     const api = window.electronAPI;
@@ -82,6 +103,13 @@ export function ReportCard() {
     const next = await api.aegisProxyGetReportCardAll({ windowDays });
     setRows(next ?? []);
     setLoaded(true);
+    if (api.aegisProxyKillSwitchGet) {
+      try {
+        setKillSnap(await api.aegisProxyKillSwitchGet());
+      } catch {
+        // ignore
+      }
+    }
   }, [windowDays]);
 
   useEffect(() => {
@@ -89,6 +117,16 @@ export function ReportCard() {
     const id = setInterval(refresh, 5000);
     return () => clearInterval(id);
   }, [refresh]);
+
+  const setGlobalKill = async (state: KillState) => {
+    await window.electronAPI?.aegisProxyKillSwitchSetGlobal?.({ state });
+    void refresh();
+  };
+
+  const setAppKill = async (appId: string, state: KillState) => {
+    await window.electronAPI?.aegisProxyKillSwitchSetApp?.({ appId, state });
+    void refresh();
+  };
 
   const totals = useMemo(() => {
     let req = 0;
@@ -144,6 +182,8 @@ export function ReportCard() {
         </div>
       </header>
 
+      {killSnap ? <KillSwitchPanel snap={killSnap} onSetGlobal={setGlobalKill} /> : null}
+
       <div className="grid grid-cols-5 gap-3">
         <Stat label="Requests" value={String(totals.req)} />
         <Stat label="Spend" value={formatUsd(totals.usd)} />
@@ -183,6 +223,8 @@ export function ReportCard() {
                 row={r}
                 expanded={expandedAppId === r.appId}
                 onToggle={() => setExpandedAppId((prev) => (prev === r.appId ? null : r.appId))}
+                kill={killSnap?.perApp[r.appId] ?? null}
+                onSetAppKill={(state) => setAppKill(r.appId, state)}
               />
             ))}
           </tbody>
@@ -196,19 +238,28 @@ function PostureRow({
   row,
   expanded,
   onToggle,
+  kill,
+  onSetAppKill,
 }: {
   row: ReportRow;
   expanded: boolean;
   onToggle: () => void;
+  kill: KillSnapshot['perApp'][string] | null;
+  onSetAppKill: (state: KillState) => void;
 }) {
   const totalDenials =
     row.bucket.aegis_denied + row.bucket.pii_blocked + row.bucket.budget_throttled;
+  const rowClass =
+    kill && kill.effective !== 'normal'
+      ? kill.effective === 'locked'
+        ? 'border-b border-gray-800 cursor-pointer bg-red-900/40'
+        : kill.effective === 'throttled'
+          ? 'border-b border-gray-800 cursor-pointer bg-yellow-900/30'
+          : 'border-b border-gray-800 cursor-pointer bg-gray-900/60'
+      : 'border-b border-gray-800 cursor-pointer hover:bg-gray-800/60';
   return (
     <>
-      <tr
-        className="border-b border-gray-800 cursor-pointer hover:bg-gray-800/60"
-        onClick={onToggle}
-      >
+      <tr className={rowClass} onClick={onToggle}>
         <td className="py-2 font-mono">
           <span className="text-gray-400 mr-1">{expanded ? '▼' : '▶'}</span>
           {row.appId}
@@ -231,11 +282,94 @@ function PostureRow({
       {expanded ? (
         <tr className="border-b border-gray-800 bg-gray-900/50">
           <td colSpan={7} className="py-3 px-3">
-            <ExpandedDetail row={row} />
+            <div className="space-y-3">
+              <PerAppKillControls kill={kill} onSetAppKill={onSetAppKill} />
+              <ExpandedDetail row={row} />
+            </div>
           </td>
         </tr>
       ) : null}
     </>
+  );
+}
+
+function KillSwitchPanel({
+  snap,
+  onSetGlobal,
+}: {
+  snap: KillSnapshot;
+  onSetGlobal: (state: KillState) => void;
+}) {
+  const tone =
+    snap.global.state === 'locked'
+      ? 'bg-red-900/40 border-red-600'
+      : snap.global.state === 'throttled'
+        ? 'bg-yellow-900/40 border-yellow-600'
+        : snap.global.state === 'paused'
+          ? 'bg-gray-800 border-yellow-700'
+          : 'bg-gray-800 border-gray-700';
+  return (
+    <section className={`rounded-lg border ${tone} p-3 flex items-center justify-between`}>
+      <div>
+        <div className="text-xs text-gray-400">
+          Global kill switch (overrides per-app when stricter)
+        </div>
+        <div className="text-sm font-mono mt-1">
+          state: <span className="text-white">{snap.global.state}</span>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        {(['normal', 'paused', 'throttled', 'locked'] as const).map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => onSetGlobal(s)}
+            className={`text-xs px-2.5 py-1 rounded ${
+              snap.global.state === s
+                ? 'bg-ankr-green text-white'
+                : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+            }`}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PerAppKillControls({
+  kill,
+  onSetAppKill,
+}: {
+  kill: KillSnapshot['perApp'][string] | null;
+  onSetAppKill: (state: KillState) => void;
+}) {
+  const state = kill?.appLevel ?? 'normal';
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="text-gray-400">Kill switch:</span>
+      {(['normal', 'paused', 'throttled', 'locked'] as const).map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => onSetAppKill(s)}
+          className={`px-2 py-0.5 rounded ${
+            state === s ? 'bg-ankr-green text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+          }`}
+        >
+          {s}
+        </button>
+      ))}
+      {kill && kill.inFlight > 0 ? (
+        <span className="text-gray-400">
+          · {kill.inFlight} in-flight {kill.effective === 'locked' ? '(will close)' : ''}
+        </span>
+      ) : null}
+      {kill && kill.effective !== kill.appLevel ? (
+        <span className="text-yellow-300">· effective: {kill.effective} (global override)</span>
+      ) : null}
+    </div>
   );
 }
 
