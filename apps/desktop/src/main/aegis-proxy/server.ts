@@ -42,6 +42,10 @@ import { BudgetLedger, BudgetConfigResolver, hourBucket } from './budget-ledger.
 import { computeCost } from './cost-rates.js';
 import { AppsPolicyStore } from './apps-policy.js';
 import { PendingConsentQueue } from './pending-consent-queue.js';
+import { categorizeHighRiskTools, extractToolDeclarations } from './dan-categorizer.js';
+import { PendingDanQueue } from './pending-dan-queue.js';
+import { OsNotificationDanCarrier } from './dan-carrier-os.js';
+import { DanDecisionCache } from './dan-decision-cache.js';
 
 /**
  * Start the aegis-proxy.
@@ -178,6 +182,37 @@ export async function startAegisProxy(
     },
   });
 
+  // ASD-T-016 DAN gate: HIGH-category tool declarations hold the request
+  // pending user approval via OS notification (default carrier). Session
+  // decision cache prevents prompt fatigue for repeat agentic sessions.
+  const danDecisionCache = new DanDecisionCache();
+  const pendingDan = new PendingDanQueue({
+    carriers: [new OsNotificationDanCarrier()],
+    onPendingAdded: (req) => {
+      events.emit({
+        kind: 'dan.held',
+        requestId: req.pendingId,
+        timestamp: req.heldAt,
+        pendingId: req.pendingId,
+        appId: req.appId,
+        hostname: req.hostname,
+        timeoutMs: req.timeoutMs,
+        highRiskTools: req.highRiskTools.map((t) => ({ name: t.name, category: t.category })),
+      });
+    },
+    onResolved: (pendingId, outcome) => {
+      events.emit({
+        kind: 'dan.resolved',
+        requestId: pendingId,
+        timestamp: new Date().toISOString(),
+        pendingId,
+        appId: '',
+        decision: outcome.decision,
+        timedOut: outcome.timedOut,
+      });
+    },
+  });
+
   const server = http.createServer((req, res) =>
     handleHttpRequest(
       req,
@@ -191,7 +226,9 @@ export async function startAegisProxy(
       budgetLedger,
       budgetConfig,
       appsPolicy,
-      pendingConsent
+      pendingConsent,
+      pendingDan,
+      danDecisionCache
     )
   );
   server.on('connect', (req, socket, head) =>
@@ -209,7 +246,9 @@ export async function startAegisProxy(
       budgetLedger,
       budgetConfig,
       appsPolicy,
-      pendingConsent
+      pendingConsent,
+      pendingDan,
+      danDecisionCache
     )
   );
 
@@ -232,12 +271,15 @@ export async function startAegisProxy(
         events,
         appsPolicy,
         pendingConsent,
+        pendingDan,
+        danDecisionCache,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {
               // Final flush of apps registry + budget ledger + policy on graceful stop.
-              // Drain pending consents (timeout-deny each).
+              // Drain pending consents + DAN holds (timeout-deny each).
               pendingConsent.drain();
+              pendingDan.drain();
               appsStore.stop().catch(() => {});
               budgetLedger.stop().catch(() => {});
               appsPolicy.stop().catch(() => {});
@@ -270,7 +312,9 @@ async function handleHttpRequest(
   budgetLedger: BudgetLedger,
   budgetConfig: BudgetConfigResolver,
   appsPolicy: AppsPolicyStore,
-  pendingConsent: PendingConsentQueue
+  pendingConsent: PendingConsentQueue,
+  pendingDan: PendingDanQueue,
+  danDecisionCache: DanDecisionCache
 ): Promise<void> {
   const rawUrl = req.url ?? '';
   if (!/^https?:\/\//i.test(rawUrl)) {
@@ -327,6 +371,8 @@ async function handleHttpRequest(
     budgetConfig,
     appsPolicy,
     pendingConsent,
+    pendingDan,
+    danDecisionCache,
   });
 }
 
@@ -362,7 +408,9 @@ async function handleHttpConnect(
   budgetLedger: BudgetLedger,
   budgetConfig: BudgetConfigResolver,
   appsPolicy: AppsPolicyStore,
-  pendingConsent: PendingConsentQueue
+  pendingConsent: PendingConsentQueue,
+  pendingDan: PendingDanQueue,
+  danDecisionCache: DanDecisionCache
 ): Promise<void> {
   const target = parseConnectTarget(req.url ?? '');
   if (!target) {
@@ -438,6 +486,8 @@ async function handleHttpConnect(
         budgetConfig,
         appsPolicy,
         pendingConsent,
+        pendingDan,
+        danDecisionCache,
       })
   );
 
@@ -482,6 +532,8 @@ interface ForwardArgs {
   budgetConfig: BudgetConfigResolver;
   appsPolicy: AppsPolicyStore;
   pendingConsent: PendingConsentQueue;
+  pendingDan: PendingDanQueue;
+  danDecisionCache: DanDecisionCache;
 }
 
 /**
@@ -509,6 +561,8 @@ function forwardWithObservation(args: ForwardArgs): void {
     budgetConfig,
     appsPolicy,
     pendingConsent,
+    pendingDan,
+    danDecisionCache,
   } = args;
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
@@ -724,6 +778,76 @@ function forwardWithObservation(args: ForwardArgs): void {
               `the per-app cap of $${budgetCfg.hourly_limit_usd.toFixed(2)}.\n`
           );
           return; // do NOT forward upstream
+        }
+      }
+
+      // ASD-T-016 DAN gate. Run after budget pass + before upstream forward.
+      // Scope: parse the request body's `tools` declarations (when adapter
+      // matched — same JSON the adapter already parsed); classify into HIGH
+      // categories; if any HIGH, hold the request pending user approval. The
+      // OS notification carrier fires from PendingDanQueue.hold. The session
+      // decision cache prevents re-prompting on every call within the same
+      // tool-set; cache TTL = 1h for allow, 1min for deny.
+      if (parsed && requestBody.length > 0) {
+        let highRiskTools: ReturnType<typeof categorizeHighRiskTools> = [];
+        try {
+          const declarations = extractToolDeclarations(JSON.parse(requestBody.toString('utf8')));
+          highRiskTools = categorizeHighRiskTools(declarations);
+        } catch {
+          // body wasn't valid JSON or had no tools — no DAN gate
+        }
+        if (highRiskTools.length === 0) {
+          events.emit({
+            kind: 'dan.skipped',
+            requestId,
+            timestamp: new Date().toISOString(),
+            appId: identity.appId,
+            hostname: upstreamHost,
+            reason: 'no-high-tools',
+          });
+        } else {
+          const cached = danDecisionCache.get(identity.appId, highRiskTools);
+          if (cached) {
+            events.emit({
+              kind: 'dan.skipped',
+              requestId,
+              timestamp: new Date().toISOString(),
+              appId: identity.appId,
+              hostname: upstreamHost,
+              reason: cached.decision === 'allow' ? 'cached-allow' : 'cached-deny',
+            });
+            if (cached.decision === 'deny') {
+              if (!res.headersSent) {
+                res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+              }
+              res.end(
+                `aegis-proxy: ASD-008-dan-cached-deny — ${identity.appId} ` +
+                  `previously denied access to HIGH-category tool(s) ` +
+                  `${highRiskTools.map((t) => t.name).join(', ')}. Wait 60s or revoke via Settings.\n`
+              );
+              return;
+            }
+          } else {
+            const outcome = await pendingDan.hold({
+              appId: identity.appId,
+              hostname: upstreamHost,
+              highRiskTools,
+            });
+            danDecisionCache.set(identity.appId, highRiskTools, outcome.decision);
+            if (outcome.decision === 'deny') {
+              if (!res.headersSent) {
+                res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+              }
+              res.end(
+                `aegis-proxy: ASD-008-dan-${outcome.timedOut ? 'timeout-denied' : 'denied'} — ` +
+                  `${identity.appId} requested ` +
+                  `${highRiskTools.length} HIGH-category tool(s) (` +
+                  `${highRiskTools.map((t) => `${t.name}:${t.category}`).join(', ')}) ` +
+                  `${outcome.timedOut ? `and the 30s DAN gate timed out.` : `and the user denied.`}\n`
+              );
+              return;
+            }
+          }
         }
       }
 

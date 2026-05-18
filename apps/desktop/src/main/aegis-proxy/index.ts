@@ -78,6 +78,29 @@ export {
   type ConsentOutcome,
 } from './pending-consent-queue.js';
 export {
+  categorizeTool,
+  categorizeHighRiskTools,
+  extractToolDeclarations,
+  HIGH_CATEGORIES,
+  type DanCategory,
+  type ToolDeclaration,
+  type CategorizedTool,
+} from './dan-categorizer.js';
+export {
+  PendingDanQueue,
+  type DanRequest,
+  type DanOutcome,
+  type DanNotifier,
+  type PendingDanQueueOptions,
+} from './pending-dan-queue.js';
+export { OsNotificationDanCarrier, type OsNotificationCarrierOptions } from './dan-carrier-os.js';
+export {
+  DanDecisionCache,
+  type CachedDanDecision,
+  type DanDecisionCacheOptions,
+} from './dan-decision-cache.js';
+export { registerDanGateHandlers } from './ipc-handlers.js';
+export {
   ensureRootCA,
   readRootCAPublic,
   deleteRootCA,

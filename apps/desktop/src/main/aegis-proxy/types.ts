@@ -38,6 +38,10 @@ export interface AegisProxyHandle {
   appsPolicy: import('./apps-policy.js').AppsPolicyStore;
   /** Pending-consent queue for unseen-app first requests. */
   pendingConsent: import('./pending-consent-queue.js').PendingConsentQueue;
+  /** Pending-DAN queue for HIGH-category tool requests (ASD-T-016). */
+  pendingDan: import('./pending-dan-queue.js').PendingDanQueue;
+  /** Session-scoped DAN decision cache (ASD-T-016). */
+  danDecisionCache: import('./dan-decision-cache.js').DanDecisionCache;
   stop(): Promise<void>;
 }
 

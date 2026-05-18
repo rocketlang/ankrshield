@@ -137,6 +137,33 @@ type AegisProxyEvent =
       appId: string;
       decision: 'allow' | 'deny';
       timedOut: boolean;
+    }
+  | {
+      kind: 'dan.held';
+      requestId: string;
+      timestamp: string;
+      pendingId: string;
+      appId: string;
+      hostname: string;
+      timeoutMs: number;
+      highRiskTools: Array<{ name: string; category: string }>;
+    }
+  | {
+      kind: 'dan.resolved';
+      requestId: string;
+      timestamp: string;
+      pendingId: string;
+      appId: string;
+      decision: 'allow' | 'deny';
+      timedOut: boolean;
+    }
+  | {
+      kind: 'dan.skipped';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      reason: 'cached-allow' | 'cached-deny' | 'no-high-tools';
     };
 
 interface PendingConsent {
@@ -145,6 +172,15 @@ interface PendingConsent {
   hostname: string;
   heldAt: string;
   timeoutMs: number;
+}
+
+interface PendingDan {
+  pendingId: string;
+  appId: string;
+  hostname: string;
+  heldAt: string;
+  timeoutMs: number;
+  highRiskTools: Array<{ name: string; category: string }>;
 }
 
 /** Aggregated per-request view, built by pairing request/response by requestId. */
@@ -196,6 +232,18 @@ declare global {
         pii_policy?: 'redact' | 'block' | 'off';
         dan_carrier?: 'os' | 'wa' | 'tg';
       }) => Promise<{ ok: boolean; error?: string }>;
+      aegisProxyListPendingDan?: () => Promise<
+        Array<
+          PendingDan & {
+            highRiskTools: Array<{ name: string; category: string; matchedBy: string }>;
+          }
+        >
+      >;
+      aegisProxyResolvePendingDan?: (input: {
+        pendingId: string;
+        decision: 'allow' | 'deny';
+      }) => Promise<{ ok: boolean; error?: string }>;
+      aegisProxyForgetDanCache?: (appId: string) => Promise<{ ok: boolean; cleared: number }>;
     };
   }
 }
@@ -210,6 +258,8 @@ export function AgentFeed() {
 
   // ASD-T-015 TOFU pending-consent dialog state.
   const [pendingConsents, setPendingConsents] = useState<PendingConsent[]>([]);
+  // ASD-T-016 DAN gate pending state.
+  const [pendingDans, setPendingDans] = useState<PendingDan[]>([]);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -218,16 +268,29 @@ export function AgentFeed() {
       // empty state rather than crash.
       return;
     }
-    // Snapshot any pending consents at mount (covers renderer-reload while
+    // Snapshot pending state at mount (covers renderer-reload while
     // proxy was already holding requests).
     void api.aegisProxyListPendingConsents?.().then((list) => {
       if (list) setPendingConsents(list);
+    });
+    void api.aegisProxyListPendingDan?.().then((list) => {
+      if (list)
+        setPendingDans(
+          list.map((d) => ({
+            pendingId: d.pendingId,
+            appId: d.appId,
+            hostname: d.hostname,
+            heldAt: d.heldAt,
+            timeoutMs: d.timeoutMs,
+            highRiskTools: d.highRiskTools.map((t) => ({ name: t.name, category: t.category })),
+          }))
+        );
     });
     const unsubscribe = api.onAegisProxyEvent((event) => {
       if (!pausedRef.current) {
         setRows((prev) => mergeEvent(prev, rowsByIdRef.current, event));
       }
-      // Pending-consent state is updated regardless of pause.
+      // Pending state is updated regardless of pause.
       if (event.kind === 'consent.pending') {
         setPendingConsents((prev) => [
           ...prev,
@@ -241,6 +304,20 @@ export function AgentFeed() {
         ]);
       } else if (event.kind === 'consent.resolved') {
         setPendingConsents((prev) => prev.filter((p) => p.pendingId !== event.pendingId));
+      } else if (event.kind === 'dan.held') {
+        setPendingDans((prev) => [
+          ...prev,
+          {
+            pendingId: event.pendingId,
+            appId: event.appId,
+            hostname: event.hostname,
+            heldAt: event.timestamp,
+            timeoutMs: event.timeoutMs,
+            highRiskTools: event.highRiskTools,
+          },
+        ]);
+      } else if (event.kind === 'dan.resolved') {
+        setPendingDans((prev) => prev.filter((p) => p.pendingId !== event.pendingId));
       }
     });
     return () => {
@@ -257,6 +334,14 @@ export function AgentFeed() {
           pending={pendingConsents}
           onResolved={(pendingId) =>
             setPendingConsents((prev) => prev.filter((p) => p.pendingId !== pendingId))
+          }
+        />
+      ) : null}
+      {pendingDans.length > 0 ? (
+        <DanInbox
+          pending={pendingDans}
+          onResolved={(pendingId) =>
+            setPendingDans((prev) => prev.filter((p) => p.pendingId !== pendingId))
           }
         />
       ) : null}
@@ -995,6 +1080,96 @@ function PendingConsentForm({
           className="px-3 py-1.5 rounded font-medium text-sm bg-ankr-green text-white hover:bg-green-600 disabled:opacity-50"
         >
           Allow with budget
+        </button>
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => submit('deny')}
+          className="px-3 py-1.5 rounded font-medium text-sm bg-red-700/70 text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          Deny
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DanInbox({
+  pending,
+  onResolved,
+}: {
+  pending: PendingDan[];
+  onResolved: (pendingId: string) => void;
+}) {
+  return (
+    <section className="bg-red-900/40 border border-red-600 rounded-lg p-4 space-y-3">
+      <header>
+        <h2 className="font-semibold text-red-200">
+          ⚠ {pending.length} DAN gate hold{pending.length === 1 ? '' : 's'}
+        </h2>
+        <p className="text-xs text-red-300">
+          HIGH-category tool access requires explicit approval (ASD-008). Default timeout 30s — no
+          answer = deny (INF-ASD-008).
+        </p>
+      </header>
+      {pending.map((p) => (
+        <DanRow key={p.pendingId} pending={p} onResolved={onResolved} />
+      ))}
+    </section>
+  );
+}
+
+function DanRow({
+  pending,
+  onResolved,
+}: {
+  pending: PendingDan;
+  onResolved: (pendingId: string) => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const submit = async (decision: 'allow' | 'deny') => {
+    const api = window.electronAPI;
+    if (!api?.aegisProxyResolvePendingDan) return;
+    setSubmitting(true);
+    setErr(null);
+    const r = await api.aegisProxyResolvePendingDan({ pendingId: pending.pendingId, decision });
+    setSubmitting(false);
+    if (!r.ok) {
+      setErr(r.error ?? 'Failed to resolve DAN gate.');
+      return;
+    }
+    onResolved(pending.pendingId);
+  };
+
+  return (
+    <div className="bg-gray-900 border border-gray-700 rounded p-3 space-y-2">
+      <div className="flex items-baseline justify-between">
+        <div>
+          <span className="font-mono text-sm text-white">{pending.appId}</span>
+          <span className="ml-2 text-xs text-gray-400">→ {pending.hostname}</span>
+        </div>
+        <span className="text-xs text-gray-500">held {pending.heldAt.slice(11, 19)} UTC</span>
+      </div>
+      <ul className="text-xs space-y-1">
+        {pending.highRiskTools.map((t) => (
+          <li key={t.name} className="font-mono">
+            <span className="text-red-300">{t.name}</span>
+            <span className="text-gray-500"> → </span>
+            <span className="text-yellow-300">{t.category}</span>
+          </li>
+        ))}
+      </ul>
+      {err ? <div className="text-xs text-red-400">{err}</div> : null}
+      <div className="flex gap-2 pt-1">
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={() => submit('allow')}
+          className="px-3 py-1.5 rounded font-medium text-sm bg-ankr-green text-white hover:bg-green-600 disabled:opacity-50"
+        >
+          Allow this request
         </button>
         <button
           type="button"

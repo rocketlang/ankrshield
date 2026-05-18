@@ -15,6 +15,8 @@ import { installRootCAToTrustStore, getTrustStoreStatus } from './ca-truststore.
 import { ConsentStore, type ConsentDecision } from './consent-store.js';
 import type { AppsPolicyStore, PiiPolicyChoice, DanCarrier } from './apps-policy.js';
 import type { PendingConsentQueue, ConsentRequest } from './pending-consent-queue.js';
+import type { PendingDanQueue, DanRequest } from './pending-dan-queue.js';
+import type { DanDecisionCache } from './dan-decision-cache.js';
 
 export const ROOT_CA_CEREMONY = 'root-ca-install';
 
@@ -92,6 +94,48 @@ export function registerTofuConsentHandlers(
     ipcMain.removeHandler('aegis-proxy:resolve-pending-consent');
     ipcMain.removeHandler('aegis-proxy:list-app-policies');
     ipcMain.removeHandler('aegis-proxy:forget-app-policy');
+  };
+}
+
+/**
+ * Wire DAN gate IPC for the renderer's DanInbox component (ASD-T-016).
+ * Returns a teardown to remove handlers when the proxy stops.
+ */
+export function registerDanGateHandlers(
+  pendingDan: PendingDanQueue,
+  danDecisionCache: DanDecisionCache
+): () => void {
+  ipcMain.handle('aegis-proxy:list-pending-dan', (): DanRequest[] => {
+    return pendingDan.list();
+  });
+
+  ipcMain.handle(
+    'aegis-proxy:resolve-pending-dan',
+    (
+      _e,
+      input: { pendingId: string; decision: 'allow' | 'deny' }
+    ): { ok: boolean; error?: string } => {
+      if (input.decision !== 'allow' && input.decision !== 'deny') {
+        return { ok: false, error: 'decision must be "allow" or "deny"' };
+      }
+      const ok = pendingDan.resolve(input.pendingId, input.decision);
+      return ok
+        ? { ok: true }
+        : { ok: false, error: 'pendingId unknown (already resolved or expired)' };
+    }
+  );
+
+  ipcMain.handle(
+    'aegis-proxy:forget-dan-cache',
+    (_e, appId: string): { ok: boolean; cleared: number } => {
+      return { ok: true, cleared: danDecisionCache.forgetApp(appId) };
+    }
+  );
+
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:list-pending-dan');
+    ipcMain.removeHandler('aegis-proxy:resolve-pending-dan');
+    ipcMain.removeHandler('aegis-proxy:forget-dan-cache');
   };
 }
 

@@ -121,6 +121,35 @@ export type AegisProxyEvent =
       appId: string;
       decision: 'allow' | 'deny';
       timedOut: boolean;
+    }
+  | {
+      kind: 'dan.held';
+      requestId: string;
+      timestamp: string;
+      pendingId: string;
+      appId: string;
+      hostname: string;
+      timeoutMs: number;
+      /** Per-tool category breakdown for renderer display. */
+      highRiskTools: Array<{ name: string; category: string }>;
+    }
+  | {
+      kind: 'dan.resolved';
+      requestId: string;
+      timestamp: string;
+      pendingId: string;
+      appId: string;
+      decision: 'allow' | 'deny';
+      timedOut: boolean;
+    }
+  | {
+      kind: 'dan.skipped';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      /** 'cached' = decision-cache hit; 'no-high-tools' = nothing to gate. */
+      reason: 'cached-allow' | 'cached-deny' | 'no-high-tools';
     };
 
 export type AegisProxyEventListener = (event: AegisProxyEvent) => void;

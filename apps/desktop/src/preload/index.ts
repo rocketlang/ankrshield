@@ -126,6 +126,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
     >,
   aegisProxyForgetAppPolicy: (appId: string) =>
     ipcRenderer.invoke('aegis-proxy:forget-app-policy', appId) as Promise<{ ok: boolean }>,
+
+  // ─── DAN gate (ASD-T-016) ─────────────────────────────────────────────────
+  aegisProxyListPendingDan: () =>
+    ipcRenderer.invoke('aegis-proxy:list-pending-dan') as Promise<
+      Array<{
+        pendingId: string;
+        appId: string;
+        hostname: string;
+        heldAt: string;
+        timeoutMs: number;
+        highRiskTools: Array<{ name: string; category: string; matchedBy: string }>;
+      }>
+    >,
+  aegisProxyResolvePendingDan: (input: { pendingId: string; decision: 'allow' | 'deny' }) =>
+    ipcRenderer.invoke('aegis-proxy:resolve-pending-dan', input) as Promise<{
+      ok: boolean;
+      error?: string;
+    }>,
+  aegisProxyForgetDanCache: (appId: string) =>
+    ipcRenderer.invoke('aegis-proxy:forget-dan-cache', appId) as Promise<{
+      ok: boolean;
+      cleared: number;
+    }>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────
@@ -282,6 +305,33 @@ export type AegisProxyEventPayload =
       appId: string;
       decision: 'allow' | 'deny';
       timedOut: boolean;
+    }
+  | {
+      kind: 'dan.held';
+      requestId: string;
+      timestamp: string;
+      pendingId: string;
+      appId: string;
+      hostname: string;
+      timeoutMs: number;
+      highRiskTools: Array<{ name: string; category: string }>;
+    }
+  | {
+      kind: 'dan.resolved';
+      requestId: string;
+      timestamp: string;
+      pendingId: string;
+      appId: string;
+      decision: 'allow' | 'deny';
+      timedOut: boolean;
+    }
+  | {
+      kind: 'dan.skipped';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      reason: 'cached-allow' | 'cached-deny' | 'no-high-tools';
     };
 
 /**
@@ -367,6 +417,23 @@ export interface ElectronAPI {
     >
   >;
   aegisProxyForgetAppPolicy: (appId: string) => Promise<{ ok: boolean }>;
+
+  // DAN gate (ASD-T-016)
+  aegisProxyListPendingDan: () => Promise<
+    Array<{
+      pendingId: string;
+      appId: string;
+      hostname: string;
+      heldAt: string;
+      timeoutMs: number;
+      highRiskTools: Array<{ name: string; category: string; matchedBy: string }>;
+    }>
+  >;
+  aegisProxyResolvePendingDan: (input: {
+    pendingId: string;
+    decision: 'allow' | 'deny';
+  }) => Promise<{ ok: boolean; error?: string }>;
+  aegisProxyForgetDanCache: (appId: string) => Promise<{ ok: boolean; cleared: number }>;
 }
 
 declare global {
