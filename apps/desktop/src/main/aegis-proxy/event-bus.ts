@@ -82,6 +82,16 @@ export type AegisProxyEvent =
       total: number;
     }
   | {
+      kind: 'pii.stream.redacted';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      /** Per-type tally of streaming PII matches scrubbed before the client. */
+      counts: Record<string, number>;
+      total: number;
+    }
+  | {
       kind: 'budget.throttled';
       requestId: string;
       timestamp: string;

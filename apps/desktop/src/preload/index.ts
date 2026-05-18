@@ -332,6 +332,15 @@ export type AegisProxyEventPayload =
       total: number;
     }
   | {
+      kind: 'pii.stream.redacted';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      counts: Record<string, number>;
+      total: number;
+    }
+  | {
       kind: 'budget.throttled';
       requestId: string;
       timestamp: string;

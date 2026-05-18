@@ -128,6 +128,14 @@ export {
   type BudgetConfig,
   type LedgerMap,
 } from './budget-ledger.js';
+export { StreamingPiiRedactor, type StreamingPiiRedactorOptions } from './pii-stream-redactor.js';
+export {
+  PassThroughStreamRewriter,
+  AnthropicStreamRewriter,
+  OpenAIStreamRewriter,
+  makeStreamRewriter,
+  type StreamRewriter,
+} from './pii-stream-rewriter.js';
 export {
   DanTimeoutStore,
   DAN_TIMEOUT_DEFAULT_MS,

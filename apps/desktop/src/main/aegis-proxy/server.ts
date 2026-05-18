@@ -47,6 +47,11 @@ import { PendingDanQueue } from './pending-dan-queue.js';
 import { DanDecisionCache } from './dan-decision-cache.js';
 import { DanCarrierRouter } from './dan-carrier-router.js';
 import { DanTimeoutStore } from './dan-timeout-config.js';
+import {
+  makeStreamRewriter,
+  PassThroughStreamRewriter,
+  type StreamRewriter,
+} from './pii-stream-rewriter.js';
 
 /**
  * Start the aegis-proxy.
@@ -936,13 +941,38 @@ function forwardWithObservation(args: ForwardArgs): void {
             ? adapter.createResponseObserver()
             : null;
 
+          // ASD-T-021: per-app streaming PII redaction. Only install when the
+          // policy is 'redact' AND the request was streaming (Anthropic SSE /
+          // OpenAI SSE). Non-streaming responses already have their JSON body
+          // walked by ASD-T-013's request-side redactor — the response side
+          // can be added later. 'off' policy or non-streaming → pass-through.
+          const piiPolicyForApp = piiPolicy.resolve(identity.appId);
+          const streamRewriter: StreamRewriter =
+            adapter && parsed?.isStreaming === true && piiPolicyForApp === 'redact'
+              ? makeStreamRewriter(parsed.provider)
+              : new PassThroughStreamRewriter();
+
           upstreamRes.on('data', (chunk: Buffer) => {
             if (responseObserver) responseObserver.tap(chunk);
-            res.write(chunk);
+            const rewritten = streamRewriter.feed(chunk);
+            if (rewritten.length > 0) res.write(rewritten);
           });
 
           upstreamRes.on('end', () => {
+            const tail = streamRewriter.finalize();
+            if (tail.length > 0) res.write(tail);
             res.end();
+            if (streamRewriter.totalMatches() > 0) {
+              events.emit({
+                kind: 'pii.stream.redacted',
+                requestId,
+                timestamp: new Date().toISOString(),
+                appId: identity.appId,
+                hostname: upstreamHost,
+                counts: streamRewriter.countsSnapshot(),
+                total: streamRewriter.totalMatches(),
+              });
+            }
             if (responseObserver) {
               const observation = responseObserver.finalize({
                 statusCode: upstreamRes.statusCode ?? 0,
