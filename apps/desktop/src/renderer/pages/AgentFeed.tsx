@@ -63,6 +63,13 @@ type AegisProxyEvent =
       timestamp: string;
       hostname: string;
       error: string;
+    }
+  | {
+      kind: 'privacy.blocked';
+      requestId: string;
+      timestamp: string;
+      hostname: string;
+      via: 'http' | 'connect';
     };
 
 /** Aggregated per-request view, built by pairing request/response by requestId. */
@@ -82,7 +89,7 @@ interface FeedRow {
   completionTokens: number | null;
   finishReason: string | null;
   latencyMs: number | null;
-  state: 'pending' | 'completed' | 'parse_failed' | 'tls_error';
+  state: 'pending' | 'completed' | 'parse_failed' | 'tls_error' | 'privacy_blocked';
   errorMessage: string | null;
 }
 
@@ -159,7 +166,7 @@ export function AgentFeed() {
         </div>
       </header>
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Stat label="Anthropic" value={stats.anthropic} />
         <Stat label="OpenAI" value={stats.openai} />
         <Stat
@@ -170,6 +177,11 @@ export function AgentFeed() {
           label="TLS errors"
           value={stats.tlsErrors}
           subtone={stats.tlsErrors > 0 ? 'warn' : 'ok'}
+        />
+        <Stat
+          label="Privacy-blocked"
+          value={stats.privacyBlocked}
+          subtone={stats.privacyBlocked > 0 ? 'warn' : 'ok'}
         />
       </section>
 
@@ -272,6 +284,13 @@ function FeedRowView({ row }: { row: FeedRow }) {
 function renderStatus(row: FeedRow) {
   if (row.state === 'pending') {
     return <span className="text-yellow-400">⋯ pending</span>;
+  }
+  if (row.state === 'privacy_blocked') {
+    return (
+      <span className="text-red-300" title={row.errorMessage ?? 'privacy engine refused this host'}>
+        🛡 privacy-blocked
+      </span>
+    );
   }
   if (row.state === 'parse_failed') {
     return (
@@ -453,6 +472,29 @@ function mergeEvent(
       byId.set(event.requestId, row);
       return capList([row, ...prev], byId);
     }
+    case 'privacy.blocked': {
+      const row: FeedRow = {
+        requestId: event.requestId,
+        startedAt: event.timestamp,
+        provider: 'unknown',
+        appId: 'unknown:?',
+        hostname: event.hostname,
+        path: event.via === 'connect' ? '(CONNECT — refused)' : '(HTTP — refused)',
+        model: null,
+        isStreaming: false,
+        messageCount: 0,
+        hasTools: false,
+        statusCode: 403,
+        promptTokens: null,
+        completionTokens: null,
+        finishReason: null,
+        latencyMs: null,
+        state: 'privacy_blocked',
+        errorMessage: 'privacy engine refused this host (ASD-010)',
+      };
+      byId.set(event.requestId, row);
+      return capList([row, ...prev], byId);
+    }
   }
 }
 
@@ -469,12 +511,14 @@ function summariseFeed(rows: FeedRow[]) {
   let anthropic = 0;
   let openai = 0;
   let tlsErrors = 0;
+  let privacyBlocked = 0;
   let latencySum = 0;
   let latencyCount = 0;
   for (const r of rows) {
     if (r.provider === 'anthropic') anthropic++;
     if (r.provider === 'openai') openai++;
     if (r.state === 'tls_error') tlsErrors++;
+    if (r.state === 'privacy_blocked') privacyBlocked++;
     if (r.latencyMs != null) {
       latencySum += r.latencyMs;
       latencyCount++;
@@ -484,6 +528,7 @@ function summariseFeed(rows: FeedRow[]) {
     anthropic,
     openai,
     tlsErrors,
+    privacyBlocked,
     avgLatencyMs: latencyCount > 0 ? Math.round(latencySum / latencyCount) : null,
   };
 }

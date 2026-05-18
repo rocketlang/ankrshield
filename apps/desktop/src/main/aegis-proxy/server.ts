@@ -25,6 +25,7 @@ import {
   ASD_PROXY_DEFAULT_PORT,
   type AegisProxyConfig,
   type AegisProxyHandle,
+  type IsBlockedFn,
   type RootCA,
 } from './types.js';
 import { validateBindAddress } from './bind-validator.js';
@@ -50,6 +51,7 @@ export async function startAegisProxy(
   const resolved: AegisProxyConfig = {
     bindAddress: config.bindAddress ?? '127.0.0.1',
     bindPort: config.bindPort ?? ASD_PROXY_DEFAULT_PORT,
+    isBlocked: config.isBlocked,
   };
 
   // ASD-001: bind-address must be loopback. Non-loopback → exit 78.
@@ -97,14 +99,24 @@ export async function startAegisProxy(
   }
 
   const proxyPort = resolved.bindPort;
+  const isBlocked = resolved.isBlocked ?? (async () => false);
 
   const server = http.createServer((req, res) =>
-    handleHttpRequest(req, res, events, appsStore, proxyPort)
+    handleHttpRequest(req, res, events, appsStore, proxyPort, isBlocked)
   );
   server.on('connect', (req, socket, head) =>
     // Node types `socket` as Duplex on the connect event; in practice it's a
     // net.Socket for TCP-served HTTP. Cast at the boundary.
-    handleHttpConnect(req, socket as net.Socket, head, leafCache, events, appsStore, proxyPort)
+    handleHttpConnect(
+      req,
+      socket as net.Socket,
+      head,
+      leafCache,
+      events,
+      appsStore,
+      proxyPort,
+      isBlocked
+    )
   );
 
   return new Promise<AegisProxyHandle>((resolve, reject) => {
@@ -146,13 +158,14 @@ export async function startAegisProxy(
  * Plain-HTTP forward handler. Client sends `GET http://host/path HTTP/1.1`
  * (absolute-form request URI per RFC 7230 §5.3.2).
  */
-function handleHttpRequest(
+async function handleHttpRequest(
   req: IncomingMessage,
   res: ServerResponse,
   events: AegisProxyEventBus,
   appsStore: AppsStore,
-  proxyPort: number
-): void {
+  proxyPort: number,
+  isBlocked: IsBlockedFn
+): Promise<void> {
   const rawUrl = req.url ?? '';
   if (!/^https?:\/\//i.test(rawUrl)) {
     res.writeHead(400, { 'content-type': 'text/plain; charset=utf-8' });
@@ -180,6 +193,15 @@ function handleHttpRequest(
       'aegis-proxy: HTTP forward handler only supports http: targets. ' +
         'For https: targets, use HTTPS_PROXY which triggers CONNECT (terminated by aegis-proxy).'
     );
+    return;
+  }
+
+  // @rule:ASD-010 / INF-ASD-009 — privacy-engine chains BEFORE AEGIS.
+  // A request to a known tracker/blocked host is refused here, without
+  // forwarding upstream and without recording cost.
+  if (await isHostBlocked(isBlocked, target.hostname, events, 'http')) {
+    res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end(`aegis-proxy: ASD-010-privacy-blocked — privacy engine refused ${target.hostname}.\n`);
     return;
   }
 
@@ -214,15 +236,16 @@ function parseConnectTarget(raw: string): ConnectTarget | null {
   return { host: m[1]!, port };
 }
 
-function handleHttpConnect(
+async function handleHttpConnect(
   req: IncomingMessage,
   clientSocket: net.Socket,
   head: Buffer,
   leafCache: LeafCertCache | null,
   events: AegisProxyEventBus,
   appsStore: AppsStore,
-  proxyPort: number
-): void {
+  proxyPort: number,
+  isBlocked: IsBlockedFn
+): Promise<void> {
   const target = parseConnectTarget(req.url ?? '');
   if (!target) {
     clientSocket.write('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
@@ -234,6 +257,22 @@ function handleHttpConnect(
     clientSocket.write(
       'HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n' +
         'aegis-proxy: root CA unavailable; cannot terminate TLS for CONNECT.\n'
+    );
+    clientSocket.end();
+    return;
+  }
+
+  // @rule:ASD-010 — privacy-engine block runs BEFORE leaf cert mint. Saves
+  // both compute (no cert mint for a host we'd block anyway) AND fingerprint
+  // leakage (no leaf cert generated for tracker domains).
+  if (await isHostBlocked(isBlocked, target.host, events, 'connect')) {
+    const body = `aegis-proxy: ASD-010-privacy-blocked — privacy engine refused ${target.host}.\n`;
+    clientSocket.write(
+      'HTTP/1.1 403 Forbidden\r\n' +
+        'Content-Type: text/plain; charset=utf-8\r\n' +
+        `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+        'Connection: close\r\n\r\n' +
+        body
     );
     clientSocket.end();
     return;
@@ -474,4 +513,39 @@ function stripHopByHopHeaders(headers: IncomingMessage['headers']): IncomingMess
   return out;
 }
 
-export const __testHooks = { parseConnectTarget };
+/**
+ * Run the privacy-engine block check + emit + log. Fail-open: if the check
+ * throws, the request proceeds (we'd rather over-allow than break the entire
+ * LLM workflow when the privacy engine is degraded). ASD-004 still applies
+ * to AEGIS checks; this is for upstream policy from a sibling subsystem.
+ */
+async function isHostBlocked(
+  fn: IsBlockedFn,
+  hostname: string,
+  events: AegisProxyEventBus,
+  via: 'http' | 'connect'
+): Promise<boolean> {
+  let blocked: boolean;
+  try {
+    blocked = await fn(hostname);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[aegis-proxy] privacy-engine isBlocked(${hostname}) threw; allowing through:`,
+      err instanceof Error ? err.message : err
+    );
+    return false;
+  }
+  if (blocked) {
+    events.emit({
+      kind: 'privacy.blocked',
+      requestId: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      hostname,
+      via,
+    });
+  }
+  return blocked;
+}
+
+export const __testHooks = { parseConnectTarget, isHostBlocked };

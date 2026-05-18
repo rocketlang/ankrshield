@@ -11,9 +11,23 @@ export const ASD_PROXY_LOOPBACK_ADDRESSES = ['127.0.0.1', '::1'] as const;
 
 export type LoopbackAddress = (typeof ASD_PROXY_LOOPBACK_ADDRESSES)[number];
 
+/**
+ * Privacy-engine block check. Returns true to deny the request before any
+ * leaf-cert mint or upstream forward. Per ASD-010 / INF-ASD-009 this runs
+ * BEFORE the AEGIS path. Failures are caught by the caller and treated as
+ * fail-open (allow) so a downed privacy engine doesn't kill LLM traffic;
+ * see also feedback in main/index.ts where this is wired to dnsService.
+ */
+export type IsBlockedFn = (hostname: string) => Promise<boolean>;
+
 export interface AegisProxyConfig {
   bindAddress: string;
   bindPort: number;
+  /**
+   * Optional privacy-engine block check. If omitted, the proxy treats every
+   * host as not-blocked (P1 P0 fallback when privacy engine isn't wired).
+   */
+  isBlocked?: IsBlockedFn;
 }
 
 export interface AegisProxyHandle {

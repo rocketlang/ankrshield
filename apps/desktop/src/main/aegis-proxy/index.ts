@@ -60,4 +60,5 @@ export {
   type RootCA,
   type RootCAPublic,
   type LeafCert,
+  type IsBlockedFn,
 } from './types.js';

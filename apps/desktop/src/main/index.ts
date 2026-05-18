@@ -69,7 +69,28 @@ app.whenReady().then(async () => {
     //   Bind violations are fatal (exit 78). Other startup failures (port in use,
     //   etc.) are logged but non-fatal — privacy engine keeps running.
     try {
-      aegisProxyHandle = await startAegisProxy();
+      // @rule:ASD-010 / INF-ASD-009 — wire dnsService.isBlocked as the
+      //   privacy-engine block check that runs BEFORE the AEGIS path in
+      //   forwardWithObservation. DNSService.isBlocked's declared return
+      //   type is `{ blocked, reason? }` but its runtime value is the
+      //   underlying resolver's boolean (the wrapper passes through
+      //   unmodified). Normalise to a plain boolean here and fail-open.
+      const dns = serviceManager.getDNSService();
+      const isBlocked = dns
+        ? async (host: string) => {
+            try {
+              const result = (await dns.isBlocked(host)) as unknown;
+              if (typeof result === 'boolean') return result;
+              if (result && typeof result === 'object' && 'blocked' in result) {
+                return (result as { blocked: boolean }).blocked === true;
+              }
+              return false;
+            } catch {
+              return false; // privacy-engine outage → fail-open per ASD-T-009 notes
+            }
+          }
+        : undefined;
+      aegisProxyHandle = await startAegisProxy({ isBlocked });
       // @rule:ASD-006 — proxy events bridged to renderer for AgentFeed (ASD-T-008).
       attachAegisProxyToRenderer(aegisProxyHandle.events);
     } catch (err) {

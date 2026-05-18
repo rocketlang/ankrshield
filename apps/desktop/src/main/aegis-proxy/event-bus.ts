@@ -42,6 +42,14 @@ export type AegisProxyEvent =
       timestamp: string;
       hostname: string;
       error: string;
+    }
+  | {
+      kind: 'privacy.blocked';
+      requestId: string;
+      timestamp: string;
+      hostname: string;
+      /** Which proxy entry point intercepted it. */
+      via: 'http' | 'connect';
     };
 
 export type AegisProxyEventListener = (event: AegisProxyEvent) => void;
