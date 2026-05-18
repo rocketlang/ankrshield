@@ -26,6 +26,7 @@ import type { KillSwitch, KillState, KillStateSnapshot } from './kill-switch.js'
 import type { AuditRetentionStore, AuditRetentionConfig } from './audit-retention-config.js';
 import type { AuditRetentionWorker } from './audit-retention-worker.js';
 import { exportAuditZip, type ExportRange } from './audit-export.js';
+import type { RequestLogStore, ReplayEntry } from './request-log-store.js';
 import {
   RETENTION_DAYS_DEFAULT,
   RETENTION_DAYS_MIN,
@@ -608,6 +609,30 @@ export function registerAuditExportHandlers(): () => void {
   return () => {
     ipcMain.removeHandler('aegis-proxy:audit-export-pick-path');
     ipcMain.removeHandler('aegis-proxy:audit-export-run');
+  };
+}
+
+/**
+ * Wire 24h-replay IPC (ASD-T-030 / FR-16 P3). Two operations:
+ *   - list: time-windowed snapshot of replay-worthy events
+ *   - range: oldest..newest timestamps in the buffer (drives the scrubber bounds)
+ */
+export function registerReplayHandlers(log: RequestLogStore): () => void {
+  ipcMain.handle(
+    'aegis-proxy:replay-list',
+    (_e, input?: { since?: string; until?: string }): ReplayEntry[] => {
+      return log.list(input ?? {});
+    }
+  );
+
+  ipcMain.handle('aegis-proxy:replay-range', () => ({
+    ...log.range(),
+    size: log.size(),
+  }));
+
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:replay-list');
+    ipcMain.removeHandler('aegis-proxy:replay-range');
   };
 }
 

@@ -123,8 +123,14 @@ export {
   registerKillSwitchHandlers,
   registerAuditRetentionHandlers,
   registerAuditExportHandlers,
+  registerReplayHandlers,
   type BudgetSummaryRow,
 } from './ipc-handlers.js';
+export {
+  RequestLogStore,
+  type ReplayEntry,
+  type RequestLogStoreOptions,
+} from './request-log-store.js';
 export {
   exportAuditZip,
   type ExportRange,

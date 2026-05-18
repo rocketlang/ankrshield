@@ -16,6 +16,7 @@ import {
   SetupRootCA,
   BudgetPanel,
   ReportCard,
+  Replay,
 } from './pages';
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
@@ -76,6 +77,7 @@ function App() {
             <Route path="agents" element={<AgentFeed />} />
             <Route path="budget" element={<BudgetPanel />} />
             <Route path="report-card" element={<ReportCard />} />
+            <Route path="replay" element={<Replay />} />
             <Route path="setup/root-ca" element={<SetupRootCA />} />
             <Route path="settings" element={<Settings />} />
           </Route>

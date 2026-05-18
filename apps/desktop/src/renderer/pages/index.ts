@@ -11,3 +11,4 @@ export { AgentFeed } from './AgentFeed';
 export { SetupRootCA } from './SetupRootCA';
 export { BudgetPanel } from './BudgetPanel';
 export { ReportCard } from './ReportCard';
+export { Replay } from './Replay';

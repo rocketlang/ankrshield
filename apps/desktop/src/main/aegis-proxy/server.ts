@@ -58,6 +58,7 @@ import { KillSwitch } from './kill-switch.js';
 import { AuditRetentionStore } from './audit-retention-config.js';
 import { AuditRetentionWorker } from './audit-retention-worker.js';
 import { ConsentStore } from './consent-store.js';
+import { RequestLogStore } from './request-log-store.js';
 
 /**
  * Start the aegis-proxy.
@@ -163,6 +164,12 @@ export async function startAegisProxy(
     consents: new ConsentStore(),
   });
   auditWorker.start();
+
+  // ASD-T-030: in-memory rolling log of the last ~24h of replay-worthy
+  // events for the /replay UI. Bounded by entry count + horizon; on
+  // shutdown detach is implicit (process exit clears memory).
+  const requestLog = new RequestLogStore();
+  requestLog.attach(events);
 
   // ASD-T-013 (doctrine-corrected — see vivechana Part 2): per-request PII
   // boundary. Default policy = 'redact' for all apps; P2 ASD-T-015 (TOFU)
@@ -353,6 +360,7 @@ export async function startAegisProxy(
         killSwitch,
         auditRetention,
         auditWorker,
+        requestLog,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {
@@ -361,6 +369,7 @@ export async function startAegisProxy(
               pendingConsent.drain();
               pendingDan.drain();
               eventTally.detach();
+              requestLog.detach();
               auditWorker.stop();
               appsStore.stop().catch(() => {});
               budgetLedger.stop().catch(() => {});

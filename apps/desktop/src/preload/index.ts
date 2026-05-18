@@ -282,6 +282,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       daysCovered: string[];
       digestsIncluded: string[];
     }>,
+
+  // ─── 24h replay (ASD-T-030 / FR-16 P3) ────────────────────────────────────
+  aegisProxyReplayList: (input?: { since?: string; until?: string }) =>
+    ipcRenderer.invoke('aegis-proxy:replay-list', input ?? {}) as Promise<unknown>,
+  aegisProxyReplayRange: () =>
+    ipcRenderer.invoke('aegis-proxy:replay-range') as Promise<{
+      oldest: string | null;
+      newest: string | null;
+      size: number;
+    }>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────
@@ -686,6 +696,14 @@ export interface ElectronAPI {
     entryCount: number;
     daysCovered: string[];
     digestsIncluded: string[];
+  }>;
+
+  // 24h replay (ASD-T-030)
+  aegisProxyReplayList: (input?: { since?: string; until?: string }) => Promise<unknown>;
+  aegisProxyReplayRange: () => Promise<{
+    oldest: string | null;
+    newest: string | null;
+    size: number;
   }>;
 }
 

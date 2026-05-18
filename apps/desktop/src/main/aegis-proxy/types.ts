@@ -58,6 +58,8 @@ export interface AegisProxyHandle {
   auditRetention: import('./audit-retention-config.js').AuditRetentionStore;
   /** Audit retention worker — prune + gzip + weekly digest (ASD-T-028). */
   auditWorker: import('./audit-retention-worker.js').AuditRetentionWorker;
+  /** Rolling in-memory event log for /replay UI (ASD-T-030). */
+  requestLog: import('./request-log-store.js').RequestLogStore;
   stop(): Promise<void>;
 }
 
