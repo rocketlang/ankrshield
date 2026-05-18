@@ -20,6 +20,8 @@ import type { DanDecisionCache } from './dan-decision-cache.js';
 import type { DanTimeoutStore } from './dan-timeout-config.js';
 import type { BudgetLedger, BudgetConfigResolver } from './budget-ledger.js';
 import type { LatencyTracker } from './latency-tracker.js';
+import type { EventTallyStore } from './event-tally-store.js';
+import { buildAllReportCards, buildReportCard, type ReportCardRow } from './report-card.js';
 import {
   DAN_TIMEOUT_DEFAULT_MS,
   DAN_TIMEOUT_MIN_MS,
@@ -439,6 +441,39 @@ export function registerAegisLatencyHandlers(aegisLatency: LatencyTracker): () =
 
   return () => {
     ipcMain.removeHandler('aegis-proxy:get-aegis-latency-snapshot');
+  };
+}
+
+/**
+ * Wire HanumanG report-card IPC (ASD-T-024 / FR-17). Read-only — the card
+ * aggregates EventTallyStore + BudgetLedger + AppsPolicy. Two flavours:
+ *  - all: every app with policy / tally / ledger activity in the window,
+ *    sorted by overall posture ascending (worst first).
+ *  - single: one specified app — used by the report-card detail view.
+ */
+export function registerReportCardHandlers(stores: {
+  tally: EventTallyStore;
+  ledger: BudgetLedger;
+  appsPolicy: AppsPolicyStore;
+}): () => void {
+  ipcMain.handle(
+    'aegis-proxy:get-report-card-all',
+    (_e, input?: { windowDays?: number }): ReportCardRow[] => {
+      const windowDays = input?.windowDays ?? 1;
+      return buildAllReportCards(stores, { windowDays });
+    }
+  );
+
+  ipcMain.handle(
+    'aegis-proxy:get-report-card-app',
+    (_e, input: { appId: string; windowDays?: number }): ReportCardRow => {
+      return buildReportCard(input.appId, stores, { windowDays: input.windowDays ?? 1 });
+    }
+  );
+
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:get-report-card-all');
+    ipcMain.removeHandler('aegis-proxy:get-report-card-app');
   };
 }
 

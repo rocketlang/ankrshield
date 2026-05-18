@@ -22,6 +22,7 @@ import {
   registerConsentDialogHandlers,
   registerBudgetPanelHandlers,
   registerAegisLatencyHandlers,
+  registerReportCardHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -121,6 +122,12 @@ app.whenReady().then(async () => {
       );
       // ASD-T-022: AEGIS latency snapshot IPC (NFR-1 compliance tile).
       registerAegisLatencyHandlers(aegisProxyHandle.aegisLatency);
+      // ASD-T-024: HanumanG report-card IPC (FR-17 — daily/per-app roll-up).
+      registerReportCardHandlers({
+        tally: aegisProxyHandle.eventTally,
+        ledger: aegisProxyHandle.budgetLedger,
+        appsPolicy: aegisProxyHandle.appsPolicy,
+      });
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

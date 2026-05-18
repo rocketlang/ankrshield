@@ -50,6 +50,8 @@ export interface AegisProxyHandle {
   danTimeoutStore: import('./dan-timeout-config.js').DanTimeoutStore;
   /** AEGIS gate latency tracker — NFR-1 source of truth (ASD-T-022). */
   aegisLatency: import('./latency-tracker.js').LatencyTracker;
+  /** Per-app per-day event tally for the HanumanG report card (ASD-T-024). */
+  eventTally: import('./event-tally-store.js').EventTallyStore;
   stop(): Promise<void>;
 }
 

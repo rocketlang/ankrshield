@@ -119,8 +119,28 @@ export {
   registerConsentDialogHandlers,
   registerBudgetPanelHandlers,
   registerAegisLatencyHandlers,
+  registerReportCardHandlers,
   type BudgetSummaryRow,
 } from './ipc-handlers.js';
+export {
+  EventTallyStore,
+  type DayBucket,
+  type AppDayMap,
+  type EventTallyStoreOptions,
+} from './event-tally-store.js';
+export {
+  scorePosture,
+  type AxisKey,
+  type AxisScore,
+  type PostureScore,
+  type PostureScoreInputs,
+} from './hanumang-mandate-vendored.js';
+export {
+  buildReportCard,
+  buildAllReportCards,
+  type ReportCardRow,
+  type BuildReportCardOptions,
+} from './report-card.js';
 export {
   LatencyTracker,
   nowMs,

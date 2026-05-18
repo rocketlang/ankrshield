@@ -53,6 +53,7 @@ import {
   type StreamRewriter,
 } from './pii-stream-rewriter.js';
 import { LatencyTracker, nowMs } from './latency-tracker.js';
+import { EventTallyStore } from './event-tally-store.js';
 
 /**
  * Start the aegis-proxy.
@@ -126,6 +127,12 @@ export async function startAegisProxy(
   // ASD-T-022: NFR-1 instrumentation — track AEGIS gate.guard() latency in a
   // rolling 1000-sample window so the renderer + tests can verify p99 < 50ms.
   const aegisLatency = new LatencyTracker({ windowSize: 1000, label: 'aegis-gate' });
+
+  // ASD-T-024: in-memory per-app per-day tally for the HanumanG report card.
+  // Subscribes to the event bus AFTER both are constructed; no persistence
+  // yet (audit/ dir handles long-horizon storage in P3 ASD-T-027).
+  const eventTally = new EventTallyStore({ retentionDays: 7 });
+  eventTally.attach(events);
 
   // ASD-T-013 (doctrine-corrected — see vivechana Part 2): per-request PII
   // boundary. Default policy = 'redact' for all apps; P2 ASD-T-015 (TOFU)
@@ -310,6 +317,7 @@ export async function startAegisProxy(
         budgetLedger,
         budgetConfig,
         aegisLatency,
+        eventTally,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {
@@ -317,6 +325,7 @@ export async function startAegisProxy(
               // Drain pending consents + DAN holds (timeout-deny each).
               pendingConsent.drain();
               pendingDan.drain();
+              eventTally.detach();
               appsStore.stop().catch(() => {});
               budgetLedger.stop().catch(() => {});
               appsPolicy.stop().catch(() => {});

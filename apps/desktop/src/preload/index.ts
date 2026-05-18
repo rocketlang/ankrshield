@@ -229,6 +229,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       nfr1_threshold_ms: number;
       nfr1_pass: boolean;
     }>,
+
+  // ─── HanumanG report card (ASD-T-024 / FR-17) ─────────────────────────────
+  aegisProxyGetReportCardAll: (input?: { windowDays?: number }) =>
+    ipcRenderer.invoke('aegis-proxy:get-report-card-all', input ?? {}) as Promise<unknown>,
+  aegisProxyGetReportCardApp: (input: { appId: string; windowDays?: number }) =>
+    ipcRenderer.invoke('aegis-proxy:get-report-card-app', input) as Promise<unknown>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────
@@ -582,6 +588,10 @@ export interface ElectronAPI {
     nfr1_threshold_ms: number;
     nfr1_pass: boolean;
   }>;
+
+  // HanumanG report card (ASD-T-024)
+  aegisProxyGetReportCardAll: (input?: { windowDays?: number }) => Promise<unknown>;
+  aegisProxyGetReportCardApp: (input: { appId: string; windowDays?: number }) => Promise<unknown>;
 }
 
 declare global {
