@@ -116,6 +116,7 @@ export {
   registerDanGateHandlers,
   registerDanCarrierCredsHandlers,
   registerDanTimeoutHandlers,
+  registerConsentDialogHandlers,
 } from './ipc-handlers.js';
 export {
   DanTimeoutStore,

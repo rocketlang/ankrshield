@@ -19,6 +19,7 @@ import {
   registerDanGateHandlers,
   registerDanCarrierCredsHandlers,
   registerDanTimeoutHandlers,
+  registerConsentDialogHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -108,6 +109,8 @@ app.whenReady().then(async () => {
       registerDanCarrierCredsHandlers();
       // ASD-T-018: IPC handlers for DAN timeout config (Settings page).
       registerDanTimeoutHandlers(aegisProxyHandle.danTimeoutStore);
+      // ASD-T-019: ConsentDialog → ConsentStore IPC (impression + decision PRAMANA records).
+      registerConsentDialogHandlers();
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

@@ -10,6 +10,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { ConsentDialog } from '../components/ConsentDialog';
+
 // Event types mirror src/preload/index.ts AegisProxyEventPayload.
 type Provider = 'anthropic' | 'openai' | 'unknown';
 
@@ -997,29 +999,29 @@ function PendingConsentForm({
   const [budget, setBudget] = useState<string>('');
   const [piiPolicy, setPiiPolicy] = useState<'redact' | 'block' | 'off'>('redact');
   const [danCarrier, setDanCarrier] = useState<'os' | 'wa' | 'tg'>('os');
-  const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const submit = async (decision: 'allow' | 'deny') => {
+  const budgetNumber = Number(budget);
+  const budgetValid = Number.isFinite(budgetNumber) && budgetNumber > 0;
+
+  const handleDecided = async (input: {
+    decision: 'allow' | 'deny' | 'skip';
+    consent_record_id: string;
+  }) => {
     const api = window.electronAPI;
     if (!api?.aegisProxyResolvePendingConsent) return;
-    if (decision === 'allow') {
-      const n = Number(budget);
-      if (!Number.isFinite(n) || n <= 0) {
-        setErr('Hourly budget must be a positive number (USD). ASD-005: no unbounded allow.');
-        return;
-      }
+    if (input.decision === 'allow' && !budgetValid) {
+      setErr('Hourly budget must be a positive number (USD). ASD-005: no unbounded allow.');
+      return;
     }
-    setSubmitting(true);
     setErr(null);
     const r = await api.aegisProxyResolvePendingConsent({
       pendingId: pending.pendingId,
-      decision,
-      hourly_limit_usd: decision === 'allow' ? Number(budget) : undefined,
+      decision: input.decision === 'allow' ? 'allow' : 'deny',
+      hourly_limit_usd: input.decision === 'allow' ? budgetNumber : undefined,
       pii_policy: piiPolicy,
       dan_carrier: danCarrier,
     });
-    setSubmitting(false);
     if (!r.ok) {
       setErr(r.error ?? 'Failed to resolve consent.');
       return;
@@ -1028,14 +1030,33 @@ function PendingConsentForm({
   };
 
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded p-3 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <span className="font-mono text-sm text-white">{pending.appId}</span>
-          <span className="ml-2 text-xs text-gray-400">→ {pending.hostname}</span>
-        </div>
-        <span className="text-xs text-gray-500">held {pending.heldAt.slice(11, 19)} UTC</span>
-      </div>
+    <ConsentDialog
+      ceremony="tofu-consent"
+      title={`${pending.appId} → ${pending.hostname}`}
+      variant="tofu"
+      allowLabel="Allow with budget"
+      allowDisabled={!budgetValid}
+      subject={{
+        pendingId: pending.pendingId,
+        appId: pending.appId,
+        hostname: pending.hostname,
+        heldAt: pending.heldAt,
+        hourly_limit_usd: budgetValid ? budgetNumber : null,
+        pii_policy: piiPolicy,
+        dan_carrier: danCarrier,
+      }}
+      purpose={
+        `Authorise ${pending.appId} to send LLM traffic through the aegis-proxy, ` +
+        `with a per-hour USD budget cap and a chosen privacy + DAN-carrier policy ` +
+        `(ASD-005 first-request trust-on-first-use).`
+      }
+      consequences={
+        `Future requests from ${pending.appId} flow through with the chosen policy until ` +
+        `you revoke it. PII handling and HIGH-category tool gating apply per your selections.`
+      }
+      revocation_path="Settings → Apps → forget this app (re-prompts on next request)."
+      onDecided={handleDecided}
+    >
       <div className="grid grid-cols-3 gap-2 text-sm">
         <label className="flex flex-col gap-1">
           <span className="text-xs text-gray-400">
@@ -1047,7 +1068,6 @@ function PendingConsentForm({
             step={0.01}
             value={budget}
             onChange={(e) => setBudget(e.target.value)}
-            disabled={submitting}
             className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
             placeholder="e.g. 0.50"
           />
@@ -1057,7 +1077,6 @@ function PendingConsentForm({
           <select
             value={piiPolicy}
             onChange={(e) => setPiiPolicy(e.target.value as 'redact' | 'block' | 'off')}
-            disabled={submitting}
             className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
           >
             <option value="redact">Redact (default)</option>
@@ -1066,11 +1085,10 @@ function PendingConsentForm({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs text-gray-400">DAN carrier (P2 ASD-T-016+)</span>
+          <span className="text-xs text-gray-400">DAN carrier</span>
           <select
             value={danCarrier}
             onChange={(e) => setDanCarrier(e.target.value as 'os' | 'wa' | 'tg')}
-            disabled={submitting}
             className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
           >
             <option value="os">OS notification (default)</option>
@@ -1079,26 +1097,8 @@ function PendingConsentForm({
           </select>
         </label>
       </div>
-      {err ? <div className="text-xs text-red-400">{err}</div> : null}
-      <div className="flex gap-2 pt-1">
-        <button
-          type="button"
-          disabled={submitting}
-          onClick={() => submit('allow')}
-          className="px-3 py-1.5 rounded font-medium text-sm bg-ankr-green text-white hover:bg-green-600 disabled:opacity-50"
-        >
-          Allow with budget
-        </button>
-        <button
-          type="button"
-          disabled={submitting}
-          onClick={() => submit('deny')}
-          className="px-3 py-1.5 rounded font-medium text-sm bg-red-700/70 text-white hover:bg-red-700 disabled:opacity-50"
-        >
-          Deny
-        </button>
-      </div>
-    </div>
+      {err ? <div className="text-xs text-red-400 mt-2">{err}</div> : null}
+    </ConsentDialog>
   );
 }
 
@@ -1134,16 +1134,22 @@ function DanRow({
   pending: PendingDan;
   onResolved: (pendingId: string) => void;
 }) {
-  const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const submit = async (decision: 'allow' | 'deny') => {
+  const topTool = pending.highRiskTools[0];
+  const moreCount = Math.max(0, pending.highRiskTools.length - 1);
+
+  const handleDecided = async (input: {
+    decision: 'allow' | 'deny' | 'skip';
+    consent_record_id: string;
+  }) => {
     const api = window.electronAPI;
     if (!api?.aegisProxyResolvePendingDan) return;
-    setSubmitting(true);
     setErr(null);
-    const r = await api.aegisProxyResolvePendingDan({ pendingId: pending.pendingId, decision });
-    setSubmitting(false);
+    const r = await api.aegisProxyResolvePendingDan({
+      pendingId: pending.pendingId,
+      decision: input.decision === 'allow' ? 'allow' : 'deny',
+    });
     if (!r.ok) {
       setErr(r.error ?? 'Failed to resolve DAN gate.');
       return;
@@ -1152,14 +1158,33 @@ function DanRow({
   };
 
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded p-3 space-y-2">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <span className="font-mono text-sm text-white">{pending.appId}</span>
-          <span className="ml-2 text-xs text-gray-400">→ {pending.hostname}</span>
-        </div>
-        <span className="text-xs text-gray-500">held {pending.heldAt.slice(11, 19)} UTC</span>
-      </div>
+    <ConsentDialog
+      ceremony="dan-gate"
+      title={`${pending.appId} → ${pending.hostname}`}
+      variant="dan"
+      allowLabel="Allow this request"
+      subject={{
+        pendingId: pending.pendingId,
+        appId: pending.appId,
+        hostname: pending.hostname,
+        heldAt: pending.heldAt,
+        highRiskTools: pending.highRiskTools,
+      }}
+      purpose={
+        `Authorise ${pending.appId} to invoke ${pending.highRiskTools.length} HIGH-category ` +
+        `tool(s)${
+          topTool
+            ? ` (${topTool.name}: ${topTool.category}${moreCount > 0 ? ` + ${moreCount} more` : ''})`
+            : ''
+        } via ${pending.hostname} (ASD-008 DAN gate).`
+      }
+      consequences={
+        `Allow caches the decision for this app + tool-set for ~1h, suppressing further DAN ` +
+        `prompts on the same combination. Deny caches for ~1min and 403s further requests.`
+      }
+      revocation_path="Settings → Apps → Clear DAN cache, or wait for the cache TTL to expire."
+      onDecided={handleDecided}
+    >
       <ul className="text-xs space-y-1">
         {pending.highRiskTools.map((t) => (
           <li key={t.name} className="font-mono">
@@ -1169,26 +1194,8 @@ function DanRow({
           </li>
         ))}
       </ul>
-      {err ? <div className="text-xs text-red-400">{err}</div> : null}
-      <div className="flex gap-2 pt-1">
-        <button
-          type="button"
-          disabled={submitting}
-          onClick={() => submit('allow')}
-          className="px-3 py-1.5 rounded font-medium text-sm bg-ankr-green text-white hover:bg-green-600 disabled:opacity-50"
-        >
-          Allow this request
-        </button>
-        <button
-          type="button"
-          disabled={submitting}
-          onClick={() => submit('deny')}
-          className="px-3 py-1.5 rounded font-medium text-sm bg-red-700/70 text-white hover:bg-red-700 disabled:opacity-50"
-        >
-          Deny
-        </button>
-      </div>
-    </div>
+      {err ? <div className="text-xs text-red-400 mt-2">{err}</div> : null}
+    </ConsentDialog>
   );
 }
 

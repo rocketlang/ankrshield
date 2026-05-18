@@ -14,7 +14,17 @@ import { join } from 'node:path';
 
 const AUDIT_DIR = join(homedir(), '.ankrshield', 'audit');
 
-export type ConsentDecision = 'allow' | 'deny' | 'skip';
+/**
+ * Decision states for a consent ceremony.
+ *
+ * - 'allow' / 'deny' — terminal user decisions
+ * - 'skip' — user closed the dialog without deciding (e.g., root-CA ceremony)
+ * - 'impression' — dialog was presented (no terminal decision yet). Per
+ *   FR-21 / ASD-YK-007, every ConsentDialog presentation produces a
+ *   PRAMANA record so we can audit *what the user saw*, not just what
+ *   they chose. Impression and decision records pair via subject.pendingId.
+ */
+export type ConsentDecision = 'allow' | 'deny' | 'skip' | 'impression';
 
 export interface ConsentRecord {
   consent_record_id: string;

@@ -114,6 +114,71 @@ export function registerTofuConsentHandlers(
 }
 
 /**
+ * Wire the ConsentDialog → main-process bridge (ASD-T-019). Two operations:
+ *   - record-impression: ConsentDialog mounted, user is being shown the
+ *     ceremony's purpose/consequences/revocation. PRAMANA-shape record.
+ *   - record-decision: user clicked allow/deny/skip on the dialog. Returns
+ *     the created record's id so the dialog can attach it to subsequent
+ *     business calls (consent_record_id round-trip per FR-21).
+ *
+ * The store is module-scoped (consentStore) so the renderer can call into
+ * a single source of truth. Returns a teardown for symmetry with the other
+ * register* helpers, though the audit dir is process-global.
+ */
+export function registerConsentDialogHandlers(): () => void {
+  ipcMain.handle(
+    'aegis-proxy:record-consent-impression',
+    async (
+      _e,
+      input: {
+        ceremony: string;
+        subject: Record<string, unknown>;
+        context: { purpose: string; consequences: string; revocation_path: string };
+      }
+    ): Promise<{ ok: true; consent_record_id: string }> => {
+      const rec = await consentStore.record({
+        ceremony: input.ceremony,
+        decision: 'impression',
+        subject: input.subject,
+        context: input.context,
+      });
+      return { ok: true, consent_record_id: rec.consent_record_id };
+    }
+  );
+
+  ipcMain.handle(
+    'aegis-proxy:record-consent-decision',
+    async (
+      _e,
+      input: {
+        ceremony: string;
+        decision: ConsentDecision;
+        subject: Record<string, unknown>;
+        context: { purpose: string; consequences: string; revocation_path: string };
+        /** If provided, links this decision record back to the impression. */
+        impression_consent_record_id?: string;
+      }
+    ): Promise<{ ok: true; consent_record_id: string }> => {
+      const subject = input.impression_consent_record_id
+        ? { ...input.subject, impression_consent_record_id: input.impression_consent_record_id }
+        : input.subject;
+      const rec = await consentStore.record({
+        ceremony: input.ceremony,
+        decision: input.decision,
+        subject,
+        context: input.context,
+      });
+      return { ok: true, consent_record_id: rec.consent_record_id };
+    }
+  );
+
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:record-consent-impression');
+    ipcMain.removeHandler('aegis-proxy:record-consent-decision');
+  };
+}
+
+/**
  * Wire DAN gate IPC for the renderer's DanInbox component (ASD-T-016).
  * Returns a teardown to remove handlers when the proxy stops.
  */

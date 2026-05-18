@@ -171,6 +171,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('aegis-proxy:clear-dan-timeout-override', appId) as Promise<{
       ok: boolean;
     }>,
+
+  // ─── ConsentDialog ↔ ConsentStore (ASD-T-019 / FR-21) ─────────────────────
+  aegisProxyRecordConsentImpression: (input: {
+    ceremony: string;
+    subject: Record<string, unknown>;
+    context: { purpose: string; consequences: string; revocation_path: string };
+  }) =>
+    ipcRenderer.invoke('aegis-proxy:record-consent-impression', input) as Promise<{
+      ok: true;
+      consent_record_id: string;
+    }>,
+  aegisProxyRecordConsentDecision: (input: {
+    ceremony: string;
+    decision: 'allow' | 'deny' | 'skip';
+    subject: Record<string, unknown>;
+    context: { purpose: string; consequences: string; revocation_path: string };
+    impression_consent_record_id?: string;
+  }) =>
+    ipcRenderer.invoke('aegis-proxy:record-consent-decision', input) as Promise<{
+      ok: true;
+      consent_record_id: string;
+    }>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────
@@ -469,6 +491,20 @@ export interface ElectronAPI {
     ms: number;
   }) => Promise<{ ok: boolean; applied_ms: number }>;
   aegisProxyClearDanTimeoutOverride: (appId: string) => Promise<{ ok: boolean }>;
+
+  // ConsentDialog (ASD-T-019 / FR-21)
+  aegisProxyRecordConsentImpression: (input: {
+    ceremony: string;
+    subject: Record<string, unknown>;
+    context: { purpose: string; consequences: string; revocation_path: string };
+  }) => Promise<{ ok: true; consent_record_id: string }>;
+  aegisProxyRecordConsentDecision: (input: {
+    ceremony: string;
+    decision: 'allow' | 'deny' | 'skip';
+    subject: Record<string, unknown>;
+    context: { purpose: string; consequences: string; revocation_path: string };
+    impression_consent_record_id?: string;
+  }) => Promise<{ ok: true; consent_record_id: string }>;
 }
 
 declare global {
