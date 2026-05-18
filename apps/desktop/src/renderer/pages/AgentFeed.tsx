@@ -99,6 +99,26 @@ type AegisProxyEvent =
       hostname: string;
       counts: Record<string, number>;
       total: number;
+    }
+  | {
+      kind: 'budget.throttled';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      currentSpendUsd: number;
+      hourlyLimitUsd: number;
+      bucket: string;
+    }
+  | {
+      kind: 'cost.recorded';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      model: string | null;
+      costUsd: number;
+      promptTokens: number | null;
+      completionTokens: number | null;
     };
 
 /** Aggregated per-request view, built by pairing request/response by requestId. */
@@ -125,12 +145,15 @@ interface FeedRow {
     | 'tls_error'
     | 'privacy_blocked'
     | 'aegis_denied'
-    | 'pii_blocked';
+    | 'pii_blocked'
+    | 'budget_throttled';
   errorMessage: string | null;
   /** PII redaction counts (per type → count) when this row had redactions applied. */
   piiRedactedCounts?: Record<string, number> | null;
   /** Total PII spans redacted (sum of counts). */
   piiRedactedTotal?: number;
+  /** USD cost recorded for this request (after response observed). */
+  costUsd?: number;
 }
 
 const MAX_ROWS = 200;
@@ -206,7 +229,7 @@ export function AgentFeed() {
         </div>
       </header>
 
-      <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+      <section className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-4">
         <Stat label="Anthropic" value={stats.anthropic} />
         <Stat label="OpenAI" value={stats.openai} />
         <Stat
@@ -237,6 +260,12 @@ export function AgentFeed() {
           label="PII blocked"
           value={stats.piiBlockedRows}
           subtone={stats.piiBlockedRows > 0 ? 'warn' : 'ok'}
+        />
+        <Stat label="Cost so far" value={`$${stats.totalCostUsd.toFixed(4)}`} />
+        <Stat
+          label="Budget throttled"
+          value={stats.budgetThrottled}
+          subtone={stats.budgetThrottled > 0 ? 'warn' : 'ok'}
         />
       </section>
 
@@ -369,6 +398,16 @@ function renderStatus(row: FeedRow) {
         title={row.errorMessage ?? 'PII boundary blocked (ASD-011)'}
       >
         🔒 pii-blocked
+      </span>
+    );
+  }
+  if (row.state === 'budget_throttled') {
+    return (
+      <span
+        className="text-amber-400"
+        title={row.errorMessage ?? 'Hourly budget exceeded (ASD-007)'}
+      >
+        💸 budget-throttled
       </span>
     );
   }
@@ -675,6 +714,37 @@ function mergeEvent(
       }
       return capList([row, ...prev], byId);
     }
+    case 'budget.throttled': {
+      const row: FeedRow = {
+        requestId: event.requestId,
+        startedAt: event.timestamp,
+        provider: 'unknown',
+        appId: event.appId,
+        hostname: event.hostname,
+        path: '(Budget — throttled)',
+        model: null,
+        isStreaming: false,
+        messageCount: 0,
+        hasTools: false,
+        statusCode: 429,
+        promptTokens: null,
+        completionTokens: null,
+        finishReason: null,
+        latencyMs: null,
+        state: 'budget_throttled',
+        errorMessage: `Spent $${event.currentSpendUsd.toFixed(4)} of $${event.hourlyLimitUsd.toFixed(2)} this hour`,
+      };
+      byId.set(event.requestId, row);
+      return capList([row, ...prev], byId);
+    }
+    case 'cost.recorded': {
+      // Augment existing row (response.observed already fired) with cost.
+      const existing = byId.get(event.requestId);
+      if (!existing) return prev;
+      const row: FeedRow = { ...existing, costUsd: event.costUsd };
+      byId.set(event.requestId, row);
+      return prev.map((r) => (r.requestId === row.requestId ? row : r));
+    }
   }
 }
 
@@ -696,6 +766,8 @@ function summariseFeed(rows: FeedRow[]) {
   let piiRedactedRows = 0;
   let piiBlockedRows = 0;
   let piiTotalSpans = 0;
+  let budgetThrottled = 0;
+  let totalCostUsd = 0;
   let latencySum = 0;
   let latencyCount = 0;
   for (const r of rows) {
@@ -705,10 +777,12 @@ function summariseFeed(rows: FeedRow[]) {
     if (r.state === 'privacy_blocked') privacyBlocked++;
     if (r.state === 'aegis_denied') aegisDenied++;
     if (r.state === 'pii_blocked') piiBlockedRows++;
+    if (r.state === 'budget_throttled') budgetThrottled++;
     if (r.piiRedactedTotal && r.piiRedactedTotal > 0) {
       piiRedactedRows++;
       piiTotalSpans += r.piiRedactedTotal;
     }
+    if (r.costUsd && r.costUsd > 0) totalCostUsd += r.costUsd;
     if (r.latencyMs != null) {
       latencySum += r.latencyMs;
       latencyCount++;
@@ -723,6 +797,8 @@ function summariseFeed(rows: FeedRow[]) {
     piiRedactedRows,
     piiBlockedRows,
     piiTotalSpans,
+    budgetThrottled,
+    totalCostUsd,
     avgLatencyMs: latencyCount > 0 ? Math.round(latencySum / latencyCount) : null,
   };
 }

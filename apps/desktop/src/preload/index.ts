@@ -206,6 +206,26 @@ export type AegisProxyEventPayload =
       hostname: string;
       counts: Record<string, number>;
       total: number;
+    }
+  | {
+      kind: 'budget.throttled';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      currentSpendUsd: number;
+      hourlyLimitUsd: number;
+      bucket: string;
+    }
+  | {
+      kind: 'cost.recorded';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      model: string | null;
+      costUsd: number;
+      promptTokens: number | null;
+      completionTokens: number | null;
     };
 
 /**

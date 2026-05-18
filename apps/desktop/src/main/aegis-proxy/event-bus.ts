@@ -80,6 +80,29 @@ export type AegisProxyEvent =
       hostname: string;
       counts: Record<string, number>;
       total: number;
+    }
+  | {
+      kind: 'budget.throttled';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      /** Current-hour USD spend at the moment of throttle. */
+      currentSpendUsd: number;
+      /** Per-app hourly cap that was exceeded. */
+      hourlyLimitUsd: number;
+      /** ISO hour bucket (YYYY-MM-DDTHH). */
+      bucket: string;
+    }
+  | {
+      kind: 'cost.recorded';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      model: string | null;
+      costUsd: number;
+      promptTokens: number | null;
+      completionTokens: number | null;
     };
 
 export type AegisProxyEventListener = (event: AegisProxyEvent) => void;

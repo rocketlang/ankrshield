@@ -38,6 +38,8 @@ import { resolveAppId } from './app-identifier.js';
 import { AppsStore } from './apps-store.js';
 import { AegisGate, AegisLiteError } from './aegis-gate.js';
 import { redactInJsonBody, PiiPolicyResolver } from './pii-boundary.js';
+import { BudgetLedger, BudgetConfigResolver, hourBucket } from './budget-ledger.js';
+import { computeCost } from './cost-rates.js';
 
 /**
  * Start the aegis-proxy.
@@ -114,12 +116,36 @@ export async function startAegisProxy(
   // will let users override per-app to 'block' or 'off'.
   const piiPolicy = new PiiPolicyResolver();
 
+  // ASD-T-014: per-app hourly budget governor — JSON-backed in-memory ledger
+  // (SQLite migration deferred to ASD-T-024 per the budget-ledger memory note).
+  // Default budget = unlimited; P2 ASD-T-015 TOFU will set per-app caps.
+  const budgetLedger = new BudgetLedger();
+  try {
+    await budgetLedger.load();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[aegis-proxy] budget-ledger.json load failed; starting fresh:',
+      err instanceof Error ? err.message : err
+    );
+  }
+  const budgetConfig = new BudgetConfigResolver();
+
   const server = http.createServer((req, res) =>
-    handleHttpRequest(req, res, events, appsStore, proxyPort, isBlocked, aegisGate, piiPolicy)
+    handleHttpRequest(
+      req,
+      res,
+      events,
+      appsStore,
+      proxyPort,
+      isBlocked,
+      aegisGate,
+      piiPolicy,
+      budgetLedger,
+      budgetConfig
+    )
   );
   server.on('connect', (req, socket, head) =>
-    // Node types `socket` as Duplex on the connect event; in practice it's a
-    // net.Socket for TCP-served HTTP. Cast at the boundary.
     handleHttpConnect(
       req,
       socket as net.Socket,
@@ -130,7 +156,9 @@ export async function startAegisProxy(
       proxyPort,
       isBlocked,
       aegisGate,
-      piiPolicy
+      piiPolicy,
+      budgetLedger,
+      budgetConfig
     )
   );
 
@@ -154,8 +182,9 @@ export async function startAegisProxy(
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {
-              // Final flush of apps registry on graceful stop.
+              // Final flush of apps registry + budget ledger on graceful stop.
               appsStore.stop().catch(() => {});
+              budgetLedger.stop().catch(() => {});
               err ? rej(err) : res();
             })
           ),
@@ -181,7 +210,9 @@ async function handleHttpRequest(
   proxyPort: number,
   isBlocked: IsBlockedFn,
   aegisGate: AegisGate,
-  piiPolicy: PiiPolicyResolver
+  piiPolicy: PiiPolicyResolver,
+  budgetLedger: BudgetLedger,
+  budgetConfig: BudgetConfigResolver
 ): Promise<void> {
   const rawUrl = req.url ?? '';
   if (!/^https?:\/\//i.test(rawUrl)) {
@@ -234,6 +265,8 @@ async function handleHttpRequest(
     proxyPort,
     aegisGate,
     piiPolicy,
+    budgetLedger,
+    budgetConfig,
   });
 }
 
@@ -265,7 +298,9 @@ async function handleHttpConnect(
   proxyPort: number,
   isBlocked: IsBlockedFn,
   aegisGate: AegisGate,
-  piiPolicy: PiiPolicyResolver
+  piiPolicy: PiiPolicyResolver,
+  budgetLedger: BudgetLedger,
+  budgetConfig: BudgetConfigResolver
 ): Promise<void> {
   const target = parseConnectTarget(req.url ?? '');
   if (!target) {
@@ -337,6 +372,8 @@ async function handleHttpConnect(
         proxyPort,
         aegisGate,
         piiPolicy,
+        budgetLedger,
+        budgetConfig,
       })
   );
 
@@ -377,6 +414,8 @@ interface ForwardArgs {
   proxyPort: number;
   aegisGate: AegisGate;
   piiPolicy: PiiPolicyResolver;
+  budgetLedger: BudgetLedger;
+  budgetConfig: BudgetConfigResolver;
 }
 
 /**
@@ -400,6 +439,8 @@ function forwardWithObservation(args: ForwardArgs): void {
     proxyPort,
     aegisGate,
     piiPolicy,
+    budgetLedger,
+    budgetConfig,
   } = args;
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
@@ -542,6 +583,38 @@ function forwardWithObservation(args: ForwardArgs): void {
         }
       }
 
+      // ASD-T-014: per-app hourly budget check. The check uses the CURRENT-HOUR
+      // spend snapshot (from prior recorded responses) — we don't have the new
+      // request's cost yet (it's computed post-response). This means one request
+      // can cross the threshold; subsequent requests in the same hour throttle.
+      // Acceptable for v1; per the budget-ledger memory, SQLite migration in
+      // P3 would unlock pre-charge reservation if needed.
+      const budgetCfg = budgetConfig.resolve(identity.appId);
+      if (budgetCfg.hourly_limit_usd != null && budgetCfg.hourly_limit_usd > 0) {
+        const currentSpend = budgetLedger.currentHourSpend(identity.appId);
+        if (currentSpend.cost_usd >= budgetCfg.hourly_limit_usd) {
+          events.emit({
+            kind: 'budget.throttled',
+            requestId,
+            timestamp: new Date().toISOString(),
+            appId: identity.appId,
+            hostname: upstreamHost,
+            currentSpendUsd: currentSpend.cost_usd,
+            hourlyLimitUsd: budgetCfg.hourly_limit_usd,
+            bucket: hourBucket(),
+          });
+          if (!res.headersSent) {
+            res.writeHead(429, { 'content-type': 'text/plain; charset=utf-8' });
+          }
+          res.end(
+            `aegis-proxy: ASD-007-budget-throttled — ${identity.appId} has spent ` +
+              `$${currentSpend.cost_usd.toFixed(4)} this hour, exceeding ` +
+              `the per-app cap of $${budgetCfg.hourly_limit_usd.toFixed(2)}.\n`
+          );
+          return; // do NOT forward upstream
+        }
+      }
+
       // Allow — emit request.observed (if adapter parsed) and forward upstream.
       if (parsed) {
         const observation: ObservedRequest = {
@@ -600,6 +673,39 @@ function forwardWithObservation(args: ForwardArgs): void {
                 timestamp: new Date().toISOString(),
                 observation,
               });
+
+              // ASD-T-014: record cost in the budget ledger. Compute via
+              // cost-rates lookup using the parsed model + observation tokens.
+              // Failures here are non-fatal — the response already flowed.
+              if (parsed) {
+                const costUsd = computeCost(
+                  parsed.provider,
+                  parsed.model,
+                  observation.promptTokens,
+                  observation.completionTokens
+                );
+                if (costUsd > 0) {
+                  try {
+                    budgetLedger.recordCost(identity.appId, costUsd);
+                    events.emit({
+                      kind: 'cost.recorded',
+                      requestId,
+                      timestamp: new Date().toISOString(),
+                      appId: identity.appId,
+                      model: parsed.model,
+                      costUsd,
+                      promptTokens: observation.promptTokens,
+                      completionTokens: observation.completionTokens,
+                    });
+                  } catch (err) {
+                    // eslint-disable-next-line no-console
+                    console.warn(
+                      `[aegis-proxy] budget ledger recordCost failed for ${identity.appId}:`,
+                      err instanceof Error ? err.message : err
+                    );
+                  }
+                }
+              }
             }
           });
 
