@@ -94,12 +94,25 @@ export {
   type PendingDanQueueOptions,
 } from './pending-dan-queue.js';
 export { OsNotificationDanCarrier, type OsNotificationCarrierOptions } from './dan-carrier-os.js';
+export { WhatsAppDanCarrier, type WhatsAppDanCarrierOptions } from './dan-carrier-wa.js';
+export { TelegramDanCarrier, type TelegramDanCarrierOptions } from './dan-carrier-tg.js';
+export { DanCarrierRouter, type DanCarrierRouterOptions } from './dan-carrier-router.js';
+export {
+  getWhatsAppCreds,
+  setWhatsAppCreds,
+  clearWhatsAppCreds,
+  getTelegramCreds,
+  setTelegramCreds,
+  clearTelegramCreds,
+  type WhatsAppCredentials,
+  type TelegramCredentials,
+} from './dan-carrier-credentials.js';
 export {
   DanDecisionCache,
   type CachedDanDecision,
   type DanDecisionCacheOptions,
 } from './dan-decision-cache.js';
-export { registerDanGateHandlers } from './ipc-handlers.js';
+export { registerDanGateHandlers, registerDanCarrierCredsHandlers } from './ipc-handlers.js';
 export {
   ensureRootCA,
   readRootCAPublic,

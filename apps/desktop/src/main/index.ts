@@ -17,6 +17,7 @@ import {
   registerAegisProxyIpcHandlers,
   registerTofuConsentHandlers,
   registerDanGateHandlers,
+  registerDanCarrierCredsHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -102,6 +103,8 @@ app.whenReady().then(async () => {
       registerTofuConsentHandlers(aegisProxyHandle.pendingConsent, aegisProxyHandle.appsPolicy);
       // ASD-T-016: IPC handlers for DAN gate (list pending + resolve + clear cache).
       registerDanGateHandlers(aegisProxyHandle.pendingDan, aegisProxyHandle.danDecisionCache);
+      // ASD-T-017: IPC handlers for DAN carrier credential management (Settings page).
+      registerDanCarrierCredsHandlers();
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

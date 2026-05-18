@@ -17,6 +17,16 @@ import type { AppsPolicyStore, PiiPolicyChoice, DanCarrier } from './apps-policy
 import type { PendingConsentQueue, ConsentRequest } from './pending-consent-queue.js';
 import type { PendingDanQueue, DanRequest } from './pending-dan-queue.js';
 import type { DanDecisionCache } from './dan-decision-cache.js';
+import {
+  getWhatsAppCreds,
+  setWhatsAppCreds,
+  clearWhatsAppCreds,
+  getTelegramCreds,
+  setTelegramCreds,
+  clearTelegramCreds,
+  type WhatsAppCredentials,
+  type TelegramCredentials,
+} from './dan-carrier-credentials.js';
 
 export const ROOT_CA_CEREMONY = 'root-ca-install';
 
@@ -136,6 +146,57 @@ export function registerDanGateHandlers(
     ipcMain.removeHandler('aegis-proxy:list-pending-dan');
     ipcMain.removeHandler('aegis-proxy:resolve-pending-dan');
     ipcMain.removeHandler('aegis-proxy:forget-dan-cache');
+  };
+}
+
+/**
+ * Wire DAN carrier credential management IPC for the Settings page
+ * (ASD-T-017). Returns a teardown. Credentials are stored in the OS
+ * keychain via dan-carrier-credentials.ts — never echoed back to the
+ * renderer for security; status getters only report 'set' / 'unset'.
+ */
+export function registerDanCarrierCredsHandlers(): () => void {
+  ipcMain.handle('aegis-proxy:get-dan-carriers-status', () => ({
+    whatsapp: getWhatsAppCreds() ? 'set' : 'unset',
+    telegram: getTelegramCreds() ? 'set' : 'unset',
+  }));
+
+  ipcMain.handle(
+    'aegis-proxy:set-whatsapp-creds',
+    (_e, creds: WhatsAppCredentials): { ok: boolean; error?: string } => {
+      try {
+        setWhatsAppCreds(creds);
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  );
+  ipcMain.handle('aegis-proxy:clear-whatsapp-creds', (): { ok: boolean } => ({
+    ok: clearWhatsAppCreds(),
+  }));
+
+  ipcMain.handle(
+    'aegis-proxy:set-telegram-creds',
+    (_e, creds: TelegramCredentials): { ok: boolean; error?: string } => {
+      try {
+        setTelegramCreds(creds);
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  );
+  ipcMain.handle('aegis-proxy:clear-telegram-creds', (): { ok: boolean } => ({
+    ok: clearTelegramCreds(),
+  }));
+
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:get-dan-carriers-status');
+    ipcMain.removeHandler('aegis-proxy:set-whatsapp-creds');
+    ipcMain.removeHandler('aegis-proxy:clear-whatsapp-creds');
+    ipcMain.removeHandler('aegis-proxy:set-telegram-creds');
+    ipcMain.removeHandler('aegis-proxy:clear-telegram-creds');
   };
 }
 

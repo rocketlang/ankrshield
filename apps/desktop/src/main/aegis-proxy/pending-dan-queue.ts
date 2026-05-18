@@ -58,7 +58,12 @@ export interface PendingDanQueueOptions {
 export class PendingDanQueue {
   private readonly pending = new Map<
     string,
-    { req: DanRequest; resolve: (outcome: DanOutcome) => void; timer: NodeJS.Timeout }
+    {
+      req: DanRequest;
+      resolve: (outcome: DanOutcome) => void;
+      timer: NodeJS.Timeout;
+      carriers: DanNotifier[];
+    }
   >();
   private readonly timeoutMs: number;
   private readonly carriers: DanNotifier[];
@@ -82,6 +87,12 @@ export class PendingDanQueue {
     appId: string;
     hostname: string;
     highRiskTools: CategorizedTool[];
+    /**
+     * Per-hold carrier override (ASD-T-017). When provided, replaces the
+     * queue's default carriers for this hold only — used by the proxy to
+     * route based on the app's stored dan_carrier policy.
+     */
+    carriers?: DanNotifier[];
   }): Promise<DanOutcome & { pendingId: string }> {
     const pendingId = crypto.randomUUID();
     const req: DanRequest = {
@@ -92,6 +103,7 @@ export class PendingDanQueue {
       timeoutMs: this.timeoutMs,
       highRiskTools: args.highRiskTools,
     };
+    const activeCarriers = args.carriers ?? this.carriers;
 
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
@@ -99,24 +111,25 @@ export class PendingDanQueue {
         if (!entry) return;
         this.pending.delete(pendingId);
         const outcome: DanOutcome = { decision: 'deny', timedOut: true };
-        this.fireResolved(pendingId, outcome);
+        this.fireResolved(pendingId, outcome, entry.carriers);
         resolve({ ...outcome, pendingId });
       }, this.timeoutMs);
 
       this.pending.set(pendingId, {
         req,
         timer,
+        carriers: activeCarriers,
         resolve: (outcome) => {
           clearTimeout(timer);
           this.pending.delete(pendingId);
-          this.fireResolved(pendingId, outcome);
+          this.fireResolved(pendingId, outcome, activeCarriers);
           resolve({ ...outcome, pendingId });
         },
       });
 
       // Notify carriers + renderer hook AFTER the entry is in the map so
       // any IPC list() call from the carrier sees the new entry.
-      for (const c of this.carriers) {
+      for (const c of activeCarriers) {
         try {
           c.notify(req);
         } catch (err) {
@@ -156,9 +169,9 @@ export class PendingDanQueue {
     }
   }
 
-  private fireResolved(pendingId: string, outcome: DanOutcome): void {
+  private fireResolved(pendingId: string, outcome: DanOutcome, carriers: DanNotifier[]): void {
     this.onResolved?.(pendingId, outcome);
-    for (const c of this.carriers) {
+    for (const c of carriers) {
       try {
         c.onResolved?.(pendingId, outcome);
       } catch {

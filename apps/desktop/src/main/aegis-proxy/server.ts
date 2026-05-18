@@ -44,8 +44,8 @@ import { AppsPolicyStore } from './apps-policy.js';
 import { PendingConsentQueue } from './pending-consent-queue.js';
 import { categorizeHighRiskTools, extractToolDeclarations } from './dan-categorizer.js';
 import { PendingDanQueue } from './pending-dan-queue.js';
-import { OsNotificationDanCarrier } from './dan-carrier-os.js';
 import { DanDecisionCache } from './dan-decision-cache.js';
+import { DanCarrierRouter } from './dan-carrier-router.js';
 
 /**
  * Start the aegis-proxy.
@@ -183,11 +183,16 @@ export async function startAegisProxy(
   });
 
   // ASD-T-016 DAN gate: HIGH-category tool declarations hold the request
-  // pending user approval via OS notification (default carrier). Session
-  // decision cache prevents prompt fatigue for repeat agentic sessions.
+  // pending user approval via the per-app chosen carrier (OS by default;
+  // WA/TG when configured per ASD-T-017). Session decision cache prevents
+  // prompt fatigue for repeat agentic sessions.
   const danDecisionCache = new DanDecisionCache();
+  const danCarrierRouter = new DanCarrierRouter();
   const pendingDan = new PendingDanQueue({
-    carriers: [new OsNotificationDanCarrier()],
+    // No default carriers — every hold passes its own carriers list via
+    // the router based on app policy. drain() still works because the
+    // entry tracks its own carriers list.
+    carriers: [],
     onPendingAdded: (req) => {
       events.emit({
         kind: 'dan.held',
@@ -228,7 +233,8 @@ export async function startAegisProxy(
       appsPolicy,
       pendingConsent,
       pendingDan,
-      danDecisionCache
+      danDecisionCache,
+      danCarrierRouter
     )
   );
   server.on('connect', (req, socket, head) =>
@@ -248,7 +254,8 @@ export async function startAegisProxy(
       appsPolicy,
       pendingConsent,
       pendingDan,
-      danDecisionCache
+      danDecisionCache,
+      danCarrierRouter
     )
   );
 
@@ -314,7 +321,8 @@ async function handleHttpRequest(
   appsPolicy: AppsPolicyStore,
   pendingConsent: PendingConsentQueue,
   pendingDan: PendingDanQueue,
-  danDecisionCache: DanDecisionCache
+  danDecisionCache: DanDecisionCache,
+  danCarrierRouter: DanCarrierRouter
 ): Promise<void> {
   const rawUrl = req.url ?? '';
   if (!/^https?:\/\//i.test(rawUrl)) {
@@ -373,6 +381,7 @@ async function handleHttpRequest(
     pendingConsent,
     pendingDan,
     danDecisionCache,
+    danCarrierRouter,
   });
 }
 
@@ -410,7 +419,8 @@ async function handleHttpConnect(
   appsPolicy: AppsPolicyStore,
   pendingConsent: PendingConsentQueue,
   pendingDan: PendingDanQueue,
-  danDecisionCache: DanDecisionCache
+  danDecisionCache: DanDecisionCache,
+  danCarrierRouter: DanCarrierRouter
 ): Promise<void> {
   const target = parseConnectTarget(req.url ?? '');
   if (!target) {
@@ -488,6 +498,7 @@ async function handleHttpConnect(
         pendingConsent,
         pendingDan,
         danDecisionCache,
+        danCarrierRouter,
       })
   );
 
@@ -534,6 +545,7 @@ interface ForwardArgs {
   pendingConsent: PendingConsentQueue;
   pendingDan: PendingDanQueue;
   danDecisionCache: DanDecisionCache;
+  danCarrierRouter: DanCarrierRouter;
 }
 
 /**
@@ -563,6 +575,7 @@ function forwardWithObservation(args: ForwardArgs): void {
     pendingConsent,
     pendingDan,
     danDecisionCache,
+    danCarrierRouter,
   } = args;
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
@@ -828,10 +841,15 @@ function forwardWithObservation(args: ForwardArgs): void {
               return;
             }
           } else {
+            // Per-app carrier choice from TOFU policy; defaults to 'os' for
+            // apps that haven't been through TOFU yet (only happens in tests
+            // where the gate is bypassed — production has TOFU upstream).
+            const carrierChoice = appsPolicy.get(identity.appId)?.dan_carrier ?? 'os';
             const outcome = await pendingDan.hold({
               appId: identity.appId,
               hostname: upstreamHost,
               highRiskTools,
+              carriers: danCarrierRouter.carriersFor(carrierChoice),
             });
             danDecisionCache.set(identity.appId, highRiskTools, outcome.decision);
             if (outcome.decision === 'deny') {
