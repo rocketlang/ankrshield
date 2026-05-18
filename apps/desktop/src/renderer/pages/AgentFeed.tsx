@@ -382,6 +382,12 @@ export function AgentFeed() {
         </div>
         <div className="flex items-center gap-2">
           <Link
+            to="/report-card"
+            className="text-xs px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200"
+          >
+            Report card →
+          </Link>
+          <Link
             to="/budget"
             className="text-xs px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200"
           >
