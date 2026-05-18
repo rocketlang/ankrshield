@@ -27,29 +27,22 @@ npx ankrshield-cli scan --domain yourdomain.com --full --stix
 
 ---
 
-## OSS vs Enterprise Edition
+## OSS scope (updated 2026-05-18)
 
-This repo contains the **open-source core**. The Enterprise Edition (`ankrshield-ee`, private) contains the AI and active response layer.
+Per the strategic pivot of 2026-05-16, ANKR has moved to an aggressive-OSS
+posture: the narrow Enterprise Edition keeps only a small set of items where
+operational leverage justifies private licensing. Most of the previously
+EE-only capabilities — including the desktop app, the mobile clients, the AI
+warrior, the spyware detector, the MDM bridge, the active-defense API, and
+the AI governance package — are now part of this open-source repo under
+**AGPL-3.0-only**.
 
-| Capability                                        | OSS (this repo) | Enterprise Edition |
-| ------------------------------------------------- | --------------- | ------------------ |
-| Domain scan engine                                | ✅              | ✅                 |
-| SPF / DMARC audit                                 | ✅              | ✅                 |
-| Typosquat detection                               | ✅              | ✅                 |
-| OTX AlienVault enrichment                         | ✅              | ✅                 |
-| Shodan host intelligence                          | ✅              | ✅                 |
-| STIX 2.1 export                                   | ✅              | ✅                 |
-| CLI (`ankrshield-cli`)                            | ✅              | ✅                 |
-| DPDP Act 2023 compliance mapping                  | ✅              | ✅                 |
-| AI threat narration & attack correlation          | ❌              | ✅                 |
-| Automated DMCA / abuse reporting                  | ❌              | ✅                 |
-| SIEM push (Splunk, Sentinel, Chronicle)           | ❌              | ✅                 |
-| Executive notification workflows                  | ❌              | ✅                 |
-| MDM integration (Intune, Workspace ONE)           | ❌              | ✅                 |
-| Nation-state spyware detection (Pegasus, Candiru) | ❌              | ✅                 |
-| Multi-tenant SaaS dashboard                       | ❌              | ✅                 |
+The April 2026 OSS-vs-EE capability table is superseded by the current
+boundary defined in `STRATEGY.md` + `EXTRACTION-QUEUE.md`. See those docs
+for the canonical, current OSS/EE split.
 
-Enterprise Edition: captain@ankr.in
+Enterprise Edition contact (for commercial dual-license + SaaS deployment
+exceptions): captain@ankr.in
 
 ---
 

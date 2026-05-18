@@ -1,0 +1,127 @@
+// xShield Active Defense — Prisma Schema
+// Standalone schema pointing to shared ankrshield DB.
+// All models prefixed Xsact_ to avoid collision.
+//
+// Provisioning: R-010 gate — run diff before push.
+// diff command:
+//   cd /root/ankrshield/apps/xshield-active-api
+//   npx prisma migrate diff \
+//     --from-schema-datasource prisma/schema.prisma \
+//     --to-schema-datamodel prisma/schema.prisma \
+//     --script > /tmp/xsact-migration-preview.sql
+//   grep -iE "DROP|ALTER COLUMN|RENAME|DELETE FROM|TRUNCATE" /tmp/xsact-migration-preview.sql
+// Only push if grep returns nothing.
+
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../node_modules/.prisma/xsact-client"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Consent Configuration ──────────────────────────────────────────────────────
+// @rule:XSACT-002 Three-mode consent config per client
+// @rule:XSACT-011 Addendum gate — beacon/Mode3/TAXII locked until signed
+
+model XsactConsentConfig {
+  id                  String    @id @default(uuid())
+  clientId            String    @unique @map("client_id")
+  mode                String    @default("mode_1")   // mode_1 | mode_2 | mode_3
+  addendumSigned      Boolean   @default(false) @map("addendum_signed")
+  addendumSignedAt    DateTime? @map("addendum_signed_at")
+  addendumSignedBy    String?   @map("addendum_signed_by")
+  mode3AlwaysOn       Boolean   @default(true) @map("mode_3_always_on")  // cannot be false
+  standingOrders      Json      @default("[]") @map("standing_orders")
+  siemWebhook         Json?     @map("siem_webhook")   // token stored as hash only
+  executiveContacts   Json      @default("[]") @map("executive_contacts")
+  jurisdiction        String    @default("other")
+  taxiiOptedOut       Boolean   @default(false) @map("taxii_opted_out")  // @rule:XSACT-010
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  auditRecords        XsactAuditRecord[]
+  beaconCredentials   XsactBeaconCredential[]
+  approvalQueueItems  XsactApprovalQueueItem[]
+
+  @@map("xsact_consent_config")
+}
+
+// ── Immutable Audit Log ────────────────────────────────────────────────────────
+// @rule:XSACT-009 Every action generates an audit record
+// @rule:INF-XSACT-004 No audit write → action blocked
+// @rule:CA-003 before_state + after_state + delta
+
+model XsactAuditRecord {
+  id                  String    @id @default(uuid())
+  clientId            String    @map("client_id")
+  timestamp           DateTime  @default(now())
+  beforeState         Json      @map("before_state")
+  actionTaken         String    @map("action_taken")
+  afterState          Json?     @map("after_state")
+  delta               Json?
+  consentMode         String    @map("consent_mode")
+  executionPath       String    @map("execution_path")
+  ruleIdApplied       String[]  @map("rule_id_applied")
+  jurisdictionDetected String   @map("jurisdiction_detected")
+  legalBasisApplied   String    @map("legal_basis_applied")
+  result              String    // success | blocked | failed | pending_approval
+  resultDetail        String?   @map("result_detail")
+  durationMs          Int       @map("duration_ms")
+  trustMaskApplied    Int       @map("trust_mask_applied")
+
+  consentConfig       XsactConsentConfig @relation(fields: [clientId], references: [clientId])
+
+  @@index([clientId, timestamp])
+  @@map("xsact_audit_record")
+}
+
+// ── Beacon Credentials ─────────────────────────────────────────────────────────
+// @rule:XSACT-YK-004 Requires Mode 2 pre-auth
+// @rule:XSACT-006 Legal: DPDP S.7(g) + GDPR Art.6(1)(f)
+
+model XsactBeaconCredential {
+  id                  String    @id @default(uuid())   // tracking UUID
+  clientId            String    @map("client_id")
+  type                String    // api_key | login | aws_key | github_token | slack_token
+  fakeValue           String    @map("fake_value")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  seededAt            DateTime? @map("seeded_at")
+  seededWhere         String?   @map("seeded_where")
+  triggered           Boolean   @default(false)
+  triggeredAt         DateTime? @map("triggered_at")
+  attackerIp          String?   @map("attacker_ip")
+  attackerFingerprint Json?     @map("attacker_fingerprint")
+  caseId              String?   @map("case_id")
+  taxiiPushed         Boolean   @default(false) @map("taxii_pushed")
+  certinReported      Boolean   @default(false) @map("certin_reported")
+
+  consentConfig       XsactConsentConfig @relation(fields: [clientId], references: [clientId])
+
+  @@index([clientId, triggered])
+  @@map("xsact_beacon_credential")
+}
+
+// ── Mode 1 Approval Queue ──────────────────────────────────────────────────────
+// @rule:XSACT-002 Mode 1 requires per-action human approval
+
+model XsactApprovalQueueItem {
+  id                  String    @id @default(uuid())
+  clientId            String    @map("client_id")
+  requestPayload      Json      @map("request_payload")
+  classificationJson  Json      @map("classification_json")
+  queuedAt            DateTime  @default(now()) @map("queued_at")
+  approved            Boolean   @default(false)
+  approvedAt          DateTime? @map("approved_at")
+  approvedBy          String?   @map("approved_by")
+  executedAt          DateTime? @map("executed_at")
+  executionResult     Json?     @map("execution_result")
+
+  consentConfig       XsactConsentConfig @relation(fields: [clientId], references: [clientId])
+
+  @@index([clientId, approved])
+  @@map("xsact_approval_queue")
+}

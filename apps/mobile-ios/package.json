@@ -1,0 +1,49 @@
+{
+  "name": "@ankrshield/mobile-ios",
+  "version": "1.5.0",
+  "private": true,
+  "description": "ankrshield mobile app for iOS (React Native)",
+  "main": "index.js",
+  "scripts": {
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "start": "expo start",
+    "prebuild": "expo prebuild",
+    "test": "jest",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-native-community/netinfo": "^11.1.0",
+    "@react-navigation/native": "^6.1.9",
+    "@react-navigation/native-stack": "^6.9.17",
+    "expo": "~50.0.21",
+    "expo-status-bar": "~1.12.1",
+    "react": "18.2.0",
+    "react-native": "0.73.2",
+    "react-native-safe-area-context": "^4.8.2",
+    "react-native-screens": "^3.29.0",
+    "react-native-svg": "^14.1.0",
+    "zustand": "^4.4.7"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.23.7",
+    "@babel/preset-env": "^7.23.7",
+    "@babel/runtime": "^7.23.7",
+    "@react-native/babel-preset": "^0.73.19",
+    "@react-native/eslint-config": "^0.73.2",
+    "@react-native/metro-config": "^0.73.3",
+    "@react-native/typescript-config": "^0.73.1",
+    "@types/react": "^18.2.46",
+    "@types/react-test-renderer": "^18.0.7",
+    "babel-jest": "^29.7.0",
+    "eslint": "^8.56.0",
+    "jest": "^29.7.0",
+    "prettier": "^3.1.1",
+    "react-test-renderer": "18.2.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

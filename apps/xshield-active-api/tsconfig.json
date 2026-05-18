@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "strict": false,
+    "skipLibCheck": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@ankrshield/ai-warrior": ["../../packages/ai-warrior/src"],
+      "@ankrshield/risk-intelligence": ["../../packages/risk-intelligence/src"]
+    }
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/ai-warrior" },
+    { "path": "../../packages/risk-intelligence" }
+  ]
+}

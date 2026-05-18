@@ -1,0 +1,27 @@
+{
+  "name": "@ankrshield/mdm-bridge",
+  "version": "1.0.0",
+  "description": "AnkrShield MDM Bridge — connect AnkrShield to Microsoft Intune and VMware Workspace ONE",
+  "license": "Apache-2.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "fastify": "^4.26.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

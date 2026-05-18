@@ -1,0 +1,34 @@
+{
+  "name": "@ankrshield/ai-warrior",
+  "version": "0.1.0",
+  "description": "AI Warrior — LLM-powered threat narration, attack correlation, auto-policy generation, honeypots and incident reporting",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3",
+    "@ankrshield/ai-governance": "workspace:*",
+    "@ankrshield/core": "workspace:*",
+    "@ankrshield/policy-engine": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.9.3",
+    "vitest": "^1.2.0"
+  }
+}

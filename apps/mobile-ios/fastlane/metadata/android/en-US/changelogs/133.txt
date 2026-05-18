@@ -1,0 +1,23 @@
+v1.3.3 — The India Security Update
+
+NEW FEATURES
+• Anti-Theft: Remote device lock + factory reset (requires Device Admin activation)
+• AV Scanner: SHA-256 APK scanning + optional VirusTotal lookup
+• Differential blocklist sync: daily delta updates, no full re-download
+• iOS Phase 1: DNS proxy + permission audit (TestFlight beta)
+
+IMPROVEMENTS
+• HomeScreen reordered — India-specific tools first
+• 4-language onboarding (en/hi/ta/te) — all screens fully translated
+• MDM screen now fully translated
+• Bitwarden integration: install / enable autofill shortcut in Settings
+
+FIXES
+• Onboarding back button no longer closes app
+• Android 14+ foreground service crash fixed
+• Blocklist sync status banner on Network screen
+
+ENTERPRISE
+• 5 new /enterprise/* API endpoints (DPDP report, audit log, SIEM webhook, pricing)
+• Telecom white-label build system (BSNL / Airtel / SBI variants)
+• Intune + Workspace ONE MDM bridge SDK

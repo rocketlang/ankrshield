@@ -45,5 +45,19 @@
       }
     }
   },
-  "ignorePatterns": ["node_modules/", "dist/", "build/", "*.config.js", "*.config.ts"]
+  "ignorePatterns": [
+    "node_modules/",
+    "dist/",
+    "build/",
+    "*.config.js",
+    "*.config.ts",
+    "apps/desktop/",
+    "apps/mobile-android/",
+    "apps/mobile-ios/",
+    "apps/xshield-active-api/",
+    "packages/ai-warrior/",
+    "packages/ai-governance/",
+    "packages/spyware-detector/",
+    "packages/ankrshield-mdm-bridge/"
+  ]
 }

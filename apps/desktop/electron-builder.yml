@@ -1,0 +1,137 @@
+appId: com.ankrshield.desktop
+productName: ankrshield
+copyright: Copyright (c) 2026 xShieldAI
+
+# Filename template — avoids the npm scope (@ankrshield) appearing
+# as a subdirectory in out/make/. Defaults would yield "@ankrshield/..."
+artifactName: 'ankrshield-${version}-${os}-${arch}.${ext}'
+
+directories:
+  output: out/make
+  buildResources: assets
+
+files:
+  - dist/**/*
+  - package.json
+  - '!**/*.{md,map,ts,tsx}'
+  - '!**/{tsconfig.json,vite.config.ts,vitest.config.ts,postcss.config.js,tailwind.config.js,forge.config.js,electron-builder.yml}'
+  - '!**/{test-services.ts,FIX-SESSION-*.md,SESSION-*.md,PHASE-*.md,TODO-*.md,*-COMPLETE.md,*-STATUS.md,GAP-*.md,TYPESCRIPT-*.md}'
+
+# asar disabled — electron-builder's asar packager crashes when traversing
+# pnpm workspace symlinks (packages/core etc.) because the symlinked files
+# resolve to paths outside apps/desktop/. Disabling asar packs the app as
+# a plain folder. Acceptable for v0; revisit once main.ts is bundled by
+# esbuild (then asar can be re-enabled cleanly).
+asar: false
+
+# Auto-update via electron-updater (S3/GitHub releases — configure publish below if used)
+# publish:
+#   provider: github
+#   owner: ankrshield
+#   repo: ankrshield
+
+# ---- macOS ----
+mac:
+  category: public.app-category.utilities
+  icon: assets/icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: entitlements.plist
+  entitlementsInherit: entitlements.plist
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+
+dmg:
+  title: 'ankrshield ${version}'
+  background: assets/dmg-background.png
+  iconSize: 100
+  window:
+    width: 540
+    height: 380
+  contents:
+    - x: 130
+      y: 220
+      type: file
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# ---- Windows ----
+win:
+  icon: assets/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: zip
+      arch:
+        - x64
+  # Signing (optional; set WIN_CSC_LINK + WIN_CSC_KEY_PASSWORD env vars to enable)
+  signAndEditExecutable: true
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: ankrshield
+  installerIcon: assets/icon.ico
+  uninstallerIcon: assets/icon.ico
+  installerHeaderIcon: assets/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+
+# ---- Linux ----
+linux:
+  category: Utility;Security
+  icon: assets/icon.png
+  maintainer: xShieldAI Team
+  vendor: xShieldAI
+  synopsis: Privacy protection for your digital life
+  description: |
+    ankrshield desktop — tracker blocking, DNS-over-HTTPS, device fleet
+    management, privacy scoring, and spyware detection. Powered by xShieldAI.
+  target:
+    - target: deb
+      arch:
+        - x64
+    - target: rpm
+      arch:
+        - x64
+    - target: zip
+      arch:
+        - x64
+
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libsecret-1-0
+
+rpm:
+  depends:
+    - libgtk-3
+    - libnotify
+    - nss
+    - libXScrnSaver
+    - libXtst
+    - xdg-utils
+    - at-spi2-core
+    - libsecret
+
+# Workaround for pnpm — electron-builder follows symlinks correctly.
+# nodeGypRebuild only needed if native modules require rebuilds.
+nodeGypRebuild: false
+buildDependenciesFromSource: false
