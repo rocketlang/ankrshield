@@ -244,6 +244,13 @@ declare global {
         decision: 'allow' | 'deny';
       }) => Promise<{ ok: boolean; error?: string }>;
       aegisProxyForgetDanCache?: (appId: string) => Promise<{ ok: boolean; cleared: number }>;
+      // DAN timeout (ASD-T-018)
+      aegisProxyGetDanTimeoutConfig?: () => Promise<{
+        global_ms: number;
+        per_app: Record<string, number>;
+        limits: { min_ms: number; max_ms: number; default_ms: number };
+      }>;
+      aegisProxySetDanTimeoutGlobal?: (ms: number) => Promise<{ ok: boolean; applied_ms: number }>;
     };
   }
 }
@@ -345,6 +352,7 @@ export function AgentFeed() {
           }
         />
       ) : null}
+      <DanTimeoutSettings />
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">
@@ -1181,5 +1189,75 @@ function DanRow({
         </button>
       </div>
     </div>
+  );
+}
+
+function DanTimeoutSettings() {
+  const [globalMs, setGlobalMs] = useState<number | null>(null);
+  const [limits, setLimits] = useState<{
+    min_ms: number;
+    max_ms: number;
+    default_ms: number;
+  } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    void window.electronAPI?.aegisProxyGetDanTimeoutConfig?.().then((cfg) => {
+      if (!cfg) return;
+      setGlobalMs(cfg.global_ms);
+      setLimits(cfg.limits);
+    });
+  }, []);
+
+  if (globalMs == null || !limits) return null;
+
+  const onChange = (next: number) => {
+    setGlobalMs(next);
+  };
+
+  const onCommit = async () => {
+    if (globalMs == null) return;
+    setSaving(true);
+    const r = await window.electronAPI?.aegisProxySetDanTimeoutGlobal?.(globalMs);
+    setSaving(false);
+    if (r?.applied_ms != null) {
+      setGlobalMs(r.applied_ms);
+      setSavedAt(Date.now());
+      setTimeout(() => setSavedAt(null), 1500);
+    }
+  };
+
+  return (
+    <details className="bg-gray-800 border border-gray-700 rounded-lg p-3">
+      <summary className="cursor-pointer text-sm font-semibold text-gray-200">
+        DAN gate timeout · {Math.round(globalMs / 1000)}s global
+      </summary>
+      <div className="mt-3 space-y-2">
+        <p className="text-xs text-gray-400">
+          How long the DAN gate holds a HIGH-category request before treating no answer as deny
+          (ASD-008). Per Vivechana Decision 3, range is {Math.round(limits.min_ms / 1000)}s–
+          {Math.round(limits.max_ms / 1000)}s; default {Math.round(limits.default_ms / 1000)}s.
+        </p>
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min={limits.min_ms}
+            max={limits.max_ms}
+            step={5000}
+            value={globalMs}
+            onChange={(e) => onChange(Number(e.target.value))}
+            onMouseUp={() => void onCommit()}
+            onTouchEnd={() => void onCommit()}
+            disabled={saving}
+            className="flex-1"
+          />
+          <span className="text-sm font-mono text-white w-12 text-right">
+            {Math.round(globalMs / 1000)}s
+          </span>
+        </div>
+        {savedAt != null ? <span className="text-xs text-ankr-green">Saved.</span> : null}
+      </div>
+    </details>
   );
 }

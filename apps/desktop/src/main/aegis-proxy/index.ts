@@ -112,7 +112,19 @@ export {
   type CachedDanDecision,
   type DanDecisionCacheOptions,
 } from './dan-decision-cache.js';
-export { registerDanGateHandlers, registerDanCarrierCredsHandlers } from './ipc-handlers.js';
+export {
+  registerDanGateHandlers,
+  registerDanCarrierCredsHandlers,
+  registerDanTimeoutHandlers,
+} from './ipc-handlers.js';
+export {
+  DanTimeoutStore,
+  DAN_TIMEOUT_DEFAULT_MS,
+  DAN_TIMEOUT_MIN_MS,
+  DAN_TIMEOUT_MAX_MS,
+  type DanTimeoutConfigShape,
+  type DanTimeoutStoreOptions,
+} from './dan-timeout-config.js';
 export {
   ensureRootCA,
   readRootCAPublic,

@@ -46,6 +46,7 @@ import { categorizeHighRiskTools, extractToolDeclarations } from './dan-categori
 import { PendingDanQueue } from './pending-dan-queue.js';
 import { DanDecisionCache } from './dan-decision-cache.js';
 import { DanCarrierRouter } from './dan-carrier-router.js';
+import { DanTimeoutStore } from './dan-timeout-config.js';
 
 /**
  * Start the aegis-proxy.
@@ -188,6 +189,18 @@ export async function startAegisProxy(
   // prompt fatigue for repeat agentic sessions.
   const danDecisionCache = new DanDecisionCache();
   const danCarrierRouter = new DanCarrierRouter();
+  // ASD-T-018 timeout config — loads from ~/.ankrshield/dan-timeout.json
+  // if present, otherwise defaults to 30s globally.
+  const danTimeoutStore = new DanTimeoutStore();
+  try {
+    await danTimeoutStore.load();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[aegis-proxy] dan-timeout.json load failed; using defaults:',
+      err instanceof Error ? err.message : err
+    );
+  }
   const pendingDan = new PendingDanQueue({
     // No default carriers — every hold passes its own carriers list via
     // the router based on app policy. drain() still works because the
@@ -234,7 +247,8 @@ export async function startAegisProxy(
       pendingConsent,
       pendingDan,
       danDecisionCache,
-      danCarrierRouter
+      danCarrierRouter,
+      danTimeoutStore
     )
   );
   server.on('connect', (req, socket, head) =>
@@ -255,7 +269,8 @@ export async function startAegisProxy(
       pendingConsent,
       pendingDan,
       danDecisionCache,
-      danCarrierRouter
+      danCarrierRouter,
+      danTimeoutStore
     )
   );
 
@@ -280,6 +295,7 @@ export async function startAegisProxy(
         pendingConsent,
         pendingDan,
         danDecisionCache,
+        danTimeoutStore,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {
@@ -290,6 +306,7 @@ export async function startAegisProxy(
               appsStore.stop().catch(() => {});
               budgetLedger.stop().catch(() => {});
               appsPolicy.stop().catch(() => {});
+              danTimeoutStore.stop().catch(() => {});
               err ? rej(err) : res();
             })
           ),
@@ -322,7 +339,8 @@ async function handleHttpRequest(
   pendingConsent: PendingConsentQueue,
   pendingDan: PendingDanQueue,
   danDecisionCache: DanDecisionCache,
-  danCarrierRouter: DanCarrierRouter
+  danCarrierRouter: DanCarrierRouter,
+  danTimeoutStore: DanTimeoutStore
 ): Promise<void> {
   const rawUrl = req.url ?? '';
   if (!/^https?:\/\//i.test(rawUrl)) {
@@ -382,6 +400,7 @@ async function handleHttpRequest(
     pendingDan,
     danDecisionCache,
     danCarrierRouter,
+    danTimeoutStore,
   });
 }
 
@@ -420,7 +439,8 @@ async function handleHttpConnect(
   pendingConsent: PendingConsentQueue,
   pendingDan: PendingDanQueue,
   danDecisionCache: DanDecisionCache,
-  danCarrierRouter: DanCarrierRouter
+  danCarrierRouter: DanCarrierRouter,
+  danTimeoutStore: DanTimeoutStore
 ): Promise<void> {
   const target = parseConnectTarget(req.url ?? '');
   if (!target) {
@@ -499,6 +519,7 @@ async function handleHttpConnect(
         pendingDan,
         danDecisionCache,
         danCarrierRouter,
+        danTimeoutStore,
       })
   );
 
@@ -546,6 +567,7 @@ interface ForwardArgs {
   pendingDan: PendingDanQueue;
   danDecisionCache: DanDecisionCache;
   danCarrierRouter: DanCarrierRouter;
+  danTimeoutStore: DanTimeoutStore;
 }
 
 /**
@@ -576,6 +598,7 @@ function forwardWithObservation(args: ForwardArgs): void {
     pendingDan,
     danDecisionCache,
     danCarrierRouter,
+    danTimeoutStore,
   } = args;
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
@@ -850,6 +873,8 @@ function forwardWithObservation(args: ForwardArgs): void {
               hostname: upstreamHost,
               highRiskTools,
               carriers: danCarrierRouter.carriersFor(carrierChoice),
+              // ASD-T-018: resolve per-app timeout (override > global > default).
+              timeoutMs: danTimeoutStore.resolve(identity.appId),
             });
             danDecisionCache.set(identity.appId, highRiskTools, outcome.decision);
             if (outcome.decision === 'deny') {

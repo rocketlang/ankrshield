@@ -93,14 +93,22 @@ export class PendingDanQueue {
      * route based on the app's stored dan_carrier policy.
      */
     carriers?: DanNotifier[];
+    /**
+     * Per-hold timeout override (ASD-T-018). When provided, replaces the
+     * queue's default timeout for this hold only. Re-clamped to
+     * [15s, 120s] defensively even though the config store also clamps.
+     */
+    timeoutMs?: number;
   }): Promise<DanOutcome & { pendingId: string }> {
     const pendingId = crypto.randomUUID();
+    const effectiveTimeoutMs =
+      args.timeoutMs != null ? clampTimeout(args.timeoutMs) : this.timeoutMs;
     const req: DanRequest = {
       pendingId,
       appId: args.appId,
       hostname: args.hostname,
       heldAt: new Date().toISOString(),
-      timeoutMs: this.timeoutMs,
+      timeoutMs: effectiveTimeoutMs,
       highRiskTools: args.highRiskTools,
     };
     const activeCarriers = args.carriers ?? this.carriers;
@@ -113,7 +121,7 @@ export class PendingDanQueue {
         const outcome: DanOutcome = { decision: 'deny', timedOut: true };
         this.fireResolved(pendingId, outcome, entry.carriers);
         resolve({ ...outcome, pendingId });
-      }, this.timeoutMs);
+      }, effectiveTimeoutMs);
 
       this.pending.set(pendingId, {
         req,

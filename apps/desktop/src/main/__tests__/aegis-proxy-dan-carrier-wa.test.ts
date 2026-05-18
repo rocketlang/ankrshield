@@ -21,7 +21,9 @@ const VALID_CREDS = {
   to_number: '+15551234567',
 };
 
-let warnSpy: ReturnType<typeof vi.spyOn>;
+// vitest's spyOn generic narrowing changed across versions — let TS infer.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let warnSpy: any;
 
 beforeEach(() => {
   warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -113,7 +115,7 @@ describe('ASD-T-017 — WhatsAppDanCarrier', () => {
     expect(() => carrier.notify(REQ)).not.toThrow();
     await flushFetchChain(fetchImpl);
     expect(warnSpy).toHaveBeenCalled();
-    const warnText = warnSpy.mock.calls.map((c) => c.join(' ')).join('|');
+    const warnText = warnSpy.mock.calls.map((c: unknown[]) => c.join(' ')).join('|');
     expect(warnText).toMatch(/WhatsApp DAN notify error/);
   });
 
@@ -127,7 +129,7 @@ describe('ASD-T-017 — WhatsAppDanCarrier', () => {
     });
     carrier.notify(REQ);
     await flushFetchChain(fetchImpl);
-    const warnText = warnSpy.mock.calls.map((c) => c.join(' ')).join('|');
+    const warnText = warnSpy.mock.calls.map((c: unknown[]) => c.join(' ')).join('|');
     expect(warnText).toMatch(/WhatsApp DAN notify failed 401/);
   });
 

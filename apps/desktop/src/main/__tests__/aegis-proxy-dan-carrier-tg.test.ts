@@ -17,7 +17,8 @@ const REQ: DanRequest = {
 
 const VALID_CREDS = { bot_token: '1234567:AAHelloWorld', chat_id: '987654321' };
 
-let warnSpy: ReturnType<typeof vi.spyOn>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let warnSpy: any;
 
 beforeEach(() => {
   warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -86,7 +87,7 @@ describe('ASD-T-017 — TelegramDanCarrier', () => {
     expect(() => carrier.notify(REQ)).not.toThrow();
     await flushFetchChain(fetchImpl);
     expect(warnSpy).toHaveBeenCalled();
-    const warnText = warnSpy.mock.calls.map((c) => c.join(' ')).join('|');
+    const warnText = warnSpy.mock.calls.map((c: unknown[]) => c.join(' ')).join('|');
     expect(warnText).toMatch(/Telegram DAN notify error/);
   });
 
@@ -102,7 +103,7 @@ describe('ASD-T-017 — TelegramDanCarrier', () => {
     });
     carrier.notify(REQ);
     await flushFetchChain(fetchImpl);
-    const warnText = warnSpy.mock.calls.map((c) => c.join(' ')).join('|');
+    const warnText = warnSpy.mock.calls.map((c: unknown[]) => c.join(' ')).join('|');
     expect(warnText).toMatch(/Telegram DAN notify failed 401/);
   });
 

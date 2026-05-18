@@ -149,6 +149,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ok: boolean;
       cleared: number;
     }>,
+
+  // ─── DAN timeout config (ASD-T-018) ───────────────────────────────────────
+  aegisProxyGetDanTimeoutConfig: () =>
+    ipcRenderer.invoke('aegis-proxy:get-dan-timeout-config') as Promise<{
+      global_ms: number;
+      per_app: Record<string, number>;
+      limits: { min_ms: number; max_ms: number; default_ms: number };
+    }>,
+  aegisProxySetDanTimeoutGlobal: (ms: number) =>
+    ipcRenderer.invoke('aegis-proxy:set-dan-timeout-global', ms) as Promise<{
+      ok: boolean;
+      applied_ms: number;
+    }>,
+  aegisProxySetDanTimeoutOverride: (input: { appId: string; ms: number }) =>
+    ipcRenderer.invoke('aegis-proxy:set-dan-timeout-override', input) as Promise<{
+      ok: boolean;
+      applied_ms: number;
+    }>,
+  aegisProxyClearDanTimeoutOverride: (appId: string) =>
+    ipcRenderer.invoke('aegis-proxy:clear-dan-timeout-override', appId) as Promise<{
+      ok: boolean;
+    }>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────
@@ -434,6 +456,19 @@ export interface ElectronAPI {
     decision: 'allow' | 'deny';
   }) => Promise<{ ok: boolean; error?: string }>;
   aegisProxyForgetDanCache: (appId: string) => Promise<{ ok: boolean; cleared: number }>;
+
+  // DAN timeout config (ASD-T-018)
+  aegisProxyGetDanTimeoutConfig: () => Promise<{
+    global_ms: number;
+    per_app: Record<string, number>;
+    limits: { min_ms: number; max_ms: number; default_ms: number };
+  }>;
+  aegisProxySetDanTimeoutGlobal: (ms: number) => Promise<{ ok: boolean; applied_ms: number }>;
+  aegisProxySetDanTimeoutOverride: (input: {
+    appId: string;
+    ms: number;
+  }) => Promise<{ ok: boolean; applied_ms: number }>;
+  aegisProxyClearDanTimeoutOverride: (appId: string) => Promise<{ ok: boolean }>;
 }
 
 declare global {

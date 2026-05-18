@@ -17,6 +17,12 @@ import type { AppsPolicyStore, PiiPolicyChoice, DanCarrier } from './apps-policy
 import type { PendingConsentQueue, ConsentRequest } from './pending-consent-queue.js';
 import type { PendingDanQueue, DanRequest } from './pending-dan-queue.js';
 import type { DanDecisionCache } from './dan-decision-cache.js';
+import type { DanTimeoutStore } from './dan-timeout-config.js';
+import {
+  DAN_TIMEOUT_DEFAULT_MS,
+  DAN_TIMEOUT_MIN_MS,
+  DAN_TIMEOUT_MAX_MS,
+} from './dan-timeout-config.js';
 import {
   getWhatsAppCreds,
   setWhatsAppCreds,
@@ -146,6 +152,54 @@ export function registerDanGateHandlers(
     ipcMain.removeHandler('aegis-proxy:list-pending-dan');
     ipcMain.removeHandler('aegis-proxy:resolve-pending-dan');
     ipcMain.removeHandler('aegis-proxy:forget-dan-cache');
+  };
+}
+
+/**
+ * Wire DAN timeout config IPC for the Settings page (ASD-T-018).
+ * Returns a teardown. Reads + writes pass through the timeout store which
+ * clamps to [15s, 120s] per Vivechana Decision 3 — values outside the
+ * range are persisted as the clamped value, not rejected.
+ */
+export function registerDanTimeoutHandlers(store: DanTimeoutStore): () => void {
+  ipcMain.handle('aegis-proxy:get-dan-timeout-config', () => ({
+    global_ms: store.getGlobal(),
+    per_app: store.snapshot().per_app,
+    limits: {
+      min_ms: DAN_TIMEOUT_MIN_MS,
+      max_ms: DAN_TIMEOUT_MAX_MS,
+      default_ms: DAN_TIMEOUT_DEFAULT_MS,
+    },
+  }));
+
+  ipcMain.handle(
+    'aegis-proxy:set-dan-timeout-global',
+    (_e, ms: number): { ok: boolean; applied_ms: number } => ({
+      ok: true,
+      applied_ms: store.setGlobal(ms),
+    })
+  );
+
+  ipcMain.handle(
+    'aegis-proxy:set-dan-timeout-override',
+    (_e, input: { appId: string; ms: number }): { ok: boolean; applied_ms: number } => ({
+      ok: true,
+      applied_ms: store.setOverride(input.appId, input.ms),
+    })
+  );
+
+  ipcMain.handle(
+    'aegis-proxy:clear-dan-timeout-override',
+    (_e, appId: string): { ok: boolean } => ({
+      ok: store.clearOverride(appId),
+    })
+  );
+
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:get-dan-timeout-config');
+    ipcMain.removeHandler('aegis-proxy:set-dan-timeout-global');
+    ipcMain.removeHandler('aegis-proxy:set-dan-timeout-override');
+    ipcMain.removeHandler('aegis-proxy:clear-dan-timeout-override');
   };
 }
 

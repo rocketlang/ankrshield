@@ -42,6 +42,8 @@ export interface AegisProxyHandle {
   pendingDan: import('./pending-dan-queue.js').PendingDanQueue;
   /** Session-scoped DAN decision cache (ASD-T-016). */
   danDecisionCache: import('./dan-decision-cache.js').DanDecisionCache;
+  /** DAN timeout config store (ASD-T-018). */
+  danTimeoutStore: import('./dan-timeout-config.js').DanTimeoutStore;
   stop(): Promise<void>;
 }
 
