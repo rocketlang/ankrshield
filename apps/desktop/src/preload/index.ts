@@ -188,6 +188,24 @@ export type AegisProxyEventPayload =
       capability_hex: string;
       trust_mask_hex: string;
       reason: string;
+    }
+  | {
+      kind: 'pii.redacted';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      counts: Record<string, number>;
+      total: number;
+    }
+  | {
+      kind: 'pii.blocked';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      counts: Record<string, number>;
+      total: number;
     };
 
 /**

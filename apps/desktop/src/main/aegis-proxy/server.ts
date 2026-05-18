@@ -37,6 +37,7 @@ import type { ObservedRequest, ProviderAdapter, ResponseObserver } from './obser
 import { resolveAppId } from './app-identifier.js';
 import { AppsStore } from './apps-store.js';
 import { AegisGate, AegisLiteError } from './aegis-gate.js';
+import { redactInJsonBody, PiiPolicyResolver } from './pii-boundary.js';
 
 /**
  * Start the aegis-proxy.
@@ -108,8 +109,13 @@ export async function startAegisProxy(
   // until the user explicitly downgrades.
   const aegisGate = new AegisGate();
 
+  // ASD-T-013 (doctrine-corrected — see vivechana Part 2): per-request PII
+  // boundary. Default policy = 'redact' for all apps; P2 ASD-T-015 (TOFU)
+  // will let users override per-app to 'block' or 'off'.
+  const piiPolicy = new PiiPolicyResolver();
+
   const server = http.createServer((req, res) =>
-    handleHttpRequest(req, res, events, appsStore, proxyPort, isBlocked, aegisGate)
+    handleHttpRequest(req, res, events, appsStore, proxyPort, isBlocked, aegisGate, piiPolicy)
   );
   server.on('connect', (req, socket, head) =>
     // Node types `socket` as Duplex on the connect event; in practice it's a
@@ -123,7 +129,8 @@ export async function startAegisProxy(
       appsStore,
       proxyPort,
       isBlocked,
-      aegisGate
+      aegisGate,
+      piiPolicy
     )
   );
 
@@ -173,7 +180,8 @@ async function handleHttpRequest(
   appsStore: AppsStore,
   proxyPort: number,
   isBlocked: IsBlockedFn,
-  aegisGate: AegisGate
+  aegisGate: AegisGate,
+  piiPolicy: PiiPolicyResolver
 ): Promise<void> {
   const rawUrl = req.url ?? '';
   if (!/^https?:\/\//i.test(rawUrl)) {
@@ -225,6 +233,7 @@ async function handleHttpRequest(
     appsStore,
     proxyPort,
     aegisGate,
+    piiPolicy,
   });
 }
 
@@ -255,7 +264,8 @@ async function handleHttpConnect(
   appsStore: AppsStore,
   proxyPort: number,
   isBlocked: IsBlockedFn,
-  aegisGate: AegisGate
+  aegisGate: AegisGate,
+  piiPolicy: PiiPolicyResolver
 ): Promise<void> {
   const target = parseConnectTarget(req.url ?? '');
   if (!target) {
@@ -326,6 +336,7 @@ async function handleHttpConnect(
         appsStore,
         proxyPort,
         aegisGate,
+        piiPolicy,
       })
   );
 
@@ -365,6 +376,7 @@ interface ForwardArgs {
   appsStore: AppsStore;
   proxyPort: number;
   aegisGate: AegisGate;
+  piiPolicy: PiiPolicyResolver;
 }
 
 /**
@@ -387,6 +399,7 @@ function forwardWithObservation(args: ForwardArgs): void {
     appsStore,
     proxyPort,
     aegisGate,
+    piiPolicy,
   } = args;
   const requestId = crypto.randomUUID();
   const startTime = Date.now();
@@ -476,6 +489,59 @@ function forwardWithObservation(args: ForwardArgs): void {
         return;
       }
 
+      // ASD-T-013 (doctrine-corrected, see vivechana Part 2): per-request PII
+      // boundary. Default policy = redact (replace PII with [REDACTED:type]);
+      // per-app override to 'block' returns 403; 'off' skips.
+      let bodyToForward = requestBody;
+      if (parsed && requestBody.length > 0) {
+        const policy = piiPolicy.resolve(identity.appId);
+        if (policy !== 'off') {
+          try {
+            const parsedBody = JSON.parse(requestBody.toString('utf8'));
+            const matches = redactInJsonBody(parsedBody);
+            if (matches.length > 0) {
+              const counts: Record<string, number> = {};
+              for (const m of matches) counts[m.type] = (counts[m.type] ?? 0) + 1;
+              if (policy === 'block') {
+                events.emit({
+                  kind: 'pii.blocked',
+                  requestId,
+                  timestamp: new Date().toISOString(),
+                  appId: identity.appId,
+                  hostname: upstreamHost,
+                  counts,
+                  total: matches.length,
+                });
+                if (!res.headersSent) {
+                  res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
+                }
+                res.end(
+                  `aegis-proxy: ASD-011-pii-blocked — request from ${identity.appId} ` +
+                    `contained ${matches.length} PII span(s) and per-app policy is 'block'.\n`
+                );
+                return; // do NOT forward upstream
+              }
+              // policy === 'redact' — replace body with redacted version
+              bodyToForward = Buffer.from(JSON.stringify(parsedBody), 'utf8');
+              events.emit({
+                kind: 'pii.redacted',
+                requestId,
+                timestamp: new Date().toISOString(),
+                appId: identity.appId,
+                hostname: upstreamHost,
+                counts,
+                total: matches.length,
+              });
+            }
+          } catch {
+            // Body wasn't JSON or parse failed — pass through unmodified.
+            // Adapter-matched requests are always JSON; getting here means
+            // either non-AI traffic or a malformed AI request. Either way,
+            // skipping redaction is safer than crashing the proxy.
+          }
+        }
+      }
+
       // Allow — emit request.observed (if adapter parsed) and forward upstream.
       if (parsed) {
         const observation: ObservedRequest = {
@@ -500,7 +566,13 @@ function forwardWithObservation(args: ForwardArgs): void {
           port: upstreamPort,
           method: req.method,
           path: upstreamPath,
-          headers: stripHopByHopHeaders(req.headers),
+          headers:
+            bodyToForward !== requestBody
+              ? {
+                  ...stripHopByHopHeaders(req.headers),
+                  'content-length': String(bodyToForward.length),
+                }
+              : stripHopByHopHeaders(req.headers),
         },
         (upstreamRes) => {
           res.writeHead(upstreamRes.statusCode ?? 502, upstreamRes.headers);
@@ -548,7 +620,7 @@ function forwardWithObservation(args: ForwardArgs): void {
         );
       });
 
-      if (requestBody.length > 0) upstream.write(requestBody);
+      if (bodyToForward.length > 0) upstream.write(bodyToForward);
       upstream.end();
     })();
   });

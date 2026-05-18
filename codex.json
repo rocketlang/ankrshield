@@ -729,8 +729,10 @@
           "rule": "ASD-010, INF-ASD-009"
         },
         "dependencies": {
-          "@xshieldai/aegis": "^2.2.0 (lite-mode SDK — wired in P2; declared here for P1 close)",
-          "@rocketlang/lakshmanrekha": "P2 dep for PII boundary",
+          "@xshieldai/aegis": "^2.2.0 (lite-mode SDK — vendored at apps/desktop/src/main/aegis-proxy/aegis-lite-vendored.ts because upstream ships .ts source only; npm dep installed for forward path)",
+          "@xshieldai/aegis (vendored)": "apps/desktop/src/main/aegis-proxy/aegis-lite-vendored.ts (P2 ASD-T-012)",
+          "@xshieldai/aegis (gate wrapper)": "apps/desktop/src/main/aegis-proxy/aegis-gate.ts (P2 ASD-T-012)",
+          "pii-boundary": "apps/desktop/src/main/aegis-proxy/pii-boundary.ts (own module, P2 ASD-T-013) — pure-regex per-request PII scanner for Indian (Aadhaar/PAN/UPI) + Western (SSN/email/phone) patterns. Replaces the original mis-named @rocketlang/lakshmanrekha reference; see vivechana Part 2.",
           "@rocketlang/hanumang-mandate": "P3 dep for report card",
           "node-forge": "^1.3.1 (cert gen)",
           "@types/node-forge": "^1.3.11",
@@ -780,7 +782,18 @@
           "cb8c228 — ASD-T-009 privacy-engine chain",
           "5c66465 — ASD-T-003 CA install ceremony"
         ],
-        "last_audited": "2026-05-18"
+        "last_audited": "2026-05-18",
+        "future_uses": {
+          "@xshieldai/lakshmanrekha": {
+            "package_name_on_npm": "@rocketlang/lakshmanrekha",
+            "actual_purpose": "LLM endpoint posture probe suite (8 deterministic attack probes + refusal classifier)",
+            "candidate_use_for_desktop": "periodic outbound posture probes against api.anthropic.com / api.openai.com, NOT per-request PII redaction",
+            "doctrine_correction_history": "P1 doc set mis-named this package as the per-request PII redactor; corrected 2026-05-18 IST evening via vivechana Part 2; PII boundary built as own module pii-boundary.ts (P2 ASD-T-013)"
+          }
+        },
+        "doctrine_corrections": [
+          "2026-05-18 IST evening: @rocketlang/lakshmanrekha mis-identified as PII redactor in P1 docs (brainstorm, project, logics, codex.json). Actually an LLM endpoint posture probe suite. Replaced with own module pii-boundary.ts; package moved to future_uses for its actual purpose. Lesson: doc reuse-maps must grep packages before listing them. See ankrshield-desktop-aegis--vivechana--formal--2026-05-18.md Part 2."
+        ]
       }
     },
     "last_audited": "2026-05-18"

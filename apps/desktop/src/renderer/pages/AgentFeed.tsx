@@ -81,6 +81,24 @@ type AegisProxyEvent =
       capability_hex: string;
       trust_mask_hex: string;
       reason: string;
+    }
+  | {
+      kind: 'pii.redacted';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      counts: Record<string, number>;
+      total: number;
+    }
+  | {
+      kind: 'pii.blocked';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      counts: Record<string, number>;
+      total: number;
     };
 
 /** Aggregated per-request view, built by pairing request/response by requestId. */
@@ -106,8 +124,13 @@ interface FeedRow {
     | 'parse_failed'
     | 'tls_error'
     | 'privacy_blocked'
-    | 'aegis_denied';
+    | 'aegis_denied'
+    | 'pii_blocked';
   errorMessage: string | null;
+  /** PII redaction counts (per type → count) when this row had redactions applied. */
+  piiRedactedCounts?: Record<string, number> | null;
+  /** Total PII spans redacted (sum of counts). */
+  piiRedactedTotal?: number;
 }
 
 const MAX_ROWS = 200;
@@ -183,7 +206,7 @@ export function AgentFeed() {
         </div>
       </header>
 
-      <section className="grid grid-cols-2 md:grid-cols-6 gap-4">
+      <section className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
         <Stat label="Anthropic" value={stats.anthropic} />
         <Stat label="OpenAI" value={stats.openai} />
         <Stat
@@ -204,6 +227,16 @@ export function AgentFeed() {
           label="AEGIS-denied"
           value={stats.aegisDenied}
           subtone={stats.aegisDenied > 0 ? 'warn' : 'ok'}
+        />
+        <Stat
+          label="PII redacted"
+          value={stats.piiTotalSpans}
+          subtone={stats.piiTotalSpans > 0 ? 'warn' : 'ok'}
+        />
+        <Stat
+          label="PII blocked"
+          value={stats.piiBlockedRows}
+          subtone={stats.piiBlockedRows > 0 ? 'warn' : 'ok'}
         />
       </section>
 
@@ -326,6 +359,16 @@ function renderStatus(row: FeedRow) {
     return (
       <span className="text-red-400" title={row.errorMessage ?? 'AEGIS gate denied (ASD-004)'}>
         ⛔ aegis-denied
+      </span>
+    );
+  }
+  if (row.state === 'pii_blocked') {
+    return (
+      <span
+        className="text-purple-300"
+        title={row.errorMessage ?? 'PII boundary blocked (ASD-011)'}
+      >
+        🔒 pii-blocked
       </span>
     );
   }
@@ -561,6 +604,77 @@ function mergeEvent(
       }
       return capList([row, ...prev], byId);
     }
+    case 'pii.redacted': {
+      // Augment existing row (request.observed already fired) with redaction counts.
+      // If no existing row, create a stub so the redaction event isn't lost.
+      const existing = byId.get(event.requestId);
+      const row: FeedRow = existing
+        ? { ...existing, piiRedactedCounts: event.counts, piiRedactedTotal: event.total }
+        : {
+            requestId: event.requestId,
+            startedAt: event.timestamp,
+            provider: 'unknown',
+            appId: event.appId,
+            hostname: event.hostname,
+            path: '(PII redacted, no request.observed)',
+            model: null,
+            isStreaming: false,
+            messageCount: 0,
+            hasTools: false,
+            statusCode: null,
+            promptTokens: null,
+            completionTokens: null,
+            finishReason: null,
+            latencyMs: null,
+            state: 'pending',
+            errorMessage: null,
+            piiRedactedCounts: event.counts,
+            piiRedactedTotal: event.total,
+          };
+      byId.set(event.requestId, row);
+      if (existing) {
+        return prev.map((r) => (r.requestId === row.requestId ? row : r));
+      }
+      return capList([row, ...prev], byId);
+    }
+    case 'pii.blocked': {
+      const existing = byId.get(event.requestId);
+      const row: FeedRow = existing
+        ? {
+            ...existing,
+            statusCode: 403,
+            state: 'pii_blocked',
+            errorMessage: `${event.total} PII span(s) detected; per-app policy is 'block'`,
+            piiRedactedCounts: event.counts,
+            piiRedactedTotal: event.total,
+          }
+        : {
+            requestId: event.requestId,
+            startedAt: event.timestamp,
+            provider: 'unknown',
+            appId: event.appId,
+            hostname: event.hostname,
+            path: '(PII boundary — blocked)',
+            model: null,
+            isStreaming: false,
+            messageCount: 0,
+            hasTools: false,
+            statusCode: 403,
+            promptTokens: null,
+            completionTokens: null,
+            finishReason: null,
+            latencyMs: null,
+            state: 'pii_blocked',
+            errorMessage: `${event.total} PII span(s) detected; per-app policy is 'block'`,
+            piiRedactedCounts: event.counts,
+            piiRedactedTotal: event.total,
+          };
+      byId.set(event.requestId, row);
+      if (existing) {
+        return prev.map((r) => (r.requestId === row.requestId ? row : r));
+      }
+      return capList([row, ...prev], byId);
+    }
   }
 }
 
@@ -579,6 +693,9 @@ function summariseFeed(rows: FeedRow[]) {
   let tlsErrors = 0;
   let privacyBlocked = 0;
   let aegisDenied = 0;
+  let piiRedactedRows = 0;
+  let piiBlockedRows = 0;
+  let piiTotalSpans = 0;
   let latencySum = 0;
   let latencyCount = 0;
   for (const r of rows) {
@@ -587,6 +704,11 @@ function summariseFeed(rows: FeedRow[]) {
     if (r.state === 'tls_error') tlsErrors++;
     if (r.state === 'privacy_blocked') privacyBlocked++;
     if (r.state === 'aegis_denied') aegisDenied++;
+    if (r.state === 'pii_blocked') piiBlockedRows++;
+    if (r.piiRedactedTotal && r.piiRedactedTotal > 0) {
+      piiRedactedRows++;
+      piiTotalSpans += r.piiRedactedTotal;
+    }
     if (r.latencyMs != null) {
       latencySum += r.latencyMs;
       latencyCount++;
@@ -598,6 +720,9 @@ function summariseFeed(rows: FeedRow[]) {
     tlsErrors,
     privacyBlocked,
     aegisDenied,
+    piiRedactedRows,
+    piiBlockedRows,
+    piiTotalSpans,
     avgLatencyMs: latencyCount > 0 ? Math.round(latencySum / latencyCount) : null,
   };
 }

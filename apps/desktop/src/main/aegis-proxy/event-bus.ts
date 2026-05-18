@@ -61,6 +61,25 @@ export type AegisProxyEvent =
       capability_hex: string;
       trust_mask_hex: string;
       reason: string;
+    }
+  | {
+      kind: 'pii.redacted';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      /** Per-type counts of redacted PII spans for renderer aggregate display. */
+      counts: Record<string, number>;
+      total: number;
+    }
+  | {
+      kind: 'pii.blocked';
+      requestId: string;
+      timestamp: string;
+      appId: string;
+      hostname: string;
+      counts: Record<string, number>;
+      total: number;
     };
 
 export type AegisProxyEventListener = (event: AegisProxyEvent) => void;
