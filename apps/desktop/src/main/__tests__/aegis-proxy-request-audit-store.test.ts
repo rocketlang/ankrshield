@@ -5,7 +5,7 @@
 // ConsentStore, no PII leak in receipt body, filename uniqueness under
 // concurrent writes, retention/export compatibility, attach/detach.
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -185,12 +185,12 @@ describe('ASD-T-031 — RequestAuditStore concurrency', () => {
     const store = new RequestAuditStore({ auditDir });
     const fixedTs = '2026-05-19T10:00:00.000Z';
     // Freeze Date so two records collide on timestamp; nonce must save us.
-    const realNow = Date.now;
-    Date.now = () => new Date(fixedTs).getTime();
-    const realIso = Date.prototype.toISOString;
-    Date.prototype.toISOString = function () {
-      return fixedTs;
-    };
+    // Use vi.spyOn so vitest auto-restores at test end — the prior version
+    // patched Date.prototype.toISOString globally which leaked across
+    // parallel test workers and caused a ~10% flake in the key-on-disk
+    // happy-path test. vi.spyOn auto-cleans via vitest's restoreMocks lifecycle.
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(new Date(fixedTs).getTime());
+    const isoSpy = vi.spyOn(Date.prototype, 'toISOString').mockReturnValue(fixedTs);
     try {
       const paths = await Promise.all([
         store.record(deniedEvent({ requestId: 'a' })),
@@ -201,8 +201,8 @@ describe('ASD-T-031 — RequestAuditStore concurrency', () => {
       expect(files).toHaveLength(3);
       expect(new Set(paths).size).toBe(3);
     } finally {
-      Date.now = realNow;
-      Date.prototype.toISOString = realIso;
+      nowSpy.mockRestore();
+      isoSpy.mockRestore();
     }
   });
 });
