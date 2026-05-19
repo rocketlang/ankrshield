@@ -763,20 +763,42 @@ export function registerKeyMigrationHandlers(ref: {
     ref.lastScanAt = new Date().toISOString();
     return { findings: ref.current, lastScanAt: ref.lastScanAt };
   });
-  ipcMain.handle('aegis-proxy:key-migrate-one', async (_e, input: { finding_id: string }) => {
-    const target = ref.current.find((f) => f.finding_id === input.finding_id);
-    if (!target) {
-      return { ok: false, reason: 'finding_id not in current list (re-scan first?)' };
+  ipcMain.handle(
+    'aegis-proxy:key-migrate-one',
+    async (
+      _e,
+      input: {
+        finding_id: string;
+        /**
+         * PRAMANA consent record id from the ConsentDialog impression+decision
+         * pair (ASD-T-037 / FR-21). Stamped onto the migration log and result
+         * so the keychain coordinates + consent record are jointly traceable.
+         */
+        consent_record_id?: string;
+      }
+    ) => {
+      const target = ref.current.find((f) => f.finding_id === input.finding_id);
+      if (!target) {
+        return { ok: false, reason: 'finding_id not in current list (re-scan first?)' };
+      }
+      const result = await migrateKeyOnDisk(target);
+      if (result.ok) {
+        // Drop the now-migrated finding from the cached list so the UI
+        // visibly shrinks. Stale lastScanAt is intentional — the rest of
+        // the list reflects the original scan time.
+        ref.current = ref.current.filter((f) => f.finding_id !== input.finding_id);
+        if (input.consent_record_id) {
+          // eslint-disable-next-line no-console
+          console.log(
+            `[aegis-proxy] ASD-T-037: key migration ${result.keychain_service}/${result.keychain_account} ` +
+              `linked to consent_record_id=${input.consent_record_id}`
+          );
+          return { ...result, consent_record_id: input.consent_record_id };
+        }
+      }
+      return result;
     }
-    const result = await migrateKeyOnDisk(target);
-    if (result.ok) {
-      // Drop the now-migrated finding from the cached list so the UI
-      // visibly shrinks. Stale lastScanAt is intentional — the rest of
-      // the list reflects the original scan time.
-      ref.current = ref.current.filter((f) => f.finding_id !== input.finding_id);
-    }
-    return result;
-  });
+  );
   return () => {
     ipcMain.removeHandler('aegis-proxy:key-list-findings');
     ipcMain.removeHandler('aegis-proxy:key-rescan');

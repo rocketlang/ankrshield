@@ -392,7 +392,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }>;
       lastScanAt: string;
     }>,
-  aegisProxyKeyMigrateOne: (input: { finding_id: string }) =>
+  aegisProxyKeyMigrateOne: (input: { finding_id: string; consent_record_id?: string }) =>
     ipcRenderer.invoke('aegis-proxy:key-migrate-one', input) as Promise<
       | {
           ok: true;
@@ -401,6 +401,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
           keychain_service: string;
           keychain_account: string;
           migrated_at: string;
+          consent_record_id?: string;
         }
       | { ok: false; finding_id?: string; reason: string }
     >,

@@ -22,6 +22,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { ConsentDialog } from '../components/ConsentDialog';
+
 declare global {
   interface Window {
     electronAPI?: {
@@ -176,6 +178,7 @@ interface KeyFinding {
 function KeyOnDiskSection() {
   const [findings, setFindings] = useState<KeyFinding[] | null>(null);
   const [lastScanAt, setLastScanAt] = useState<string | null>(null);
+  const [pending, setPending] = useState<KeyFinding | null>(null);
   const [migratingId, setMigratingId] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<string | null>(null);
 
@@ -208,29 +211,22 @@ function KeyOnDiskSection() {
     }
   };
 
-  const migrate = async (f: KeyFinding) => {
+  const completeMigration = async (
+    finding: KeyFinding,
+    consent_record_id: string
+  ): Promise<void> => {
     const api = window.electronAPI;
     if (!api?.aegisProxyKeyMigrateOne) return;
-    // Spec calls for ConsentDialog here; for this iteration we use a
-    // window.confirm gate so the migration cannot fire by misclick. A
-    // future task can lift this to a full ConsentDialog with PRAMANA
-    // record (FR-21).
-    const ok = window.confirm(
-      `Migrate ${f.provider} key from ${f.path}:${f.line}?\n\n` +
-        `This will:\n` +
-        `1. Back up the source file (mode 0o600)\n` +
-        `2. Write the secret to OS keychain\n` +
-        `3. Replace the secret in-line with a [MIGRATED-…] marker\n\n` +
-        `You can undo by restoring the backup. The keychain entry will remain.`
-    );
-    if (!ok) return;
-    setMigratingId(f.finding_id);
+    setMigratingId(finding.finding_id);
     try {
-      const r = await api.aegisProxyKeyMigrateOne({ finding_id: f.finding_id });
+      const r = await api.aegisProxyKeyMigrateOne({
+        finding_id: finding.finding_id,
+        consent_record_id,
+      });
       if (r.ok) {
         setLastResult(
           `Migrated: secret moved to keychain ${r.keychain_service}/${r.keychain_account}; ` +
-            `backup at ${r.backup_path}.`
+            `backup at ${r.backup_path}; consent ${consent_record_id.slice(0, 8)}…`
         );
         await refresh();
       } else {
@@ -274,7 +270,7 @@ function KeyOnDiskSection() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => void migrate(f)}
+                    onClick={() => setPending(f)}
                     disabled={migratingId === f.finding_id}
                     className="text-[11px] px-2 py-1 rounded bg-ankr-green text-white hover:bg-green-600 disabled:opacity-50"
                   >
@@ -298,10 +294,92 @@ function KeyOnDiskSection() {
             INF-ASD-002 ground truth: keys belong in the OS keychain, not on disk. Each migration
             backs up the source file before zeroing, so you can recover manually if needed.
           </p>
+          {pending ? (
+            <KeyMigrationDialog
+              finding={pending}
+              onClose={() => setPending(null)}
+              onConfirmed={async (cid) => {
+                const target = pending;
+                setPending(null);
+                if (target) await completeMigration(target, cid);
+              }}
+            />
+          ) : null}
         </>
       )}
     </Section>
   );
+}
+
+/**
+ * Per-key migration consent modal (ASD-T-037 / FR-21). Replaces the
+ * prior window.confirm() gate with a first-class ConsentDialog so every
+ * migration produces a PRAMANA-shape impression + decision record via
+ * ConsentStore (consent_record_id round-tripped to migrate-one). Off-switch
+ * is the dialog's Deny button or the X-via-close click outside.
+ */
+function KeyMigrationDialog({
+  finding,
+  onClose,
+  onConfirmed,
+}: {
+  finding: KeyFinding;
+  onClose: () => void;
+  onConfirmed: (consent_record_id: string) => Promise<void>;
+}) {
+  const handleDecided = async (input: {
+    decision: 'allow' | 'deny' | 'skip';
+    consent_record_id: string;
+  }) => {
+    if (input.decision === 'allow') {
+      await onConfirmed(input.consent_record_id);
+    } else {
+      onClose();
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+      <div className="max-w-xl w-full">
+        <ConsentDialog
+          ceremony="key-on-disk-migration"
+          title={`Migrate ${finding.provider} key from ${shortPath(finding.path)}`}
+          variant="ceremony"
+          allowLabel="Migrate to keychain"
+          denyLabel="Keep on disk"
+          didacticRuleId="INF-ASD-002"
+          subject={{
+            finding_id: finding.finding_id,
+            path: finding.path,
+            line: finding.line,
+            provider: finding.provider,
+            preview: finding.preview,
+          }}
+          purpose={
+            `Move a plaintext ${finding.provider} API key from ` +
+            `${finding.path}:${finding.line} (${finding.preview}…) to the OS keychain.`
+          }
+          consequences={
+            'The source file will be backed up at <path>.ankrshield-bak-<ts> (chmod 0o600), the ' +
+            'secret written to the OS keychain (service=ankrshield-migrated-keys), and the ' +
+            'source rewritten in-place with a [MIGRATED-TO-KEYCHAIN-…] marker preserving ' +
+            'surrounding text. The keychain entry persists even if you later delete the backup.'
+          }
+          revocation_path={
+            'Restore the .ankrshield-bak-* file over the source to undo the rewrite. The ' +
+            'keychain entry can be removed via the OS keychain GUI (Keychain Access on macOS, ' +
+            'Credential Manager on Windows, seahorse / secret-tool on Linux).'
+          }
+          onDecided={handleDecided}
+        />
+      </div>
+    </div>
+  );
+}
+
+function shortPath(path: string): string {
+  const parts = path.split('/');
+  if (parts.length <= 3) return path;
+  return `…/${parts.slice(-2).join('/')}`;
 }
 
 // ─── 1. Identity & Trust ─────────────────────────────────────────────────────
