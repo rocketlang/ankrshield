@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 
 export function Header() {
   const [protectionEnabled, setProtectionEnabled] = useState(true);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   useEffect(() => {
     loadProtectionStatus();

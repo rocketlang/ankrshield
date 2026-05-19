@@ -14,12 +14,19 @@ export interface AIActivity {
   timestamp: Date;
 }
 
-// Typed EventEmitter declaration
+// Typed EventEmitter declaration. The interface + class share a name
+// intentionally — the standard TypeScript pattern for typing on/emit
+// signatures on an EventEmitter subclass. lint flags it as "unsafe"
+// because it can't see that the interface declares only methods; we
+// vouch for it here and disable the rule pair-wise.
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export declare interface AIAgentMonitor {
   on(event: 'activity', listener: (activity: AIActivity) => void): this;
   emit(event: 'activity', activity: AIActivity): boolean;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class AIAgentMonitor extends EventEmitter {
   private activities: AIActivity[] = [];
 

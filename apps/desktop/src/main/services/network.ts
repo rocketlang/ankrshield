@@ -6,7 +6,7 @@
 
 import { PrismaClient, EventType as PrismaEventType } from '@prisma/client';
 import { createNetworkMonitor } from '@ankrshield/network-monitor';
-import type { BaseNetworkMonitor, NetworkFlow } from '@ankrshield/network-monitor';
+import type { BaseNetworkMonitor } from '@ankrshield/network-monitor';
 import { databaseManager } from '../infrastructure/database.js';
 import { userManager } from '../infrastructure/user.js';
 import { eventBus, EventType } from '../infrastructure/event-bus.js';
@@ -122,7 +122,7 @@ export class NetworkService {
       const protocol = flow.protocol || 'TCP';
 
       // Try DNS correlation or use provided domain
-      let domain = flow.domain || this.dnsCache.get(destinationIP) || destinationIP;
+      const domain = flow.domain || this.dnsCache.get(destinationIP) || destinationIP;
 
       // TODO: Add tracker detection using privacy-engine
       const isBlocked = false; // Real blocking logic here

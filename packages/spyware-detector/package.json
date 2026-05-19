@@ -16,7 +16,9 @@
     "dev": "tsc --watch",
     "test": "vitest",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix"
   },
   "dependencies": {
     "@ankrshield/core": "workspace:*"

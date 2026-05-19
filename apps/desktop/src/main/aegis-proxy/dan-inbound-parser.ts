@@ -50,7 +50,7 @@ export function parseDanReply(text: string | null | undefined): DanReply | null 
 
   const tokens = trimmed
     .toLowerCase()
-    .split(/[\s,;:!?\[\](){}]+/)
+    .split(/[\s,;:!?[\](){}]+/)
     .filter((t) => t.length > 0);
   if (tokens.length === 0) return null;
 

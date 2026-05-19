@@ -98,7 +98,7 @@ describe('ASD-T-026/27 — preflight', () => {
   });
 
   it('THROTTLED with limit=3, windowMs=10s allows 3 then denies', () => {
-    let t = 1000;
+    const t = 1000;
     const k = new KillSwitch({
       throttle: { limit: 3, windowMs: 10000 },
       now: () => t,

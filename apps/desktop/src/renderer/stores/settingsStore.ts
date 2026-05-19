@@ -96,7 +96,7 @@ const defaultSettings: Settings = {
 // Create store with persistence
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       ...defaultSettings,
 
       // Setters
@@ -221,6 +221,7 @@ export const useSettingsStore = create<SettingsState>()(
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => {
         // Only persist settings, not action functions
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructure intentionally drops syncWithBackend from persisted shape
         const { syncWithBackend, ...settings } = state;
         return settings as Settings;
       },

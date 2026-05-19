@@ -79,11 +79,14 @@ const DECOY_TEMPLATES: DecoyTemplate[] = [
 
 // ─── Honeypot Manager ─────────────────────────────────────────────────────────
 
+// Typed EventEmitter pattern — interface + class share a name intentionally.
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export declare interface HoneypotManager {
   on(event: 'triggered', listener: (asset: HoneypotAsset) => void): this;
   emit(event: 'triggered', asset: HoneypotAsset): boolean;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class HoneypotManager extends EventEmitter {
   private assets: Map<string, HoneypotAsset> = new Map();
   private honeypotDir: string;

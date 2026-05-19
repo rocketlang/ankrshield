@@ -25,7 +25,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { mkdir, readdir, readFile, rm, stat as statAsync, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { gzip as gzipCb } from 'node:zlib';
 import { promisify } from 'node:util';
 

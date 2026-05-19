@@ -2,7 +2,8 @@ import { randomUUID } from 'crypto';
 import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
-import { app } from 'electron';
+// `app` import previously here was unused — removed to satisfy lint;
+// re-add if a future refactor needs Electron's userData path.
 import { configManager } from '../config.js';
 
 /**

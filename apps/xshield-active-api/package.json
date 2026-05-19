@@ -10,7 +10,9 @@
     "build": "tsc --noEmitOnError false || true",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix"
   },
   "dependencies": {
     "@ankrshield/ai-warrior": "workspace:*",

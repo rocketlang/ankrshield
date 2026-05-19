@@ -305,7 +305,10 @@ describe('ASD-T-036 — migrateKeyOnDisk', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const { stat } = await import('node:fs/promises');
-    const s = await stat(result.backup_path);
+    // Backup mode is platform-dependent (we no longer assert it); just touch
+    // stat() so the chmod-after-copy path is exercised. The deliberate
+    // assertion lives on the source-rewrite mode below.
+    await stat(result.backup_path);
     // Source rewrite mode is 0o600; backup inherits source perms via copyFile.
     // We don't assert backup mode (platform-dependent) — just that source
     // came back at 0o600.
