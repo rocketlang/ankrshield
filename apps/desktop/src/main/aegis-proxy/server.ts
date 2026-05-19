@@ -1217,6 +1217,10 @@ function stripHopByHopHeaders(headers: IncomingMessage['headers']): IncomingMess
  * throws, the request proceeds (we'd rather over-allow than break the entire
  * LLM workflow when the privacy engine is degraded). ASD-004 still applies
  * to AEGIS checks; this is for upstream policy from a sibling subsystem.
+ *
+ * @rule:ASD-010 — proxy cannot bypass the privacy engine.
+ * @rule:INF-ASD-009 — privacy_engine.would_block(host) → reject 403 with
+ *   code ASD-010-privacy-blocked; do not forward, do not record cost.
  */
 async function isHostBlocked(
   fn: IsBlockedFn,

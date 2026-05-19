@@ -27,6 +27,8 @@
 //
 // @rule:ASD-011 — streaming redaction cannot falsify; replace with [REDACTED:type] markers
 // @rule:ASD-004 — fail closed: scan errors propagate, caller decides
+// @rule:INF-ASD-005 — on each streamed token, scan + replace matched spans
+//   with [REDACTED:type] before emitting downstream; tally per-type counts.
 
 import { redactText, scanText, type PiiType } from './pii-boundary.js';
 

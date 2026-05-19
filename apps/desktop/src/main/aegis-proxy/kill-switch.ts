@@ -6,6 +6,12 @@
 // upstream sockets so the user-visible "stop now" UX completes ≤1s p99
 // (NFR-2, FR-15, ASD-009, INF-ASD-006).
 //
+// @rule:ASD-009 — kill switch path bypasses the request-processing pipeline.
+// @rule:ASD-YK-003 — Pause beats block for mid-stream enforcement. THROTTLE
+//   lets in-flight streams complete cleanly while gating the next request;
+//   LOCKED is the hard-stop primitive that closes sockets.
+// @rule:INF-ASD-006 — LOCKED transition closes in-flight streams within 1s p99.
+//
 // Implementation notes:
 //
 // - "Dedicated worker thread" per FR-15 is interpreted as "the IPC handler

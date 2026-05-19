@@ -23,6 +23,8 @@
 // can clear specific AI_* bits.
 //
 // @rule:ASD-004 — failure mode is deny; AEGIS check throw → 403
+// @rule:INF-ASD-003 — TRY aegis.lite.guard / CATCH AegisLiteError → deny +
+//   surface error to the renderer; never silently pass through on check failure.
 // @rule:ASD-YK-001 — PreToolUse latency budget < 50ms p99 (lite.guard is μs)
 // @rule:FR-7 — every request must pass lite.guard() with per-app trust_mask
 // @rule:SDK-001 — Lite mode never reduces enforcement vs full AEGIS

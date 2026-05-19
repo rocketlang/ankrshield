@@ -7,6 +7,9 @@
 //
 // @rule:ASD-005 — first request from an unseen app holds pending dialog;
 //   no silent first-call pass-through.
+// @rule:ASD-YK-002 — TOFU beats allow-list for consumer surface; no app
+//   pre-declaration is required because the user can't enumerate every AI
+//   app they'll ever run.
 // @rule:INF-ASD-004 — modal-until-decided; the dialog has exactly two
 //   terminal options (Allow with budget, Deny). Timeout = deny.
 
