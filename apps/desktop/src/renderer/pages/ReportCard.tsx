@@ -101,6 +101,10 @@ declare global {
         digestsIncluded: string[];
       }>;
       aegisProxyRequestAuditStats?: () => Promise<{ writes: number; errors: number }>;
+      aegisProxyDidacticState?: () => Promise<{ enabled: boolean; updated_at: string | null }>;
+      aegisProxyDidacticSet?: (input: {
+        enabled: boolean;
+      }) => Promise<{ enabled: boolean; updated_at: string | null }>;
     };
   }
 }
@@ -194,6 +198,7 @@ export function ReportCard() {
           >
             Budget panel
           </Link>
+          <DidacticToggle />
           <AuditExportButton />
         </div>
       </header>
@@ -603,6 +608,54 @@ function AuditExportButton() {
         </span>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * DidacticToggle (ASD-T-033 / FR-18) — header button that flips the
+ * didactic-mode bit and persists. When on, every consent dialog renders
+ * a 3-line "why this dialog" hint via DidacticHint. Off by default per
+ * ASD-008 zero-surface; the change is immediate (next dialog mount).
+ */
+function DidacticToggle() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  useEffect(() => {
+    void (async () => {
+      const api = window.electronAPI;
+      if (!api?.aegisProxyDidacticState) return;
+      try {
+        const s = await api.aegisProxyDidacticState();
+        setEnabled(!!s.enabled);
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+  const flip = async () => {
+    const api = window.electronAPI;
+    if (!api?.aegisProxyDidacticSet) return;
+    const next = !enabled;
+    try {
+      const s = await api.aegisProxyDidacticSet({ enabled: next });
+      setEnabled(!!s.enabled);
+    } catch {
+      // ignore
+    }
+  };
+  if (enabled === null) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => void flip()}
+      title="Didactic mode shows a per-rule explanation on every consent dialog."
+      className={`text-xs px-3 py-1.5 rounded ${
+        enabled
+          ? 'bg-blue-700 hover:bg-blue-600 text-white'
+          : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+      }`}
+    >
+      Didactic: {enabled ? 'ON' : 'OFF'}
+    </button>
   );
 }
 

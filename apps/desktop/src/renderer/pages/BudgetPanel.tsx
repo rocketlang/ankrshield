@@ -260,6 +260,7 @@ function CapEditDialog({
           variant="ceremony"
           allowLabel="Apply"
           allowDisabled={!valid}
+          didacticRuleId="ASD-005"
           subject={{
             appId: row.appId,
             previous_hourly_limit_usd: row.hourly_limit_usd,

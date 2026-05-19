@@ -62,6 +62,8 @@ export interface AegisProxyHandle {
   requestLog: import('./request-log-store.js').RequestLogStore;
   /** Persisted per-request audit receipts (ASD-T-031 / FR-13). */
   requestAudit: import('./request-audit-store.js').RequestAuditStore;
+  /** Didactic-mode toggle (ASD-T-033 / FR-18). */
+  didacticMode: import('./didactic-mode-store.js').DidacticModeStore;
   stop(): Promise<void>;
 }
 

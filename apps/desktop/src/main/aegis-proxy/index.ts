@@ -125,6 +125,7 @@ export {
   registerAuditExportHandlers,
   registerReplayHandlers,
   registerRequestAuditHandlers,
+  registerDidacticModeHandlers,
   type BudgetSummaryRow,
 } from './ipc-handlers.js';
 export {
@@ -137,6 +138,18 @@ export {
   type RequestAuditReceipt,
   type RequestAuditStoreOptions,
 } from './request-audit-store.js';
+export {
+  DidacticModeStore,
+  type DidacticState,
+  type DidacticModeStoreOptions,
+} from './didactic-mode-store.js';
+export {
+  RULES_CATALOG,
+  RULE_IDS,
+  getRule,
+  rulesByLayer,
+  type RuleExplanation,
+} from './rules-catalog.js';
 export {
   exportAuditZip,
   type ExportRange,

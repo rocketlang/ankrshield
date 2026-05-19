@@ -1070,6 +1070,7 @@ function PendingConsentForm({
       variant="tofu"
       allowLabel="Allow with budget"
       allowDisabled={!budgetValid}
+      didacticRuleId="ASD-005"
       subject={{
         pendingId: pending.pendingId,
         appId: pending.appId,
@@ -1197,6 +1198,7 @@ function DanRow({
       title={`${pending.appId} → ${pending.hostname}`}
       variant="dan"
       allowLabel="Allow this request"
+      didacticRuleId="ASD-005"
       subject={{
         pendingId: pending.pendingId,
         appId: pending.appId,

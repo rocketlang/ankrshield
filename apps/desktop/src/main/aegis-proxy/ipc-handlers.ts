@@ -28,6 +28,8 @@ import type { AuditRetentionWorker } from './audit-retention-worker.js';
 import { exportAuditZip, type ExportRange } from './audit-export.js';
 import type { RequestLogStore, ReplayEntry } from './request-log-store.js';
 import type { RequestAuditStore, RequestAuditReceipt } from './request-audit-store.js';
+import type { DidacticModeStore, DidacticState } from './didactic-mode-store.js';
+import { RULES_CATALOG, RULE_IDS, type RuleExplanation } from './rules-catalog.js';
 import {
   RETENTION_DAYS_DEFAULT,
   RETENTION_DAYS_MIN,
@@ -652,6 +654,38 @@ export function registerRequestAuditHandlers(store: RequestAuditStore): () => vo
   return () => {
     ipcMain.removeHandler('aegis-proxy:request-audit-stats');
     ipcMain.removeHandler('aegis-proxy:request-audit-list');
+  };
+}
+
+/**
+ * Wire didactic-mode IPC (ASD-T-033 / FR-18). Three operations:
+ *   - state: returns { enabled, updated_at } for the toggle UI
+ *   - set:   flips the toggle; persisted via DidacticModeStore
+ *   - rule:  returns one rule explanation by ID
+ *   - rules: returns the full catalog (renderer caches it once)
+ */
+export function registerDidacticModeHandlers(store: DidacticModeStore): () => void {
+  ipcMain.handle('aegis-proxy:didactic-state', (): DidacticState => store.get());
+  ipcMain.handle(
+    'aegis-proxy:didactic-set',
+    (_e, input: { enabled: boolean }): DidacticState => store.set(!!input.enabled)
+  );
+  ipcMain.handle(
+    'aegis-proxy:didactic-rule',
+    (_e, input: { id: string }): RuleExplanation | null => RULES_CATALOG[input.id] ?? null
+  );
+  ipcMain.handle(
+    'aegis-proxy:didactic-rules',
+    (): { rules: Record<string, RuleExplanation>; ids: readonly string[] } => ({
+      rules: RULES_CATALOG,
+      ids: RULE_IDS,
+    })
+  );
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:didactic-state');
+    ipcMain.removeHandler('aegis-proxy:didactic-set');
+    ipcMain.removeHandler('aegis-proxy:didactic-rule');
+    ipcMain.removeHandler('aegis-proxy:didactic-rules');
   };
 }
 

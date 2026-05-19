@@ -313,6 +313,34 @@ contextBridge.exposeInMainWorld('electronAPI', {
         detail: Record<string, unknown>;
       }>
     >,
+
+  // ─── Didactic mode + rules catalog (ASD-T-033 / FR-18) ───────────────────
+  aegisProxyDidacticState: () =>
+    ipcRenderer.invoke('aegis-proxy:didactic-state') as Promise<{
+      enabled: boolean;
+      updated_at: string | null;
+    }>,
+  aegisProxyDidacticSet: (input: { enabled: boolean }) =>
+    ipcRenderer.invoke('aegis-proxy:didactic-set', input) as Promise<{
+      enabled: boolean;
+      updated_at: string | null;
+    }>,
+  aegisProxyDidacticRule: (input: { id: string }) =>
+    ipcRenderer.invoke('aegis-proxy:didactic-rule', input) as Promise<{
+      id: string;
+      title: string;
+      summary: string;
+      citation: string;
+      layer?: 'A' | 'B' | 'C';
+    } | null>,
+  aegisProxyDidacticRules: () =>
+    ipcRenderer.invoke('aegis-proxy:didactic-rules') as Promise<{
+      rules: Record<
+        string,
+        { id: string; title: string; summary: string; citation: string; layer?: 'A' | 'B' | 'C' }
+      >;
+      ids: readonly string[];
+    }>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────

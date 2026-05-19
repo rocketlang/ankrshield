@@ -60,6 +60,7 @@ import { AuditRetentionWorker } from './audit-retention-worker.js';
 import { ConsentStore } from './consent-store.js';
 import { RequestLogStore } from './request-log-store.js';
 import { RequestAuditStore } from './request-audit-store.js';
+import { DidacticModeStore } from './didactic-mode-store.js';
 
 /**
  * Start the aegis-proxy.
@@ -178,6 +179,19 @@ export async function startAegisProxy(
   // and T-029 ZIP export pick these up automatically by directory walk.
   const requestAudit = new RequestAuditStore();
   requestAudit.attach(events);
+
+  // ASD-T-033: didactic-mode toggle (FR-18). Off by default per ASD-008.
+  // Renderer consumes this via IPC; main side just persists the bit.
+  const didacticMode = new DidacticModeStore();
+  try {
+    await didacticMode.load();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[aegis-proxy] didactic.json load failed; defaulting to off:',
+      err instanceof Error ? err.message : err
+    );
+  }
 
   // ASD-T-013 (doctrine-corrected — see vivechana Part 2): per-request PII
   // boundary. Default policy = 'redact' for all apps; P2 ASD-T-015 (TOFU)
@@ -370,6 +384,7 @@ export async function startAegisProxy(
         auditWorker,
         requestLog,
         requestAudit,
+        didacticMode,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {
@@ -386,6 +401,7 @@ export async function startAegisProxy(
               appsPolicy.stop().catch(() => {});
               danTimeoutStore.stop().catch(() => {});
               auditRetention.stop().catch(() => {});
+              didacticMode.stop().catch(() => {});
               err ? rej(err) : res();
             })
           ),

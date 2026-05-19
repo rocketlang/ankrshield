@@ -16,6 +16,8 @@
 
 import { ReactNode, useEffect, useRef, useState } from 'react';
 
+import { DidacticHint } from './DidacticHint';
+
 export interface ConsentDialogProps {
   /** Stable identifier for this ceremony (e.g. 'tofu-consent', 'dan-gate'). */
   ceremony: string;
@@ -57,6 +59,13 @@ export interface ConsentDialogProps {
   allowLabel?: string;
   /** Label override for the Deny button (default: "Deny"). */
   denyLabel?: string;
+  /**
+   * Optional rule ID for the didactic hint (ASD-T-033 / FR-18). When set
+   * AND the user has didactic mode on, a small "why this dialog" block
+   * renders below consequences/revocation. Pass the ASD-* rule that the
+   * dialog itself enforces, not a downstream rule.
+   */
+  didacticRuleId?: string;
 }
 
 const VARIANT_CLASSES: Record<
@@ -103,6 +112,7 @@ export function ConsentDialog(props: ConsentDialogProps) {
     children,
     allowLabel = 'Allow',
     denyLabel = 'Deny',
+    didacticRuleId,
   } = props;
 
   const [impressionId, setImpressionId] = useState<string | null>(null);
@@ -182,6 +192,12 @@ export function ConsentDialog(props: ConsentDialogProps) {
           </div>
         ) : null}
       </dl>
+      {didacticRuleId ? (
+        <DidacticHint
+          ruleId={didacticRuleId}
+          tone={variant === 'dan' ? 'danger' : variant === 'tofu' ? 'warn' : 'neutral'}
+        />
+      ) : null}
       {children ? <div className="bg-gray-900/60 rounded p-2">{children}</div> : null}
       <div className="flex gap-2 pt-1">
         <button
