@@ -59,6 +59,7 @@ import { AuditRetentionStore } from './audit-retention-config.js';
 import { AuditRetentionWorker } from './audit-retention-worker.js';
 import { ConsentStore } from './consent-store.js';
 import { RequestLogStore } from './request-log-store.js';
+import { RequestAuditStore } from './request-audit-store.js';
 
 /**
  * Start the aegis-proxy.
@@ -170,6 +171,13 @@ export async function startAegisProxy(
   // shutdown detach is implicit (process exit clears memory).
   const requestLog = new RequestLogStore();
   requestLog.attach(events);
+
+  // ASD-T-031: persisted per-request audit receipts (FR-13). Subscribes to
+  // the same bus and writes a PRAMANA-format JSON per gated event under
+  // ~/.ankrshield/audit/YYYY-MM-DD/request-*.json. T-028 retention worker
+  // and T-029 ZIP export pick these up automatically by directory walk.
+  const requestAudit = new RequestAuditStore();
+  requestAudit.attach(events);
 
   // ASD-T-013 (doctrine-corrected — see vivechana Part 2): per-request PII
   // boundary. Default policy = 'redact' for all apps; P2 ASD-T-015 (TOFU)
@@ -361,6 +369,7 @@ export async function startAegisProxy(
         auditRetention,
         auditWorker,
         requestLog,
+        requestAudit,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {
@@ -370,6 +379,7 @@ export async function startAegisProxy(
               pendingDan.drain();
               eventTally.detach();
               requestLog.detach();
+              requestAudit.detach();
               auditWorker.stop();
               appsStore.stop().catch(() => {});
               budgetLedger.stop().catch(() => {});

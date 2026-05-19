@@ -27,6 +27,7 @@ import {
   registerAuditRetentionHandlers,
   registerAuditExportHandlers,
   registerReplayHandlers,
+  registerRequestAuditHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -140,6 +141,8 @@ app.whenReady().then(async () => {
       registerAuditExportHandlers();
       // ASD-T-030: 24h replay IPC (FR-16 P3).
       registerReplayHandlers(aegisProxyHandle.requestLog);
+      // ASD-T-031: persisted per-request audit receipts IPC (FR-13).
+      registerRequestAuditHandlers(aegisProxyHandle.requestAudit);
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

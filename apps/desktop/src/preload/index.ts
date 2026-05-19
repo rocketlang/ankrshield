@@ -292,6 +292,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
       newest: string | null;
       size: number;
     }>,
+
+  // ─── Per-request audit receipts (ASD-T-031 / FR-13) ──────────────────────
+  aegisProxyRequestAuditStats: () =>
+    ipcRenderer.invoke('aegis-proxy:request-audit-stats') as Promise<{
+      writes: number;
+      errors: number;
+    }>,
+  aegisProxyRequestAuditList: (input: { date: string }) =>
+    ipcRenderer.invoke('aegis-proxy:request-audit-list', input) as Promise<
+      Array<{
+        receipt_id: string;
+        schema_version: 1;
+        ts: string;
+        event_kind: string;
+        request_id: string;
+        app_id: string;
+        hostname: string;
+        rule: string;
+        detail: Record<string, unknown>;
+      }>
+    >,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────

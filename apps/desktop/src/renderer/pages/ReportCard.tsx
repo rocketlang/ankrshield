@@ -100,6 +100,7 @@ declare global {
         daysCovered: string[];
         digestsIncluded: string[];
       }>;
+      aegisProxyRequestAuditStats?: () => Promise<{ writes: number; errors: number }>;
     };
   }
 }
@@ -210,6 +211,8 @@ export function ReportCard() {
           tone={totals.denials > 0 ? 'warn' : 'ok'}
         />
       </div>
+
+      <RequestAuditTile />
 
       {!loaded ? (
         <p className="text-sm text-gray-400">Loading…</p>
@@ -599,6 +602,44 @@ function AuditExportButton() {
           {status}
         </span>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * RequestAuditTile (ASD-T-031 / FR-13) — small banner that shows how many
+ * PRAMANA per-request receipts the current session has flushed to disk.
+ * Polls every 5s; intentionally minimal — the value of the tile is *that
+ * the count moves*, proving the audit pipeline is live, not a dashboard.
+ */
+function RequestAuditTile() {
+  const [stats, setStats] = useState<{ writes: number; errors: number } | null>(null);
+  useEffect(() => {
+    const tick = async () => {
+      const api = window.electronAPI;
+      if (!api?.aegisProxyRequestAuditStats) return;
+      try {
+        setStats(await api.aegisProxyRequestAuditStats());
+      } catch {
+        // ignore
+      }
+    };
+    void tick();
+    const id = setInterval(tick, 5000);
+    return () => clearInterval(id);
+  }, []);
+  if (!stats) return null;
+  const tone = stats.errors > 0 ? 'text-amber-300' : 'text-gray-300';
+  return (
+    <div className="flex items-center gap-3 text-xs text-gray-400 bg-gray-900 border border-gray-800 rounded px-3 py-2">
+      <span className="font-medium text-gray-300">Audit receipts (this session):</span>
+      <span className={tone}>
+        {stats.writes} written
+        {stats.errors > 0 ? ` · ${stats.errors} errors` : ''}
+      </span>
+      <span className="text-gray-500">
+        → ~/.ankrshield/audit/{new Date().toISOString().slice(0, 10)}/request-*.json
+      </span>
     </div>
   );
 }

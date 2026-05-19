@@ -27,6 +27,7 @@ import type { AuditRetentionStore, AuditRetentionConfig } from './audit-retentio
 import type { AuditRetentionWorker } from './audit-retention-worker.js';
 import { exportAuditZip, type ExportRange } from './audit-export.js';
 import type { RequestLogStore, ReplayEntry } from './request-log-store.js';
+import type { RequestAuditStore, RequestAuditReceipt } from './request-audit-store.js';
 import {
   RETENTION_DAYS_DEFAULT,
   RETENTION_DAYS_MIN,
@@ -633,6 +634,24 @@ export function registerReplayHandlers(log: RequestLogStore): () => void {
   return () => {
     ipcMain.removeHandler('aegis-proxy:replay-list');
     ipcMain.removeHandler('aegis-proxy:replay-range');
+  };
+}
+
+/**
+ * Wire request-audit IPC (ASD-T-031 / FR-13). Two operations:
+ *   - stats: per-session write + error counters for a renderer tile
+ *   - list:  receipts for a given YYYY-MM-DD (diagnostic; not paged — caller
+ *            picks a day, store returns chronological order)
+ */
+export function registerRequestAuditHandlers(store: RequestAuditStore): () => void {
+  ipcMain.handle('aegis-proxy:request-audit-stats', () => store.stats());
+  ipcMain.handle(
+    'aegis-proxy:request-audit-list',
+    (_e, input: { date: string }): Promise<RequestAuditReceipt[]> => store.list(input.date)
+  );
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:request-audit-stats');
+    ipcMain.removeHandler('aegis-proxy:request-audit-list');
   };
 }
 

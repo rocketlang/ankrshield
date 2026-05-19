@@ -124,6 +124,7 @@ export {
   registerAuditRetentionHandlers,
   registerAuditExportHandlers,
   registerReplayHandlers,
+  registerRequestAuditHandlers,
   type BudgetSummaryRow,
 } from './ipc-handlers.js';
 export {
@@ -131,6 +132,11 @@ export {
   type ReplayEntry,
   type RequestLogStoreOptions,
 } from './request-log-store.js';
+export {
+  RequestAuditStore,
+  type RequestAuditReceipt,
+  type RequestAuditStoreOptions,
+} from './request-audit-store.js';
 export {
   exportAuditZip,
   type ExportRange,
