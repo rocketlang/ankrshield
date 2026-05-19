@@ -17,6 +17,7 @@ import {
   BudgetPanel,
   ReportCard,
   Replay,
+  SettingsAegis,
 } from './pages';
 import { useAppStore } from './stores/appStore';
 import { useSettingsStore } from './stores/settingsStore';
@@ -80,6 +81,7 @@ function App() {
             <Route path="replay" element={<Replay />} />
             <Route path="setup/root-ca" element={<SetupRootCA />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="settings/aegis" element={<SettingsAegis />} />
           </Route>
         </Routes>
       </HashRouter>

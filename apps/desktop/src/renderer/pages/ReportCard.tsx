@@ -200,6 +200,12 @@ export function ReportCard() {
           </Link>
           <DidacticToggle />
           <AuditExportButton />
+          <Link
+            to="/settings/aegis"
+            className="text-xs px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200"
+          >
+            ⚙️ AEGIS Settings
+          </Link>
         </div>
       </header>
 

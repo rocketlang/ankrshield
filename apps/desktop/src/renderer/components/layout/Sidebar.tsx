@@ -17,6 +17,7 @@ const navItems: NavItem[] = [
   { to: '/devices', label: 'Devices', icon: '💻' },
   { to: '/agents', label: 'Agents', icon: '🤖' },
   { to: '/settings', label: 'Settings', icon: '⚙️' },
+  { to: '/settings/aegis', label: 'AEGIS Settings', icon: '🛡️' },
 ];
 
 export function Sidebar() {
