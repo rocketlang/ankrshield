@@ -30,6 +30,8 @@ import type { RequestLogStore, ReplayEntry } from './request-log-store.js';
 import type { RequestAuditStore, RequestAuditReceipt } from './request-audit-store.js';
 import type { DidacticModeStore, DidacticState } from './didactic-mode-store.js';
 import { RULES_CATALOG, RULE_IDS, type RuleExplanation } from './rules-catalog.js';
+import type { DanInboundConfigStore, DanInboundConfig } from './dan-inbound-config.js';
+import type { TelegramInboundPoller } from './dan-inbound-poller.js';
 import {
   RETENTION_DAYS_DEFAULT,
   RETENTION_DAYS_MIN,
@@ -686,6 +688,56 @@ export function registerDidacticModeHandlers(store: DidacticModeStore): () => vo
     ipcMain.removeHandler('aegis-proxy:didactic-set');
     ipcMain.removeHandler('aegis-proxy:didactic-rule');
     ipcMain.removeHandler('aegis-proxy:didactic-rules');
+  };
+}
+
+/**
+ * Wire DAN inbound (reply-to-approve) IPC (ASD-T-034 / FR-10 extension).
+ * Four operations:
+ *   - state: returns the persisted DanInboundConfig
+ *   - set:   patch the config; if tg_polling_enabled flips, start/stop poller
+ *   - tick:  manual poll trigger (Settings page "Test connection" button)
+ *   - running: boolean for the poller's current state (drives toggle UI)
+ *
+ * The poller is owned by the proxy lifecycle (startAegisProxy constructs +
+ * shutdown stops). Toggling enabled here is the lone runtime control.
+ */
+export function registerDanInboundHandlers(
+  store: DanInboundConfigStore,
+  poller: TelegramInboundPoller
+): () => void {
+  ipcMain.handle('aegis-proxy:dan-inbound-state', (): DanInboundConfig => store.get());
+  ipcMain.handle(
+    'aegis-proxy:dan-inbound-set',
+    (
+      _e,
+      input: {
+        tg_polling_enabled?: boolean;
+        wa_polling_enabled?: boolean;
+        poll_interval_ms?: number;
+      }
+    ): { config: DanInboundConfig; running: boolean } => {
+      const before = store.get().tg_polling_enabled;
+      const next = store.set(input);
+      const after = next.tg_polling_enabled;
+      if (before && !after) {
+        poller.stop();
+      } else if (!before && after) {
+        poller.start(next.poll_interval_ms);
+      }
+      return { config: next, running: poller.isRunning() };
+    }
+  );
+  ipcMain.handle(
+    'aegis-proxy:dan-inbound-tick',
+    async (): Promise<{ results: unknown[] }> => ({ results: await poller.tick() })
+  );
+  ipcMain.handle('aegis-proxy:dan-inbound-running', () => ({ running: poller.isRunning() }));
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:dan-inbound-state');
+    ipcMain.removeHandler('aegis-proxy:dan-inbound-set');
+    ipcMain.removeHandler('aegis-proxy:dan-inbound-tick');
+    ipcMain.removeHandler('aegis-proxy:dan-inbound-running');
   };
 }
 

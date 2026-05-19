@@ -126,6 +126,7 @@ export {
   registerReplayHandlers,
   registerRequestAuditHandlers,
   registerDidacticModeHandlers,
+  registerDanInboundHandlers,
   type BudgetSummaryRow,
 } from './ipc-handlers.js';
 export {
@@ -150,6 +151,27 @@ export {
   rulesByLayer,
   type RuleExplanation,
 } from './rules-catalog.js';
+export {
+  parseDanReply,
+  nonceForPendingId,
+  type DanReply,
+  type DanReplyDecision,
+} from './dan-inbound-parser.js';
+export {
+  DanInboundConfigStore,
+  clampInterval,
+  POLL_INTERVAL_DEFAULT_MS,
+  POLL_INTERVAL_MIN_MS,
+  POLL_INTERVAL_MAX_MS,
+  type DanInboundConfig,
+  type DanInboundConfigStoreOptions,
+} from './dan-inbound-config.js';
+export {
+  TelegramInboundPoller,
+  type TelegramInboundPollerOptions,
+  type TelegramUpdate,
+  type UpdateDispatchResult,
+} from './dan-inbound-poller.js';
 export {
   exportAuditZip,
   type ExportRange,

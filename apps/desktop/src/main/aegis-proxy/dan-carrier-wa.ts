@@ -18,6 +18,7 @@
 
 import type { DanNotifier, DanRequest, DanOutcome } from './pending-dan-queue.js';
 import { getWhatsAppCreds, type WhatsAppCredentials } from './dan-carrier-credentials.js';
+import { nonceForPendingId } from './dan-inbound-parser.js';
 
 export interface WhatsAppDanCarrierOptions {
   /** Injection for tests. Defaults to globalThis.fetch. */
@@ -104,13 +105,15 @@ function buildMessage(req: DanRequest): string {
   const more = req.highRiskTools.length - 1;
   const what = top ? `${top.name} (${top.category})` : 'an unknown HIGH-category tool';
   const moreStr = more > 0 ? ` + ${more} more` : '';
+  const nonce = nonceForPendingId(req.pendingId);
   return (
     `🛡 ankrshield DAN gate\n\n` +
     `App: ${req.appId}\n` +
     `Tool: ${what}${moreStr}\n` +
     `→ ${req.hostname}\n\n` +
     `Open ankrshield to approve. Held at ${req.heldAt.slice(11, 19)} UTC. ` +
-    `Auto-deny in ${Math.round(req.timeoutMs / 1000)}s.`
+    `Auto-deny in ${Math.round(req.timeoutMs / 1000)}s.\n\n` +
+    `Reply with "y ${nonce}" to approve or "n ${nonce}" to deny once inbound polling ships.`
   );
 }
 

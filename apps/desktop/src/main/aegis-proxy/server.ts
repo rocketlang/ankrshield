@@ -61,6 +61,8 @@ import { ConsentStore } from './consent-store.js';
 import { RequestLogStore } from './request-log-store.js';
 import { RequestAuditStore } from './request-audit-store.js';
 import { DidacticModeStore } from './didactic-mode-store.js';
+import { DanInboundConfigStore } from './dan-inbound-config.js';
+import { TelegramInboundPoller } from './dan-inbound-poller.js';
 
 /**
  * Start the aegis-proxy.
@@ -193,6 +195,20 @@ export async function startAegisProxy(
     );
   }
 
+  // ASD-T-034: DAN inbound (reply-to-approve on Telegram) config — load
+  // here so error reporting happens with the other config loads. The
+  // poller itself is constructed below, after `pendingDan` exists.
+  const danInbound = new DanInboundConfigStore();
+  try {
+    await danInbound.load();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[aegis-proxy] dan-inbound.json load failed; defaulting to off:',
+      err instanceof Error ? err.message : err
+    );
+  }
+
   // ASD-T-013 (doctrine-corrected — see vivechana Part 2): per-request PII
   // boundary. Default policy = 'redact' for all apps; P2 ASD-T-015 (TOFU)
   // will let users override per-app to 'block' or 'off'.
@@ -306,6 +322,13 @@ export async function startAegisProxy(
     },
   });
 
+  // ASD-T-034: Telegram inbound poller — constructed now that pendingDan
+  // exists. Auto-starts only if the persisted config says so.
+  const tgInboundPoller = new TelegramInboundPoller(pendingDan);
+  if (danInbound.get().tg_polling_enabled) {
+    tgInboundPoller.start(danInbound.get().poll_interval_ms);
+  }
+
   const server = http.createServer((req, res) =>
     handleHttpRequest(
       req,
@@ -385,6 +408,8 @@ export async function startAegisProxy(
         requestLog,
         requestAudit,
         didacticMode,
+        danInbound,
+        tgInboundPoller,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {
@@ -402,6 +427,8 @@ export async function startAegisProxy(
               danTimeoutStore.stop().catch(() => {});
               auditRetention.stop().catch(() => {});
               didacticMode.stop().catch(() => {});
+              tgInboundPoller.stop();
+              danInbound.stop().catch(() => {});
               err ? rej(err) : res();
             })
           ),

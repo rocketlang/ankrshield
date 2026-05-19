@@ -341,6 +341,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
       >;
       ids: readonly string[];
     }>,
+
+  // ─── DAN inbound (reply-to-approve, ASD-T-034 / FR-10 ext) ───────────────
+  aegisProxyDanInboundState: () =>
+    ipcRenderer.invoke('aegis-proxy:dan-inbound-state') as Promise<{
+      tg_polling_enabled: boolean;
+      wa_polling_enabled: boolean;
+      poll_interval_ms: number;
+      updated_at: string | null;
+    }>,
+  aegisProxyDanInboundSet: (input: {
+    tg_polling_enabled?: boolean;
+    wa_polling_enabled?: boolean;
+    poll_interval_ms?: number;
+  }) =>
+    ipcRenderer.invoke('aegis-proxy:dan-inbound-set', input) as Promise<{
+      config: {
+        tg_polling_enabled: boolean;
+        wa_polling_enabled: boolean;
+        poll_interval_ms: number;
+        updated_at: string | null;
+      };
+      running: boolean;
+    }>,
+  aegisProxyDanInboundTick: () =>
+    ipcRenderer.invoke('aegis-proxy:dan-inbound-tick') as Promise<{ results: unknown[] }>,
+  aegisProxyDanInboundRunning: () =>
+    ipcRenderer.invoke('aegis-proxy:dan-inbound-running') as Promise<{ running: boolean }>,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────

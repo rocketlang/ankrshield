@@ -29,6 +29,7 @@ import {
   registerReplayHandlers,
   registerRequestAuditHandlers,
   registerDidacticModeHandlers,
+  registerDanInboundHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -146,6 +147,8 @@ app.whenReady().then(async () => {
       registerRequestAuditHandlers(aegisProxyHandle.requestAudit);
       // ASD-T-033: didactic-mode toggle + rules catalog IPC (FR-18).
       registerDidacticModeHandlers(aegisProxyHandle.didacticMode);
+      // ASD-T-034: DAN inbound (reply-to-approve) toggle IPC.
+      registerDanInboundHandlers(aegisProxyHandle.danInbound, aegisProxyHandle.tgInboundPoller);
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',

@@ -64,6 +64,10 @@ export interface AegisProxyHandle {
   requestAudit: import('./request-audit-store.js').RequestAuditStore;
   /** Didactic-mode toggle (ASD-T-033 / FR-18). */
   didacticMode: import('./didactic-mode-store.js').DidacticModeStore;
+  /** DAN inbound (reply-to-approve) config store (ASD-T-034). */
+  danInbound: import('./dan-inbound-config.js').DanInboundConfigStore;
+  /** Telegram getUpdates poller for DAN reply-to-approve (ASD-T-034). */
+  tgInboundPoller: import('./dan-inbound-poller.js').TelegramInboundPoller;
   stop(): Promise<void>;
 }
 

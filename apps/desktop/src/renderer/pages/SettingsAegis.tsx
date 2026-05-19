@@ -68,6 +68,26 @@ declare global {
         enabled: boolean;
       }) => Promise<{ enabled: boolean; updated_at: string | null }>;
       aegisProxyRequestAuditStats?: () => Promise<{ writes: number; errors: number }>;
+      aegisProxyDanInboundState?: () => Promise<{
+        tg_polling_enabled: boolean;
+        wa_polling_enabled: boolean;
+        poll_interval_ms: number;
+        updated_at: string | null;
+      }>;
+      aegisProxyDanInboundSet?: (input: {
+        tg_polling_enabled?: boolean;
+        wa_polling_enabled?: boolean;
+        poll_interval_ms?: number;
+      }) => Promise<{
+        config: {
+          tg_polling_enabled: boolean;
+          wa_polling_enabled: boolean;
+          poll_interval_ms: number;
+          updated_at: string | null;
+        };
+        running: boolean;
+      }>;
+      aegisProxyDanInboundRunning?: () => Promise<{ running: boolean }>;
     };
   }
 }
@@ -261,6 +281,11 @@ function DanGateSection() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [wa, setWa] = useState<{ configured: boolean; from_number?: string } | null>(null);
   const [tg, setTg] = useState<{ configured: boolean; chat_id?: string } | null>(null);
+  const [inbound, setInbound] = useState<{
+    tg_polling_enabled: boolean;
+    poll_interval_ms: number;
+  } | null>(null);
+  const [inboundRunning, setInboundRunning] = useState<boolean>(false);
 
   useEffect(() => {
     void (async () => {
@@ -288,8 +313,43 @@ function DanGateSection() {
           // ignore
         }
       }
+      if (api?.aegisProxyDanInboundState) {
+        try {
+          const s = await api.aegisProxyDanInboundState();
+          setInbound({
+            tg_polling_enabled: s.tg_polling_enabled,
+            poll_interval_ms: s.poll_interval_ms,
+          });
+        } catch {
+          // ignore
+        }
+      }
+      if (api?.aegisProxyDanInboundRunning) {
+        try {
+          setInboundRunning((await api.aegisProxyDanInboundRunning()).running);
+        } catch {
+          // ignore
+        }
+      }
     })();
   }, []);
+
+  const flipInbound = async () => {
+    const api = window.electronAPI;
+    if (!api?.aegisProxyDanInboundSet || !inbound) return;
+    try {
+      const r = await api.aegisProxyDanInboundSet({
+        tg_polling_enabled: !inbound.tg_polling_enabled,
+      });
+      setInbound({
+        tg_polling_enabled: r.config.tg_polling_enabled,
+        poll_interval_ms: r.config.poll_interval_ms,
+      });
+      setInboundRunning(r.running);
+    } catch {
+      // ignore
+    }
+  };
 
   const commitTimeout = async () => {
     if (globalMs == null) return;
@@ -360,9 +420,36 @@ function DanGateSection() {
               )
             }
           />
+          <Row
+            label="Telegram reply-to-approve"
+            value={
+              inbound == null ? (
+                <Spinner inline />
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Toggle
+                    checked={inbound.tg_polling_enabled}
+                    onChange={() => void flipInbound()}
+                    label={inbound.tg_polling_enabled ? 'ON' : 'OFF'}
+                  />
+                  {inbound.tg_polling_enabled ? (
+                    <Badge tone={inboundRunning ? 'ok' : 'warn'}>
+                      {inboundRunning
+                        ? `polling every ${Math.round(inbound.poll_interval_ms / 1000)}s`
+                        : 'not running (creds?)'}
+                    </Badge>
+                  ) : null}
+                </span>
+              )
+            }
+          />
           <p className="text-xs text-gray-400 pt-1">
             Carrier credentials are stored in the OS keychain (ASD-003). The OS-notification carrier
-            is always available as fallback.
+            is always available as fallback. Inbound: reply{' '}
+            <code className="text-gray-300">"y &lt;nonce&gt;"</code> or{' '}
+            <code className="text-gray-300">"n &lt;nonce&gt;"</code> on Telegram (nonce embedded in
+            the outgoing DAN message). WhatsApp inbound is a future task (Meta Business webhook
+            setup required).
           </p>
         </>
       )}

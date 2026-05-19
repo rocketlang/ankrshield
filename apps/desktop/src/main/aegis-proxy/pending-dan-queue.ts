@@ -162,6 +162,28 @@ export class PendingDanQueue {
     return true;
   }
 
+  /**
+   * Resolve by the 6-char prefix nonce embedded in outgoing carrier
+   * messages (ASD-T-034). Returns the resolved pendingId or null if no
+   * pending entry matches. Ambiguity-tolerant: if two pendingIds share
+   * the same 6-char prefix (probability ~1 in 16M), the FIRST match
+   * wins — newest pending entries are preferred since `pending` is a
+   * Map that preserves insertion order on iteration.
+   *
+   * @rule:ASD-008 — DAN carrier inbound path resolves via embedded nonce.
+   */
+  resolveByNonce(nonce: string, decision: 'allow' | 'deny'): string | null {
+    const wanted = nonce.toLowerCase();
+    if (wanted.length !== 6) return null;
+    for (const [pendingId, entry] of this.pending.entries()) {
+      if (pendingId.slice(0, 6).toLowerCase() === wanted) {
+        entry.resolve({ decision, timedOut: false });
+        return pendingId;
+      }
+    }
+    return null;
+  }
+
   list(): DanRequest[] {
     return [...this.pending.values()].map((e) => e.req);
   }
