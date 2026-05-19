@@ -127,6 +127,7 @@ export {
   registerRequestAuditHandlers,
   registerDidacticModeHandlers,
   registerDanInboundHandlers,
+  registerKeyMigrationHandlers,
   type BudgetSummaryRow,
 } from './ipc-handlers.js';
 export {
@@ -172,6 +173,23 @@ export {
   type TelegramUpdate,
   type UpdateDispatchResult,
 } from './dan-inbound-poller.js';
+export {
+  scanForKeysOnDisk,
+  defaultScanPaths,
+  inferProvider,
+  makeFindingId,
+  KEY_PATTERN,
+  type KeyFinding,
+  type KeyProvider,
+  type ScanOptions,
+} from './key-on-disk-scanner.js';
+export {
+  migrateKeyOnDisk,
+  MIGRATED_KEY_SERVICE,
+  type MigrationResult,
+  type MigrationError,
+  type MigrateKeyOptions,
+} from './key-on-disk-migrator.js';
 export {
   exportAuditZip,
   type ExportRange,

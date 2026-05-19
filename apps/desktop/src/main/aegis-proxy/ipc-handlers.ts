@@ -32,6 +32,8 @@ import type { DidacticModeStore, DidacticState } from './didactic-mode-store.js'
 import { RULES_CATALOG, RULE_IDS, type RuleExplanation } from './rules-catalog.js';
 import type { DanInboundConfigStore, DanInboundConfig } from './dan-inbound-config.js';
 import type { TelegramInboundPoller } from './dan-inbound-poller.js';
+import { scanForKeysOnDisk, type KeyFinding } from './key-on-disk-scanner.js';
+import { migrateKeyOnDisk } from './key-on-disk-migrator.js';
 import {
   RETENTION_DAYS_DEFAULT,
   RETENTION_DAYS_MIN,
@@ -738,6 +740,47 @@ export function registerDanInboundHandlers(
     ipcMain.removeHandler('aegis-proxy:dan-inbound-set');
     ipcMain.removeHandler('aegis-proxy:dan-inbound-tick');
     ipcMain.removeHandler('aegis-proxy:dan-inbound-running');
+  };
+}
+
+/**
+ * Wire INF-ASD-002 key-on-disk migration IPC (ASD-T-036). Three operations:
+ *   - list:    return cached findings + lastScanAt (cheap)
+ *   - rescan:  re-walk well-known paths, update cached ref, return findings
+ *   - migrate: per-finding migration — backup, keychain write, source rewrite.
+ *              Caller is responsible for having shown a ConsentDialog first.
+ */
+export function registerKeyMigrationHandlers(ref: {
+  current: KeyFinding[];
+  lastScanAt: string;
+}): () => void {
+  ipcMain.handle('aegis-proxy:key-list-findings', () => ({
+    findings: ref.current,
+    lastScanAt: ref.lastScanAt,
+  }));
+  ipcMain.handle('aegis-proxy:key-rescan', async () => {
+    ref.current = await scanForKeysOnDisk();
+    ref.lastScanAt = new Date().toISOString();
+    return { findings: ref.current, lastScanAt: ref.lastScanAt };
+  });
+  ipcMain.handle('aegis-proxy:key-migrate-one', async (_e, input: { finding_id: string }) => {
+    const target = ref.current.find((f) => f.finding_id === input.finding_id);
+    if (!target) {
+      return { ok: false, reason: 'finding_id not in current list (re-scan first?)' };
+    }
+    const result = await migrateKeyOnDisk(target);
+    if (result.ok) {
+      // Drop the now-migrated finding from the cached list so the UI
+      // visibly shrinks. Stale lastScanAt is intentional — the rest of
+      // the list reflects the original scan time.
+      ref.current = ref.current.filter((f) => f.finding_id !== input.finding_id);
+    }
+    return result;
+  });
+  return () => {
+    ipcMain.removeHandler('aegis-proxy:key-list-findings');
+    ipcMain.removeHandler('aegis-proxy:key-rescan');
+    ipcMain.removeHandler('aegis-proxy:key-migrate-one');
   };
 }
 

@@ -68,6 +68,14 @@ export interface AegisProxyHandle {
   danInbound: import('./dan-inbound-config.js').DanInboundConfigStore;
   /** Telegram getUpdates poller for DAN reply-to-approve (ASD-T-034). */
   tgInboundPoller: import('./dan-inbound-poller.js').TelegramInboundPoller;
+  /**
+   * Key-on-disk scan findings (ASD-T-036 / INF-ASD-002). Mutable ref so the
+   * IPC re-scan handler can update the same array consumers see.
+   */
+  keyFindingsRef: {
+    current: import('./key-on-disk-scanner.js').KeyFinding[];
+    lastScanAt: string;
+  };
   stop(): Promise<void>;
 }
 

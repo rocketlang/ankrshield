@@ -63,6 +63,7 @@ import { RequestAuditStore } from './request-audit-store.js';
 import { DidacticModeStore } from './didactic-mode-store.js';
 import { DanInboundConfigStore } from './dan-inbound-config.js';
 import { TelegramInboundPoller } from './dan-inbound-poller.js';
+import { scanForKeysOnDisk, type KeyFinding } from './key-on-disk-scanner.js';
 
 /**
  * Start the aegis-proxy.
@@ -329,6 +330,33 @@ export async function startAegisProxy(
     tgInboundPoller.start(danInbound.get().poll_interval_ms);
   }
 
+  // ASD-T-036: one-shot key-on-disk scan at startup (INF-ASD-002). Cached
+  // findings are surfaced via IPC; migration is per-key, user-confirmed,
+  // and never automatic. Re-scan is also IPC-exposed.
+  let keyFindings: KeyFinding[] = [];
+  try {
+    keyFindings = await scanForKeysOnDisk();
+    if (keyFindings.length > 0) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[aegis-proxy] INF-ASD-002: found ${keyFindings.length} plaintext key(s) on disk; ` +
+          `user must confirm migration via Settings → AEGIS Settings → Keys on disk.`
+      );
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[aegis-proxy] key-on-disk scan failed; skipping:',
+      err instanceof Error ? err.message : err
+    );
+  }
+  // The "store" here is a tiny mutable holder so an IPC re-scan can update
+  // the same reference passed to registerKeyMigrationHandlers.
+  const keyFindingsRef: { current: KeyFinding[]; lastScanAt: string } = {
+    current: keyFindings,
+    lastScanAt: new Date().toISOString(),
+  };
+
   const server = http.createServer((req, res) =>
     handleHttpRequest(
       req,
@@ -410,6 +438,7 @@ export async function startAegisProxy(
         didacticMode,
         danInbound,
         tgInboundPoller,
+        keyFindingsRef,
         stop: () =>
           new Promise<void>((res, rej) =>
             server.close((err) => {

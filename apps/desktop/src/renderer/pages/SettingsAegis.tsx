@@ -88,6 +88,37 @@ declare global {
         running: boolean;
       }>;
       aegisProxyDanInboundRunning?: () => Promise<{ running: boolean }>;
+      aegisProxyKeyListFindings?: () => Promise<{
+        findings: Array<{
+          path: string;
+          line: number;
+          provider: 'anthropic' | 'openai' | 'unknown';
+          preview: string;
+          finding_id: string;
+        }>;
+        lastScanAt: string;
+      }>;
+      aegisProxyKeyRescan?: () => Promise<{
+        findings: Array<{
+          path: string;
+          line: number;
+          provider: 'anthropic' | 'openai' | 'unknown';
+          preview: string;
+          finding_id: string;
+        }>;
+        lastScanAt: string;
+      }>;
+      aegisProxyKeyMigrateOne?: (input: { finding_id: string }) => Promise<
+        | {
+            ok: true;
+            finding_id: string;
+            backup_path: string;
+            keychain_service: string;
+            keychain_account: string;
+            migrated_at: string;
+          }
+        | { ok: false; finding_id?: string; reason: string }
+      >;
     };
   }
 }
@@ -122,12 +153,154 @@ export function SettingsAegis() {
       </header>
 
       <IdentityTrustSection />
+      <KeyOnDiskSection />
       <AppsTofuSection />
       <DanGateSection />
       <AuditRetentionSection />
       <KillSwitchSummarySection />
       <DidacticPoofSection />
     </div>
+  );
+}
+
+// ─── 1b. Key-on-disk findings (ASD-T-036 / INF-ASD-002) ──────────────────────
+
+interface KeyFinding {
+  path: string;
+  line: number;
+  provider: 'anthropic' | 'openai' | 'unknown';
+  preview: string;
+  finding_id: string;
+}
+
+function KeyOnDiskSection() {
+  const [findings, setFindings] = useState<KeyFinding[] | null>(null);
+  const [lastScanAt, setLastScanAt] = useState<string | null>(null);
+  const [migratingId, setMigratingId] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    const api = window.electronAPI;
+    if (!api?.aegisProxyKeyListFindings) return;
+    try {
+      const r = await api.aegisProxyKeyListFindings();
+      setFindings(r.findings);
+      setLastScanAt(r.lastScanAt);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const rescan = async () => {
+    const api = window.electronAPI;
+    if (!api?.aegisProxyKeyRescan) return;
+    try {
+      const r = await api.aegisProxyKeyRescan();
+      setFindings(r.findings);
+      setLastScanAt(r.lastScanAt);
+      setLastResult(`Re-scan complete: ${r.findings.length} finding(s).`);
+    } catch (err) {
+      setLastResult(`Re-scan failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const migrate = async (f: KeyFinding) => {
+    const api = window.electronAPI;
+    if (!api?.aegisProxyKeyMigrateOne) return;
+    // Spec calls for ConsentDialog here; for this iteration we use a
+    // window.confirm gate so the migration cannot fire by misclick. A
+    // future task can lift this to a full ConsentDialog with PRAMANA
+    // record (FR-21).
+    const ok = window.confirm(
+      `Migrate ${f.provider} key from ${f.path}:${f.line}?\n\n` +
+        `This will:\n` +
+        `1. Back up the source file (mode 0o600)\n` +
+        `2. Write the secret to OS keychain\n` +
+        `3. Replace the secret in-line with a [MIGRATED-…] marker\n\n` +
+        `You can undo by restoring the backup. The keychain entry will remain.`
+    );
+    if (!ok) return;
+    setMigratingId(f.finding_id);
+    try {
+      const r = await api.aegisProxyKeyMigrateOne({ finding_id: f.finding_id });
+      if (r.ok) {
+        setLastResult(
+          `Migrated: secret moved to keychain ${r.keychain_service}/${r.keychain_account}; ` +
+            `backup at ${r.backup_path}.`
+        );
+        await refresh();
+      } else {
+        setLastResult(`Migration failed: ${r.reason}`);
+      }
+    } finally {
+      setMigratingId(null);
+    }
+  };
+
+  return (
+    <Section title="Keys on disk (migration scanner)" rule="INF-ASD-002 · ASD-003">
+      {findings == null ? (
+        <Spinner />
+      ) : (
+        <>
+          <Row
+            label="Last scan"
+            value={
+              <span className="text-xs text-gray-300">
+                {lastScanAt ? new Date(lastScanAt).toLocaleString() : '—'} · {findings.length}{' '}
+                finding{findings.length === 1 ? '' : 's'}
+              </span>
+            }
+          />
+          {findings.length === 0 ? (
+            <p className="text-xs text-gray-400 pt-1">
+              No plaintext API keys found in the well-known paths (.env, .bashrc, .zshrc, .profile,
+              .aws/credentials, etc.).
+            </p>
+          ) : (
+            <ul className="space-y-2 pt-1">
+              {findings.map((f) => (
+                <li
+                  key={f.finding_id}
+                  className="flex items-center justify-between gap-3 text-xs bg-gray-900 border border-gray-700 rounded px-2 py-2"
+                >
+                  <span className="font-mono text-gray-300 truncate">
+                    <Badge tone={f.provider === 'unknown' ? 'warn' : 'neutral'}>{f.provider}</Badge>{' '}
+                    {f.path}:{f.line} → <span className="text-amber-300">{f.preview}…</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => void migrate(f)}
+                    disabled={migratingId === f.finding_id}
+                    className="text-[11px] px-2 py-1 rounded bg-ankr-green text-white hover:bg-green-600 disabled:opacity-50"
+                  >
+                    {migratingId === f.finding_id ? 'Migrating…' : 'Migrate to keychain'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="pt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void rescan()}
+              className="text-xs px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200"
+            >
+              Re-scan now
+            </button>
+            {lastResult ? <span className="text-xs text-gray-300">{lastResult}</span> : null}
+          </div>
+          <p className="text-xs text-gray-400 pt-1">
+            INF-ASD-002 ground truth: keys belong in the OS keychain, not on disk. Each migration
+            backs up the source file before zeroing, so you can recover manually if needed.
+          </p>
+        </>
+      )}
+    </Section>
   );
 }
 

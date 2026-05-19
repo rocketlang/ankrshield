@@ -368,6 +368,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('aegis-proxy:dan-inbound-tick') as Promise<{ results: unknown[] }>,
   aegisProxyDanInboundRunning: () =>
     ipcRenderer.invoke('aegis-proxy:dan-inbound-running') as Promise<{ running: boolean }>,
+
+  // ─── Key-on-disk migration (ASD-T-036 / INF-ASD-002) ─────────────────────
+  aegisProxyKeyListFindings: () =>
+    ipcRenderer.invoke('aegis-proxy:key-list-findings') as Promise<{
+      findings: Array<{
+        path: string;
+        line: number;
+        provider: 'anthropic' | 'openai' | 'unknown';
+        preview: string;
+        finding_id: string;
+      }>;
+      lastScanAt: string;
+    }>,
+  aegisProxyKeyRescan: () =>
+    ipcRenderer.invoke('aegis-proxy:key-rescan') as Promise<{
+      findings: Array<{
+        path: string;
+        line: number;
+        provider: 'anthropic' | 'openai' | 'unknown';
+        preview: string;
+        finding_id: string;
+      }>;
+      lastScanAt: string;
+    }>,
+  aegisProxyKeyMigrateOne: (input: { finding_id: string }) =>
+    ipcRenderer.invoke('aegis-proxy:key-migrate-one', input) as Promise<
+      | {
+          ok: true;
+          finding_id: string;
+          backup_path: string;
+          keychain_service: string;
+          keychain_account: string;
+          migrated_at: string;
+        }
+      | { ok: false; finding_id?: string; reason: string }
+    >,
 });
 
 // ─── Aegis Proxy CA setup payloads (renderer-side mirror) ───────────────────

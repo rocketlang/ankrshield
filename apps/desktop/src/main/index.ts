@@ -30,6 +30,7 @@ import {
   registerRequestAuditHandlers,
   registerDidacticModeHandlers,
   registerDanInboundHandlers,
+  registerKeyMigrationHandlers,
   type AegisProxyHandle,
 } from './aegis-proxy/index.js';
 
@@ -149,6 +150,8 @@ app.whenReady().then(async () => {
       registerDidacticModeHandlers(aegisProxyHandle.didacticMode);
       // ASD-T-034: DAN inbound (reply-to-approve) toggle IPC.
       registerDanInboundHandlers(aegisProxyHandle.danInbound, aegisProxyHandle.tgInboundPoller);
+      // ASD-T-036: INF-ASD-002 key-on-disk migration IPC.
+      registerKeyMigrationHandlers(aegisProxyHandle.keyFindingsRef);
     } catch (err) {
       console.warn(
         '[aegis-proxy] failed to start; privacy engine continues without agentic safeguard:',
