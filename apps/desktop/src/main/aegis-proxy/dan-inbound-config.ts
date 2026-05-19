@@ -27,11 +27,26 @@ export const POLL_INTERVAL_DEFAULT_MS = 5_000;
 export const POLL_INTERVAL_MIN_MS = 2_000;
 export const POLL_INTERVAL_MAX_MS = 60_000;
 
+// WA webhook port — defaults to 4859 (adjacent to the proxy's 4857; 4858
+// is taken by bitmaskos on the ANKR dev VM per ports.json — picking 4859
+// so the desktop avoids collision when developing against the fleet).
+// User binds this to ngrok / cloudflared to expose to Meta.
+export const WA_WEBHOOK_PORT_DEFAULT = 4859;
+export const WA_WEBHOOK_PORT_MIN = 1024;
+export const WA_WEBHOOK_PORT_MAX = 65535;
+
 export interface DanInboundConfig {
   tg_polling_enabled: boolean;
-  /** Reserved for future WhatsApp inbound. Not honoured by the poller yet. */
+  /**
+   * WA inbound enabled. When ON + WaWebhookCredentials present, the
+   * WA inbound webhook server (ASD-T-038) binds wa_webhook_port on
+   * 127.0.0.1. User then exposes via cloudflared / ngrok.
+   */
   wa_polling_enabled: boolean;
+  /** Telegram getUpdates poll interval (T-034). */
   poll_interval_ms: number;
+  /** WA inbound webhook localhost-bind port (T-038). */
+  wa_webhook_port: number;
   updated_at: string | null;
 }
 
@@ -39,6 +54,7 @@ const DEFAULT_STATE: DanInboundConfig = {
   tg_polling_enabled: false,
   wa_polling_enabled: false,
   poll_interval_ms: POLL_INTERVAL_DEFAULT_MS,
+  wa_webhook_port: WA_WEBHOOK_PORT_DEFAULT,
   updated_at: null,
 };
 
@@ -80,6 +96,11 @@ export class DanInboundConfigStore {
             ? parsed.poll_interval_ms
             : POLL_INTERVAL_DEFAULT_MS
         ),
+        wa_webhook_port: clampWebhookPort(
+          typeof parsed.wa_webhook_port === 'number'
+            ? parsed.wa_webhook_port
+            : WA_WEBHOOK_PORT_DEFAULT
+        ),
         updated_at: typeof parsed.updated_at === 'string' ? parsed.updated_at : null,
       };
     } catch {
@@ -115,6 +136,13 @@ export class DanInboundConfigStore {
       const clamped = clampInterval(patch.poll_interval_ms);
       if (clamped !== this.state.poll_interval_ms) {
         this.state.poll_interval_ms = clamped;
+        changed = true;
+      }
+    }
+    if (patch.wa_webhook_port != null) {
+      const clamped = clampWebhookPort(patch.wa_webhook_port);
+      if (clamped !== this.state.wa_webhook_port) {
+        this.state.wa_webhook_port = clamped;
         changed = true;
       }
     }
@@ -165,6 +193,11 @@ export class DanInboundConfigStore {
 export function clampInterval(ms: number): number {
   if (!Number.isFinite(ms)) return POLL_INTERVAL_DEFAULT_MS;
   return Math.min(POLL_INTERVAL_MAX_MS, Math.max(POLL_INTERVAL_MIN_MS, Math.round(ms)));
+}
+
+export function clampWebhookPort(p: number): number {
+  if (!Number.isFinite(p)) return WA_WEBHOOK_PORT_DEFAULT;
+  return Math.min(WA_WEBHOOK_PORT_MAX, Math.max(WA_WEBHOOK_PORT_MIN, Math.round(p)));
 }
 
 export const __paths = { DEFAULT_PATH };

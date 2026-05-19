@@ -32,6 +32,13 @@ import type { DidacticModeStore, DidacticState } from './didactic-mode-store.js'
 import { RULES_CATALOG, RULE_IDS, type RuleExplanation } from './rules-catalog.js';
 import type { DanInboundConfigStore, DanInboundConfig } from './dan-inbound-config.js';
 import type { TelegramInboundPoller } from './dan-inbound-poller.js';
+import type { WaInboundWebhookServer } from './wa-inbound-webhook-server.js';
+import {
+  getWaWebhookCreds,
+  setWaWebhookCreds,
+  clearWaWebhookCreds,
+  hasWaWebhookCreds,
+} from './wa-webhook-creds.js';
 import { scanForKeysOnDisk, type KeyFinding } from './key-on-disk-scanner.js';
 import { migrateKeyOnDisk } from './key-on-disk-migrator.js';
 import {
@@ -706,40 +713,96 @@ export function registerDidacticModeHandlers(store: DidacticModeStore): () => vo
  */
 export function registerDanInboundHandlers(
   store: DanInboundConfigStore,
-  poller: TelegramInboundPoller
+  poller: TelegramInboundPoller,
+  /** WA inbound webhook server (ASD-T-038). Optional for back-compat with older test wiring. */
+  waServer?: WaInboundWebhookServer
 ): () => void {
   ipcMain.handle('aegis-proxy:dan-inbound-state', (): DanInboundConfig => store.get());
   ipcMain.handle(
     'aegis-proxy:dan-inbound-set',
-    (
+    async (
       _e,
       input: {
         tg_polling_enabled?: boolean;
         wa_polling_enabled?: boolean;
         poll_interval_ms?: number;
+        wa_webhook_port?: number;
       }
-    ): { config: DanInboundConfig; running: boolean } => {
-      const before = store.get().tg_polling_enabled;
+    ): Promise<{ config: DanInboundConfig; tg_running: boolean; wa_running: boolean }> => {
+      const before = store.get();
       const next = store.set(input);
-      const after = next.tg_polling_enabled;
-      if (before && !after) {
+      // TG transition
+      if (before.tg_polling_enabled && !next.tg_polling_enabled) {
         poller.stop();
-      } else if (!before && after) {
+      } else if (!before.tg_polling_enabled && next.tg_polling_enabled) {
         poller.start(next.poll_interval_ms);
       }
-      return { config: next, running: poller.isRunning() };
+      // WA transition — only when waServer was wired in.
+      if (waServer) {
+        if (before.wa_polling_enabled && !next.wa_polling_enabled) {
+          await waServer.stop().catch(() => {});
+        } else if (!before.wa_polling_enabled && next.wa_polling_enabled) {
+          await waServer.start(next.wa_webhook_port).catch(() => {});
+        } else if (next.wa_polling_enabled && before.wa_webhook_port !== next.wa_webhook_port) {
+          // Port changed while running — restart.
+          await waServer.stop().catch(() => {});
+          await waServer.start(next.wa_webhook_port).catch(() => {});
+        }
+      }
+      return {
+        config: next,
+        tg_running: poller.isRunning(),
+        wa_running: waServer?.isRunning() ?? false,
+      };
     }
   );
   ipcMain.handle(
     'aegis-proxy:dan-inbound-tick',
     async (): Promise<{ results: unknown[] }> => ({ results: await poller.tick() })
   );
-  ipcMain.handle('aegis-proxy:dan-inbound-running', () => ({ running: poller.isRunning() }));
+  ipcMain.handle('aegis-proxy:dan-inbound-running', () => ({
+    tg_running: poller.isRunning(),
+    wa_running: waServer?.isRunning() ?? false,
+    wa_stats: waServer?.stats() ?? null,
+  }));
+
+  // ASD-T-038: WA webhook credential management (app_secret + verify_token).
+  ipcMain.handle('aegis-proxy:wa-webhook-creds-status', () => hasWaWebhookCreds());
+  ipcMain.handle(
+    'aegis-proxy:wa-webhook-creds-set',
+    (_e, input: { app_secret: string; verify_token?: string }) => {
+      try {
+        const saved = setWaWebhookCreds(input);
+        // Don't leak the secret back — return only the verify_token preview.
+        return {
+          ok: true as const,
+          verify_token_preview: saved.verify_token.slice(0, 8),
+        };
+      } catch (err) {
+        return { ok: false as const, error: err instanceof Error ? err.message : String(err) };
+      }
+    }
+  );
+  ipcMain.handle('aegis-proxy:wa-webhook-creds-clear', () => ({
+    cleared: clearWaWebhookCreds(),
+  }));
+  ipcMain.handle('aegis-proxy:wa-webhook-creds-get-verify-token', () => {
+    // Renderer needs the FULL verify_token once to paste into Meta. Returned
+    // only on explicit request — never on status() — so it doesn't leak into
+    // diagnostic polling.
+    const c = getWaWebhookCreds();
+    return c ? { verify_token: c.verify_token } : { verify_token: null };
+  });
+
   return () => {
     ipcMain.removeHandler('aegis-proxy:dan-inbound-state');
     ipcMain.removeHandler('aegis-proxy:dan-inbound-set');
     ipcMain.removeHandler('aegis-proxy:dan-inbound-tick');
     ipcMain.removeHandler('aegis-proxy:dan-inbound-running');
+    ipcMain.removeHandler('aegis-proxy:wa-webhook-creds-status');
+    ipcMain.removeHandler('aegis-proxy:wa-webhook-creds-set');
+    ipcMain.removeHandler('aegis-proxy:wa-webhook-creds-clear');
+    ipcMain.removeHandler('aegis-proxy:wa-webhook-creds-get-verify-token');
   };
 }
 

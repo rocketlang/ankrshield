@@ -367,7 +367,28 @@ contextBridge.exposeInMainWorld('electronAPI', {
   aegisProxyDanInboundTick: () =>
     ipcRenderer.invoke('aegis-proxy:dan-inbound-tick') as Promise<{ results: unknown[] }>,
   aegisProxyDanInboundRunning: () =>
-    ipcRenderer.invoke('aegis-proxy:dan-inbound-running') as Promise<{ running: boolean }>,
+    ipcRenderer.invoke('aegis-proxy:dan-inbound-running') as Promise<{
+      tg_running: boolean;
+      wa_running: boolean;
+      wa_stats: { running: boolean; port: number; dispatched: number; sigFailures: number } | null;
+    }>,
+
+  // ─── WA inbound webhook (ASD-T-038) ───────────────────────────────────────
+  aegisProxyWaWebhookCredsStatus: () =>
+    ipcRenderer.invoke('aegis-proxy:wa-webhook-creds-status') as Promise<{
+      configured: boolean;
+      verify_token_preview?: string;
+    }>,
+  aegisProxyWaWebhookCredsSet: (input: { app_secret: string; verify_token?: string }) =>
+    ipcRenderer.invoke('aegis-proxy:wa-webhook-creds-set', input) as Promise<
+      { ok: true; verify_token_preview: string } | { ok: false; error: string }
+    >,
+  aegisProxyWaWebhookCredsClear: () =>
+    ipcRenderer.invoke('aegis-proxy:wa-webhook-creds-clear') as Promise<{ cleared: boolean }>,
+  aegisProxyWaWebhookCredsGetVerifyToken: () =>
+    ipcRenderer.invoke('aegis-proxy:wa-webhook-creds-get-verify-token') as Promise<{
+      verify_token: string | null;
+    }>,
 
   // ─── Key-on-disk migration (ASD-T-036 / INF-ASD-002) ─────────────────────
   aegisProxyKeyListFindings: () =>

@@ -148,8 +148,13 @@ app.whenReady().then(async () => {
       registerRequestAuditHandlers(aegisProxyHandle.requestAudit);
       // ASD-T-033: didactic-mode toggle + rules catalog IPC (FR-18).
       registerDidacticModeHandlers(aegisProxyHandle.didacticMode);
-      // ASD-T-034: DAN inbound (reply-to-approve) toggle IPC.
-      registerDanInboundHandlers(aegisProxyHandle.danInbound, aegisProxyHandle.tgInboundPoller);
+      // ASD-T-034 + T-038: DAN inbound (reply-to-approve) toggle IPC — both
+      // Telegram poller AND WhatsApp webhook server controls live here.
+      registerDanInboundHandlers(
+        aegisProxyHandle.danInbound,
+        aegisProxyHandle.tgInboundPoller,
+        aegisProxyHandle.waInboundServer
+      );
       // ASD-T-036: INF-ASD-002 key-on-disk migration IPC.
       registerKeyMigrationHandlers(aegisProxyHandle.keyFindingsRef);
     } catch (err) {

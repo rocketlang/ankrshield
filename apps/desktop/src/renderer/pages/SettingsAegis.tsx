@@ -76,20 +76,42 @@ declare global {
         poll_interval_ms: number;
         updated_at: string | null;
       }>;
+      aegisProxyDanInboundRunning?: () => Promise<{
+        tg_running: boolean;
+        wa_running: boolean;
+        wa_stats: {
+          running: boolean;
+          port: number;
+          dispatched: number;
+          sigFailures: number;
+        } | null;
+      }>;
       aegisProxyDanInboundSet?: (input: {
         tg_polling_enabled?: boolean;
         wa_polling_enabled?: boolean;
         poll_interval_ms?: number;
+        wa_webhook_port?: number;
       }) => Promise<{
         config: {
           tg_polling_enabled: boolean;
           wa_polling_enabled: boolean;
           poll_interval_ms: number;
+          wa_webhook_port: number;
           updated_at: string | null;
         };
-        running: boolean;
+        tg_running: boolean;
+        wa_running: boolean;
       }>;
-      aegisProxyDanInboundRunning?: () => Promise<{ running: boolean }>;
+      aegisProxyWaWebhookCredsStatus?: () => Promise<{
+        configured: boolean;
+        verify_token_preview?: string;
+      }>;
+      aegisProxyWaWebhookCredsSet?: (input: {
+        app_secret: string;
+        verify_token?: string;
+      }) => Promise<{ ok: true; verify_token_preview: string } | { ok: false; error: string }>;
+      aegisProxyWaWebhookCredsClear?: () => Promise<{ cleared: boolean }>;
+      aegisProxyWaWebhookCredsGetVerifyToken?: () => Promise<{ verify_token: string | null }>;
       aegisProxyKeyListFindings?: () => Promise<{
         findings: Array<{
           path: string;
@@ -158,10 +180,258 @@ export function SettingsAegis() {
       <KeyOnDiskSection />
       <AppsTofuSection />
       <DanGateSection />
+      <WhatsAppInboundSection />
       <AuditRetentionSection />
       <KillSwitchSummarySection />
       <DidacticPoofSection />
     </div>
+  );
+}
+
+// ─── 3b. WhatsApp inbound webhook (ASD-T-038) ────────────────────────────────
+
+function WhatsAppInboundSection() {
+  const [credsConfigured, setCredsConfigured] = useState<boolean | null>(null);
+  const [verifyTokenPreview, setVerifyTokenPreview] = useState<string | null>(null);
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [waPort, setWaPort] = useState<number | null>(null);
+  const [waRunning, setWaRunning] = useState<boolean>(false);
+  const [waStats, setWaStats] = useState<{ dispatched: number; sigFailures: number } | null>(null);
+  const [revealedToken, setRevealedToken] = useState<string | null>(null);
+  const [appSecretInput, setAppSecretInput] = useState<string>('');
+  const [verifyTokenInput, setVerifyTokenInput] = useState<string>('');
+  const [setMsg, setSetMsg] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    const api = window.electronAPI;
+    if (api?.aegisProxyWaWebhookCredsStatus) {
+      try {
+        const s = await api.aegisProxyWaWebhookCredsStatus();
+        setCredsConfigured(s.configured);
+        setVerifyTokenPreview(s.verify_token_preview ?? null);
+      } catch {
+        // ignore
+      }
+    }
+    if (api?.aegisProxyDanInboundState) {
+      try {
+        const s = await api.aegisProxyDanInboundState();
+        setEnabled(s.wa_polling_enabled);
+        setWaPort(s.wa_webhook_port);
+      } catch {
+        // ignore
+      }
+    }
+    if (api?.aegisProxyDanInboundRunning) {
+      try {
+        const r = await api.aegisProxyDanInboundRunning();
+        setWaRunning(r.wa_running);
+        if (r.wa_stats)
+          setWaStats({ dispatched: r.wa_stats.dispatched, sigFailures: r.wa_stats.sigFailures });
+      } catch {
+        // ignore
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+    const id = setInterval(refresh, 5000);
+    return () => clearInterval(id);
+  }, [refresh]);
+
+  const flipEnabled = async () => {
+    const api = window.electronAPI;
+    if (!api?.aegisProxyDanInboundSet || enabled === null) return;
+    try {
+      const r = await api.aegisProxyDanInboundSet({ wa_polling_enabled: !enabled });
+      setEnabled(r.config.wa_polling_enabled);
+      setWaPort(r.config.wa_webhook_port);
+      setWaRunning(r.wa_running);
+    } catch {
+      // ignore
+    }
+  };
+
+  const saveCreds = async () => {
+    const api = window.electronAPI;
+    if (!api?.aegisProxyWaWebhookCredsSet) return;
+    if (!appSecretInput.trim()) {
+      setSetMsg('app_secret required');
+      return;
+    }
+    try {
+      const r = await api.aegisProxyWaWebhookCredsSet({
+        app_secret: appSecretInput.trim(),
+        verify_token: verifyTokenInput.trim() || undefined,
+      });
+      if (r.ok) {
+        setSetMsg(`Saved · verify_token preview ${r.verify_token_preview}…`);
+        setAppSecretInput('');
+        setVerifyTokenInput('');
+        await refresh();
+      } else {
+        setSetMsg(`Save failed: ${r.error}`);
+      }
+    } catch (err) {
+      setSetMsg(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const clearCreds = async () => {
+    const api = window.electronAPI;
+    if (!api?.aegisProxyWaWebhookCredsClear) return;
+    if (
+      !window.confirm(
+        'Clear stored WhatsApp webhook credentials? Inbound will stop until reconfigured.'
+      )
+    ) {
+      return;
+    }
+    try {
+      await api.aegisProxyWaWebhookCredsClear();
+      setRevealedToken(null);
+      await refresh();
+    } catch {
+      // ignore
+    }
+  };
+
+  const revealToken = async () => {
+    const api = window.electronAPI;
+    if (!api?.aegisProxyWaWebhookCredsGetVerifyToken) return;
+    try {
+      const r = await api.aegisProxyWaWebhookCredsGetVerifyToken();
+      setRevealedToken(r.verify_token);
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <Section title="WhatsApp inbound webhook" rule="ASD-T-038 · ASD-008">
+      {credsConfigured == null ? (
+        <Spinner />
+      ) : (
+        <>
+          <Row
+            label="Credentials"
+            value={
+              credsConfigured ? (
+                <Badge tone="ok">configured · verify_token {verifyTokenPreview}…</Badge>
+              ) : (
+                <Badge tone="warn">not configured</Badge>
+              )
+            }
+          />
+          <Row
+            label="Inbound polling"
+            value={
+              enabled == null ? (
+                <Spinner inline />
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Toggle
+                    checked={enabled}
+                    onChange={() => void flipEnabled()}
+                    label={enabled ? 'ON' : 'OFF'}
+                  />
+                  {enabled ? (
+                    <Badge tone={waRunning ? 'ok' : 'warn'}>
+                      {waRunning
+                        ? `listening 127.0.0.1:${waPort}`
+                        : credsConfigured
+                          ? 'not running (port?)'
+                          : 'not running (creds?)'}
+                    </Badge>
+                  ) : null}
+                </span>
+              )
+            }
+          />
+          {waStats ? (
+            <Row
+              label="Session stats"
+              value={
+                <span className="text-xs text-gray-300">
+                  {waStats.dispatched} dispatched ·{' '}
+                  {waStats.sigFailures > 0 ? (
+                    <span className="text-amber-300">{waStats.sigFailures} sig failures</span>
+                  ) : (
+                    '0 sig failures'
+                  )}
+                </span>
+              }
+            />
+          ) : null}
+          {credsConfigured ? (
+            <div className="pt-2 flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => void revealToken()}
+                className="text-xs px-3 py-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-200"
+              >
+                Reveal verify_token (paste into Meta)
+              </button>
+              <button
+                type="button"
+                onClick={() => void clearCreds()}
+                className="text-xs px-3 py-1.5 rounded bg-red-800 hover:bg-red-700 text-white"
+              >
+                Clear credentials
+              </button>
+              {revealedToken ? (
+                <code className="text-[11px] text-amber-200 font-mono break-all">
+                  {revealedToken}
+                </code>
+              ) : null}
+            </div>
+          ) : (
+            <div className="pt-2 space-y-2 border-t border-gray-700 mt-2">
+              <p className="text-xs text-gray-400">
+                Set the Meta App Secret (used to verify <code>X-Hub-Signature-256</code> on every
+                incoming POST). If you leave verify_token blank, a random 32-char hex token is
+                generated — paste it into Meta&apos;s webhook configuration page.
+              </p>
+              <input
+                type="password"
+                placeholder="Meta App Secret"
+                value={appSecretInput}
+                onChange={(e) => setAppSecretInput(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white font-mono"
+              />
+              <input
+                type="text"
+                placeholder="verify_token (optional — leave blank to auto-generate)"
+                value={verifyTokenInput}
+                onChange={(e) => setVerifyTokenInput(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => void saveCreds()}
+                disabled={!appSecretInput.trim()}
+                className="text-xs px-3 py-1.5 rounded bg-ankr-green text-white hover:bg-green-600 disabled:opacity-50"
+              >
+                Save credentials
+              </button>
+              {setMsg ? <span className="text-xs text-gray-300 ml-2">{setMsg}</span> : null}
+            </div>
+          )}
+          <p className="text-xs text-gray-400 pt-1">
+            Webhook listens on <code className="text-gray-300">127.0.0.1:{waPort ?? '?'}</code>{' '}
+            only. Expose to Meta via{' '}
+            <code className="text-gray-300">
+              cloudflared tunnel --url http://localhost:{waPort ?? '?'}
+            </code>{' '}
+            or ngrok / Tailscale Funnel. Webhook URL path is{' '}
+            <code className="text-gray-300">/webhook/whatsapp</code>. Every POST is HMAC-verified
+            (ASD-004 deny-first). Outgoing DAN messages already embed the same nonce format as
+            Telegram inbound — works end-to-end the moment your tunnel is live.
+          </p>
+        </>
+      )}
+    </Section>
   );
 }
 
@@ -577,7 +847,7 @@ function DanGateSection() {
       }
       if (api?.aegisProxyDanInboundRunning) {
         try {
-          setInboundRunning((await api.aegisProxyDanInboundRunning()).running);
+          setInboundRunning((await api.aegisProxyDanInboundRunning()).tg_running);
         } catch {
           // ignore
         }
@@ -596,7 +866,7 @@ function DanGateSection() {
         tg_polling_enabled: r.config.tg_polling_enabled,
         poll_interval_ms: r.config.poll_interval_ms,
       });
-      setInboundRunning(r.running);
+      setInboundRunning(r.tg_running);
     } catch {
       // ignore
     }

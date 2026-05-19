@@ -174,6 +174,20 @@ export {
   type UpdateDispatchResult,
 } from './dan-inbound-poller.js';
 export {
+  WaInboundWebhookServer,
+  type WaInboundWebhookServerOptions,
+  type WaInboundDispatchResult,
+} from './wa-inbound-webhook-server.js';
+export { verifyMetaSignature, computeMetaSignature } from './wa-webhook-signature.js';
+export { parseWaWebhookPayload, type ParsedWaMessage } from './wa-webhook-parser.js';
+export {
+  getWaWebhookCreds,
+  setWaWebhookCreds,
+  clearWaWebhookCreds,
+  hasWaWebhookCreds,
+  type WaWebhookCredentials,
+} from './wa-webhook-creds.js';
+export {
   scanForKeysOnDisk,
   defaultScanPaths,
   inferProvider,

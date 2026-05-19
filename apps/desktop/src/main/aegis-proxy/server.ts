@@ -63,6 +63,7 @@ import { RequestAuditStore } from './request-audit-store.js';
 import { DidacticModeStore } from './didactic-mode-store.js';
 import { DanInboundConfigStore } from './dan-inbound-config.js';
 import { TelegramInboundPoller } from './dan-inbound-poller.js';
+import { WaInboundWebhookServer } from './wa-inbound-webhook-server.js';
 import { scanForKeysOnDisk, type KeyFinding } from './key-on-disk-scanner.js';
 
 /**
@@ -330,6 +331,15 @@ export async function startAegisProxy(
     tgInboundPoller.start(danInbound.get().poll_interval_ms);
   }
 
+  // ASD-T-038: WhatsApp inbound webhook server (loopback only). Auto-starts
+  // only if the persisted config says so AND WA webhook creds are present.
+  // User exposes via cloudflared / ngrok / Tailscale Funnel for Meta to
+  // POST to. Off by default per ASD-008.
+  const waInboundServer = new WaInboundWebhookServer(pendingDan);
+  if (danInbound.get().wa_polling_enabled) {
+    await waInboundServer.start(danInbound.get().wa_webhook_port).catch(() => {});
+  }
+
   // ASD-T-036: one-shot key-on-disk scan at startup (INF-ASD-002). Cached
   // findings are surfaced via IPC; migration is per-key, user-confirmed,
   // and never automatic. Re-scan is also IPC-exposed.
@@ -438,6 +448,7 @@ export async function startAegisProxy(
         didacticMode,
         danInbound,
         tgInboundPoller,
+        waInboundServer,
         keyFindingsRef,
         stop: () =>
           new Promise<void>((res, rej) =>
@@ -457,6 +468,7 @@ export async function startAegisProxy(
               auditRetention.stop().catch(() => {});
               didacticMode.stop().catch(() => {});
               tgInboundPoller.stop();
+              waInboundServer.stop().catch(() => {});
               danInbound.stop().catch(() => {});
               err ? rej(err) : res();
             })
