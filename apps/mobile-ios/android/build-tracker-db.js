@@ -236,5 +236,46 @@ bulkInsert([
   ['app-measurement.com', 'analytics', 'Google', 2],
 ]);
 
+// ── 5. Canonical 203k DNS blocklist (WS1-T4) — phone blocks what the server shield blocks ──
+// Same source + filter as packages/dns-resolver (ndjson-loader): DNS-reliable formats only
+// (hosts/adguard). EasyList/EasyPrivacy are browser adblock rules — wrong to sinkhole at DNS
+// (they put github.com/wikipedia.org as rule subjects, not block-the-domain).
+const NDJSON = path.resolve(
+  __dirname,
+  '../../../packages/dns-resolver/.cache/blocklists/parsed-domains.ndjson'
+);
+if (fs.existsSync(NDJSON)) {
+  const DNS_OK = new Set(['hosts', 'adguard']);
+  const valid = (d) =>
+    d.length >= 4 &&
+    d.length <= 253 &&
+    d.includes('.') &&
+    !/^\d{1,3}(\.\d{1,3}){3}$/.test(d) &&
+    !/[^a-z0-9.-]/.test(d) &&
+    !d.startsWith('.') &&
+    !d.endsWith('.') &&
+    !d.startsWith('-') &&
+    !d.includes('..');
+  const catMap = { 'ads-tracking': 'advertising', ads: 'advertising', tracking: 'analytics', malware: 'malware', social: 'social' };
+  const lines = fs.readFileSync(NDJSON, 'utf8').split('\n');
+  let added = 0;
+  const ingest = db.transaction(() => {
+    for (const line of lines) {
+      if (!line) continue;
+      let e;
+      try { e = JSON.parse(line); } catch { continue; }
+      const d = (e.domain || '').toLowerCase().trim();
+      if (!d || !valid(d) || !DNS_OK.has(e.format)) continue;
+      insert.run(d, catMap[e.category] || 'tracking', null, e.category === 'malware' ? 4 : 2, today);
+      added++;
+    }
+  });
+  ingest();
+  console.log(`  + ${added.toLocaleString()} from canonical DNS blocklist (hosts/adguard)`);
+} else {
+  console.warn(`  ! canonical blocklist not found at ${NDJSON} — sqlite has curated list only`);
+}
+
+count = db.prepare('SELECT COUNT(*) AS c FROM trackers').get().c;
 db.close();
-console.log(`✓ tracker-db.sqlite built: ${count} domains → ${OUT}`);
+console.log(`✓ tracker-db.sqlite built: ${count.toLocaleString()} domains → ${OUT}`);
