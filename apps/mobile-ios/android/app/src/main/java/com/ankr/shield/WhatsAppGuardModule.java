@@ -149,14 +149,13 @@ public class WhatsAppGuardModule extends ReactContextBaseJavaModule {
      */
     @ReactMethod
     public void autoStart(Promise promise) {
-        SharedPreferences prefs = getReactApplicationContext()
-            .getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE);
-        if (!prefs.getBoolean(KEY_ENABLED, false)) {
-            promise.resolve(false); // not opted in yet — do nothing
-            return;
-        }
-        if (running) { promise.resolve(true); return; }
-        startGuard(promise);
+        // DISABLED auto-start on launch (2026-06-11): on Android 14 (targetSdk 34), starting this
+        // foreground service at app launch can throw inside startForeground() (FGS-type mismatch /
+        // notification permission not yet granted). When startForeground doesn't complete in time,
+        // Android's watchdog crashes the WHOLE app with ForegroundServiceDidNotStartInTimeException
+        // — a crash on open. The guard is opt-in/secondary; never auto-start it during launch.
+        // Users can start it manually from its screen once the FGS type is declared properly.
+        promise.resolve(false);
     }
 
     /**
