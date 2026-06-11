@@ -10,7 +10,9 @@
     "splash": {
       "backgroundColor": "#0f172a"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -18,7 +20,10 @@
       },
       "package": "com.ankr.shield",
       "versionCode": 1,
-      "permissions": ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"],
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ],
       "googleServicesFile": "./google-services.json"
     },
     "ios": {
@@ -31,9 +36,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "ankrshield"
+        "projectId": "7b8e6b82-ddbc-4c55-834e-790666a07db6"
       }
     },
-    "owner": "ankrlabs"
+    "owner": "powerpbox1"
   }
 }
