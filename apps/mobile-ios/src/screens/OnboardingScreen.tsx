@@ -111,172 +111,175 @@ export function OnboardingScreen({ navigation }: any) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <View style={s.root}>
+    <View style={styles.root}>
       <ScrollView
         ref={scrollRef}
         horizontal
         pagingEnabled
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
-        style={s.pager}
+        style={styles.pager}
       >
         {/* ── Step 0: Welcome ─────────────────────────────────────────── */}
-        <View style={s.page}>
-          <View style={s.welcomeTop}>
-            <Text style={s.bigShield}>🛡</Text>
-            <Text style={s.welcomeTitle}>{s.onboarding.title}</Text>
-            <Text style={s.welcomeSub}>{s.onboarding.subtitle}</Text>
+        <View style={styles.page}>
+          <View style={styles.welcomeTop}>
+            <Text style={styles.bigShield}>🛡</Text>
+            <Text style={styles.welcomeTitle}>{s.onboarding.title}</Text>
+            <Text style={styles.welcomeSub}>{s.onboarding.subtitle}</Text>
           </View>
-          <View style={s.welcomeBottom}>
-            <Text style={s.trustLine}>{s.onboarding.trustLine}</Text>
-            <TouchableOpacity style={s.primaryBtn} onPress={() => goTo(1)}>
-              <Text style={s.primaryBtnText}>{s.onboarding.getStarted}</Text>
+          <View style={styles.welcomeBottom}>
+            <Text style={styles.trustLine}>{s.onboarding.trustLine}</Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => goTo(1)}>
+              <Text style={styles.primaryBtnText}>{s.onboarding.getStarted}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* ── Step 1: Features ────────────────────────────────────────── */}
-        <View style={s.page}>
-          <Text style={s.stepTitle}>{s.onboarding.featuresTitle}</Text>
-          <Text style={s.stepSub}>{s.onboarding.featuresSub}</Text>
-          <View style={s.featureGrid}>
+        <View style={styles.page}>
+          <Text style={styles.stepTitle}>{s.onboarding.featuresTitle}</Text>
+          <Text style={styles.stepSub}>{s.onboarding.featuresSub}</Text>
+          <View style={styles.featureGrid}>
             {FEATURES.map((f) => (
-              <View key={f.title} style={s.featureCard}>
-                <Text style={s.featureIcon}>{f.icon}</Text>
-                <Text style={s.featureTitle}>{f.title}</Text>
-                <Text style={s.featureDesc}>{f.desc}</Text>
+              <View key={f.title} style={styles.featureCard}>
+                <Text style={styles.featureIcon}>{f.icon}</Text>
+                <Text style={styles.featureTitle}>{f.title}</Text>
+                <Text style={styles.featureDesc}>{f.desc}</Text>
               </View>
             ))}
           </View>
-          <TouchableOpacity style={s.primaryBtn} onPress={() => goTo(2)}>
-            <Text style={s.primaryBtnText}>{s.onboarding.next}</Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => goTo(2)}>
+            <Text style={styles.primaryBtnText}>{s.onboarding.next}</Text>
           </TouchableOpacity>
         </View>
 
         {/* ── Step 2: DNS Shield ──────────────────────────────────────── */}
-        <View style={s.page}>
-          <Text style={s.stepTitle}>{s.onboarding.dnsTitle}</Text>
-          <View style={s.explainCard}>
-            <Text style={s.explainIcon}>🌐</Text>
-            <Text style={s.explainText}>
-              Creates a <Text style={s.bold}>local VPN on your phone</Text> — all DNS queries are
-              filtered through AnkrShield's blocklist.{'\n\n'}
+        <View style={styles.page}>
+          <Text style={styles.stepTitle}>{s.onboarding.dnsTitle}</Text>
+          <View style={styles.explainCard}>
+            <Text style={styles.explainIcon}>🌐</Text>
+            <Text style={styles.explainText}>
+              Creates a <Text style={styles.bold}>local VPN on your phone</Text> — all DNS queries
+              are filtered through AnkrShield's blocklist.{'\n\n'}
               No traffic is routed to any external server. Your browsing is private.
             </Text>
           </View>
-          <View style={s.bulletList}>
-            <Text style={s.bullet}>✅ Blocks 100,000+ tracker and ad domains</Text>
-            <Text style={s.bullet}>✅ Filters phishing domains from IOC feeds</Text>
-            <Text style={s.bullet}>✅ DNS-over-HTTPS — prevents ISP snooping</Text>
-            <Text style={s.bullet}>✅ Works in every app, not just browsers</Text>
+          <View style={styles.bulletList}>
+            <Text style={styles.bullet}>✅ Blocks 100,000+ tracker and ad domains</Text>
+            <Text style={styles.bullet}>✅ Filters phishing domains from IOC feeds</Text>
+            <Text style={styles.bullet}>✅ DNS-over-HTTPS — prevents ISP snooping</Text>
+            <Text style={styles.bullet}>✅ Works in every app, not just browsers</Text>
           </View>
           <TouchableOpacity
-            style={[s.primaryBtn, vpnStarted && s.primaryBtnSuccess]}
+            style={[styles.primaryBtn, vpnStarted && styles.primaryBtnSuccess]}
             onPress={handleEnableDns}
             disabled={vpnStarting}
           >
             {vpnStarting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={s.primaryBtnText}>
+              <Text style={styles.primaryBtnText}>
                 {vpnStarted ? s.onboarding.dnsActive : s.onboarding.enableDns}
               </Text>
             )}
           </TouchableOpacity>
-          <TouchableOpacity style={s.skipBtn} onPress={() => goTo(3)}>
-            <Text style={s.skipBtnText}>{s.onboarding.skip}</Text>
+          <TouchableOpacity style={styles.skipBtn} onPress={() => goTo(3)}>
+            <Text style={styles.skipBtnText}>{s.onboarding.skip}</Text>
           </TouchableOpacity>
         </View>
 
         {/* ── Step 3: Permissions ─────────────────────────────────────── */}
-        <View style={s.page}>
-          <Text style={s.stepTitle}>Two quick permissions</Text>
-          <Text style={s.stepSub}>Optional but recommended for full protection</Text>
+        <View style={styles.page}>
+          <Text style={styles.stepTitle}>Two quick permissions</Text>
+          <Text style={styles.stepSub}>Optional but recommended for full protection</Text>
 
-          <View style={s.permCard}>
-            <Text style={s.permIcon}>🔔</Text>
-            <View style={s.permBody}>
-              <Text style={s.permTitle}>Notifications</Text>
-              <Text style={s.permDesc}>
+          <View style={styles.permCard}>
+            <Text style={styles.permIcon}>🔔</Text>
+            <View style={styles.permBody}>
+              <Text style={styles.permTitle}>Notifications</Text>
+              <Text style={styles.permDesc}>
                 Get instant alerts when a phishing site, malicious file, or fraud call is detected.
               </Text>
             </View>
-            <TouchableOpacity style={s.permBtn} onPress={() => Linking.openSettings()}>
-              <Text style={s.permBtnText}>Enable</Text>
+            <TouchableOpacity style={styles.permBtn} onPress={() => Linking.openSettings()}>
+              <Text style={styles.permBtnText}>Enable</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={s.permCard}>
-            <Text style={s.permIcon}>🦾</Text>
-            <View style={s.permBody}>
-              <Text style={s.permTitle}>Accessibility</Text>
-              <Text style={s.permDesc}>
+          <View style={styles.permCard}>
+            <Text style={styles.permIcon}>🦾</Text>
+            <View style={styles.permBody}>
+              <Text style={styles.permTitle}>Accessibility</Text>
+              <Text style={styles.permDesc}>
                 Powers Safe Browsing — reads only the URL bar in your browser, nothing else.
               </Text>
             </View>
-            <TouchableOpacity style={s.permBtn} onPress={() => Linking.openSettings()}>
-              <Text style={s.permBtnText}>Enable</Text>
+            <TouchableOpacity style={styles.permBtn} onPress={() => Linking.openSettings()}>
+              <Text style={styles.permBtnText}>Enable</Text>
             </TouchableOpacity>
           </View>
 
-          <View style={s.privacyNote}>
-            <Text style={s.privacyNoteText}>
+          <View style={styles.privacyNote}>
+            <Text style={styles.privacyNoteText}>
               🔒 AnkrShield never reads message content, passwords, or personal data. All processing
               is on-device.
             </Text>
           </View>
 
-          <TouchableOpacity style={s.primaryBtn} onPress={() => goTo(4)}>
-            <Text style={s.primaryBtnText}>{s.onboarding.continue}</Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => goTo(4)}>
+            <Text style={styles.primaryBtnText}>{s.onboarding.continue}</Text>
           </TouchableOpacity>
         </View>
 
         {/* ── Step 4: Done ────────────────────────────────────────────── */}
-        <View style={s.page}>
-          <View style={s.doneTop}>
-            <Text style={s.doneBigCheck}>✅</Text>
-            <Text style={s.doneTitle}>You're protected</Text>
-            <Text style={s.doneSub}>
+        <View style={styles.page}>
+          <View style={styles.doneTop}>
+            <Text style={styles.doneBigCheck}>✅</Text>
+            <Text style={styles.doneTitle}>You're protected</Text>
+            <Text style={styles.doneSub}>
               AnkrShield is watching your network, files, and apps in the background.
             </Text>
           </View>
 
-          <View style={s.doneHighlights}>
-            <View style={s.doneRow}>
-              <Text style={s.doneRowIcon}>🌐</Text>
-              <Text style={s.doneRowText}>DNS tracker blocking active</Text>
+          <View style={styles.doneHighlights}>
+            <View style={styles.doneRow}>
+              <Text style={styles.doneRowIcon}>🌐</Text>
+              <Text style={styles.doneRowText}>DNS tracker blocking active</Text>
             </View>
-            <View style={s.doneRow}>
-              <Text style={s.doneRowIcon}>🦠</Text>
-              <Text style={s.doneRowText}>Ransomware watcher ready</Text>
+            <View style={styles.doneRow}>
+              <Text style={styles.doneRowIcon}>🦠</Text>
+              <Text style={styles.doneRowText}>Ransomware watcher ready</Text>
             </View>
-            <View style={s.doneRow}>
-              <Text style={s.doneRowIcon}>📞</Text>
-              <Text style={s.doneRowText}>Call protection loaded</Text>
+            <View style={styles.doneRow}>
+              <Text style={styles.doneRowIcon}>📞</Text>
+              <Text style={styles.doneRowText}>Call protection loaded</Text>
             </View>
-            <View style={s.doneRow}>
-              <Text style={s.doneRowIcon}>🛡</Text>
-              <Text style={s.doneRowText}>42+ domains protected from phishing</Text>
+            <View style={styles.doneRow}>
+              <Text style={styles.doneRowIcon}>🛡</Text>
+              <Text style={styles.doneRowText}>42+ domains protected from phishing</Text>
             </View>
           </View>
 
-          <TouchableOpacity style={[s.primaryBtn, s.primaryBtnSuccess]} onPress={handleFinish}>
-            <Text style={s.primaryBtnText}>{s.onboarding.startProtecting}</Text>
+          <TouchableOpacity
+            style={[styles.primaryBtn, styles.primaryBtnSuccess]}
+            onPress={handleFinish}
+          >
+            <Text style={styles.primaryBtnText}>{s.onboarding.startProtecting}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
       {/* Progress dots */}
-      <View style={s.dots}>
+      <View style={styles.dots}>
         {STEPS.map((_, i) => (
-          <View key={i} style={[s.dot, i === step && s.dotActive]} />
+          <View key={i} style={[styles.dot, i === step && styles.dotActive]} />
         ))}
       </View>
     </View>
   );
 }
 
-const _s = StyleSheet.create({
+const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#080c14' },
   pager: { flex: 1 },
   page: {

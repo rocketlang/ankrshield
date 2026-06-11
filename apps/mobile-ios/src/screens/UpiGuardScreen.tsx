@@ -62,10 +62,12 @@ export function UpiGuardScreen({ route }: any) {
     if (prefillUri) {
       setTimeout(() => handleCheck(), 400);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadHistory() {
-    if (!UpiGuard) return;
+    if (!UpiGuard) {
+      return;
+    }
     try {
       const h = await UpiGuard.getCheckHistory();
       setHistory(h ?? []);
@@ -75,7 +77,9 @@ export function UpiGuardScreen({ route }: any) {
   }
 
   async function handleCheck() {
-    if (!input.trim() || !UpiGuard) return;
+    if (!input.trim() || !UpiGuard) {
+      return;
+    }
     setChecking(true);
     try {
       const analysis: UpiAnalysis = await UpiGuard.analyzeUri(input.trim());
@@ -91,18 +95,18 @@ export function UpiGuardScreen({ route }: any) {
   const meta = result ? RISK_META[result.riskLevel] : null;
 
   return (
-    <ScrollView style={s.container} keyboardShouldPersistTaps="handled">
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       {/* Hero */}
-      <View style={s.hero}>
-        <Text style={s.heroIcon}>💳</Text>
-        <Text style={s.heroTitle}>{s.upiGuard.title}</Text>
-        <Text style={s.heroSub}>{s.upiGuard.subtitle}</Text>
+      <View style={styles.hero}>
+        <Text style={styles.heroIcon}>💳</Text>
+        <Text style={styles.heroTitle}>{s.upiGuard.title}</Text>
+        <Text style={styles.heroSub}>{s.upiGuard.subtitle}</Text>
       </View>
 
       {/* Input */}
-      <View style={s.inputSection}>
+      <View style={styles.inputSection}>
         <TextInput
-          style={s.input}
+          style={styles.input}
           value={input}
           onChangeText={setInput}
           placeholder={s.upiGuard.placeholder}
@@ -113,55 +117,55 @@ export function UpiGuardScreen({ route }: any) {
           autoCorrect={false}
         />
         <TouchableOpacity
-          style={[s.checkBtn, (!input.trim() || checking) && s.checkBtnDisabled]}
+          style={[styles.checkBtn, (!input.trim() || checking) && styles.checkBtnDisabled]}
           onPress={handleCheck}
           disabled={!input.trim() || checking}
         >
           {checking ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <Text style={s.checkBtnText}>{s.upiGuard.verify}</Text>
+            <Text style={styles.checkBtnText}>{s.upiGuard.verify}</Text>
           )}
         </TouchableOpacity>
       </View>
 
       {/* Result card */}
       {result && meta && (
-        <View style={[s.resultCard, { borderColor: meta.color }]}>
-          <View style={s.resultHeader}>
-            <Text style={s.resultIcon}>{meta.icon}</Text>
-            <View style={s.resultHeaderInfo}>
-              <Text style={[s.resultLevel, { color: meta.color }]}>{meta.label}</Text>
-              {result.vpa !== '' && <Text style={s.resultVpa}>{result.vpa}</Text>}
+        <View style={[styles.resultCard, { borderColor: meta.color }]}>
+          <View style={styles.resultHeader}>
+            <Text style={styles.resultIcon}>{meta.icon}</Text>
+            <View style={styles.resultHeaderInfo}>
+              <Text style={[styles.resultLevel, { color: meta.color }]}>{meta.label}</Text>
+              {result.vpa !== '' && <Text style={styles.resultVpa}>{result.vpa}</Text>}
             </View>
             {result.knownHandle && (
-              <View style={s.verifiedBadge}>
-                <Text style={s.verifiedBadgeText}>{s.upiGuard.knownPsp}</Text>
+              <View style={styles.verifiedBadge}>
+                <Text style={styles.verifiedBadgeText}>{s.upiGuard.knownPsp}</Text>
               </View>
             )}
           </View>
 
           {/* Payment details */}
           {result.payeeName || result.amount || result.note ? (
-            <View style={s.detailsBox}>
+            <View style={styles.detailsBox}>
               {result.payeeName !== '' && (
-                <View style={s.detailRow}>
-                  <Text style={s.detailLabel}>{s.upiGuard.payee}</Text>
-                  <Text style={s.detailValue}>{result.payeeName}</Text>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>{s.upiGuard.payee}</Text>
+                  <Text style={styles.detailValue}>{result.payeeName}</Text>
                 </View>
               )}
               {result.amount !== '' && (
-                <View style={s.detailRow}>
-                  <Text style={s.detailLabel}>{s.upiGuard.amount}</Text>
-                  <Text style={[s.detailValue, s.detailAmount]}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>{s.upiGuard.amount}</Text>
+                  <Text style={[styles.detailValue, styles.detailAmount]}>
                     ₹{parseFloat(result.amount).toLocaleString('en-IN')} {result.currency}
                   </Text>
                 </View>
               )}
               {result.note !== '' && (
-                <View style={s.detailRow}>
-                  <Text style={s.detailLabel}>{s.upiGuard.note}</Text>
-                  <Text style={s.detailValue} numberOfLines={2}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>{s.upiGuard.note}</Text>
+                  <Text style={styles.detailValue} numberOfLines={2}>
                     {result.note}
                   </Text>
                 </View>
@@ -171,12 +175,12 @@ export function UpiGuardScreen({ route }: any) {
 
           {/* Risk flags */}
           {result.flags.length > 0 && (
-            <View style={s.flagsSection}>
-              <Text style={s.flagsTitle}>{s.upiGuard.riskSignals}</Text>
+            <View style={styles.flagsSection}>
+              <Text style={styles.flagsTitle}>{s.upiGuard.riskSignals}</Text>
               {result.flags.map((flag, i) => (
-                <View key={i} style={s.flagRow}>
-                  <Text style={s.flagDot}>▸</Text>
-                  <Text style={s.flagText}>{flag}</Text>
+                <View key={i} style={styles.flagRow}>
+                  <Text style={styles.flagDot}>▸</Text>
+                  <Text style={styles.flagText}>{flag}</Text>
                 </View>
               ))}
             </View>
@@ -185,14 +189,14 @@ export function UpiGuardScreen({ route }: any) {
           {/* Advice */}
           <View
             style={[
-              s.adviceBox,
+              styles.adviceBox,
               { borderColor: meta.color + '44', backgroundColor: meta.color + '0d' },
             ]}
           >
-            <Text style={[s.adviceTitle, { color: meta.color }]}>
+            <Text style={[styles.adviceTitle, { color: meta.color }]}>
               {result.riskLevel === 'safe' ? '✅ Looks legitimate' : '⚠️ Verify before paying'}
             </Text>
-            <Text style={s.adviceText}>
+            <Text style={styles.adviceText}>
               {result.riskLevel === 'safe'
                 ? 'VPA uses a registered PSP handle and details look normal. Still confirm the payee name before completing.'
                 : result.riskLevel === 'critical'
@@ -204,23 +208,23 @@ export function UpiGuardScreen({ route }: any) {
       )}
 
       {/* How to use */}
-      <View style={s.howSection}>
-        <Text style={s.howTitle}>How to use</Text>
-        <Text style={s.howText}>
+      <View style={styles.howSection}>
+        <Text style={styles.howTitle}>How to use</Text>
+        <Text style={styles.howText}>
           1. When you receive a UPI payment link via SMS, WhatsApp, or email, copy it.{'\n'}
-          2. Paste it above and tap <Text style={s.howCode}>Verify</Text>.{'\n'}
+          2. Paste it above and tap <Text style={styles.howCode}>Verify</Text>.{'\n'}
           3. AnkrShield checks the payee VPA, amount, and note for fraud signals.{'\n\n'}
           You can also open your camera app, scan a UPI QR code, and copy the resulting URL here.
         </Text>
       </View>
 
       {/* Supported apps */}
-      <View style={s.appsSection}>
-        <Text style={s.appsSectionTitle}>Works with all UPI apps</Text>
-        <View style={s.appsRow}>
+      <View style={styles.appsSection}>
+        <Text style={styles.appsSectionTitle}>Works with all UPI apps</Text>
+        <View style={styles.appsRow}>
           {KNOWN_UPI_APPS.map((app) => (
-            <View key={app} style={s.appChip}>
-              <Text style={s.appChipText}>{app}</Text>
+            <View key={app} style={styles.appChip}>
+              <Text style={styles.appChipText}>{app}</Text>
             </View>
           ))}
         </View>
@@ -228,20 +232,20 @@ export function UpiGuardScreen({ route }: any) {
 
       {/* Recent checks */}
       {history.length > 0 && (
-        <View style={s.historySection}>
-          <Text style={s.historySectionTitle}>Recent checks</Text>
+        <View style={styles.historySection}>
+          <Text style={styles.historySectionTitle}>Recent checks</Text>
           {history.slice(0, 5).map((h, i) => {
             const hMeta = RISK_META[h.riskLevel as keyof typeof RISK_META] ?? RISK_META.caution;
             return (
-              <View key={i} style={s.historyRow}>
-                <Text style={s.historyIcon}>{hMeta.icon}</Text>
-                <View style={s.historyBody}>
-                  <Text style={s.historyVpa} numberOfLines={1}>
+              <View key={i} style={styles.historyRow}>
+                <Text style={styles.historyIcon}>{hMeta.icon}</Text>
+                <View style={styles.historyBody}>
+                  <Text style={styles.historyVpa} numberOfLines={1}>
                     {h.vpa || 'Unknown VPA'}
                   </Text>
-                  {h.amount ? <Text style={s.historyAmt}>₹{h.amount}</Text> : null}
+                  {h.amount ? <Text style={styles.historyAmt}>₹{h.amount}</Text> : null}
                 </View>
-                <Text style={[s.historyLevel, { color: hMeta.color }]}>{hMeta.label}</Text>
+                <Text style={[styles.historyLevel, { color: hMeta.color }]}>{hMeta.label}</Text>
               </View>
             );
           })}
@@ -249,8 +253,8 @@ export function UpiGuardScreen({ route }: any) {
       )}
 
       {/* Safety tip */}
-      <View style={s.tipBox}>
-        <Text style={s.tipText}>
+      <View style={styles.tipBox}>
+        <Text style={styles.tipText}>
           💡 Real banks and businesses NEVER send payment requests out of the blue. If you're asked
           to pay to "unfreeze your account" or "claim a refund" — it's always fraud.
         </Text>
@@ -259,7 +263,7 @@ export function UpiGuardScreen({ route }: any) {
   );
 }
 
-const _s = StyleSheet.create({
+const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0d0d0d' },
 
   hero: { padding: 24, alignItems: 'center' },
