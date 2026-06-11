@@ -1098,13 +1098,11 @@ const start = async () => {
         try {
           const r = await fetch(`${sdge}/sdge/audit/${encodeURIComponent(hash)}`);
           if (!r.ok) {
-            return reply
-              .status(r.status === 404 ? 404 : 502)
-              .send({
-                verified: false,
-                hash,
-                reason: r.status === 404 ? 'no ledger entry for this hash' : `SDGE ${r.status}`,
-              });
+            return reply.status(r.status === 404 ? 404 : 502).send({
+              verified: false,
+              hash,
+              reason: r.status === 404 ? 'no ledger entry for this hash' : `SDGE ${r.status}`,
+            });
           }
           const trail: any = await r.json();
           return {
@@ -1126,6 +1124,197 @@ const start = async () => {
         }
       }
     );
+
+    // ── Capabilities aggregator (Slice WS5-T11) — @rule:CAP-004 ───────────────────
+    // The showcase page hits ONLY this public gateway; the gateway relays each proof to the
+    // real internal services (DNS-shield 4860, siblings 4255/4256, SDGE 4103, own Forja). No
+    // internal port is exposed to the browser. Every capability is run LIVE against production
+    // — never a staged demo (CAP-001). Roadmap items are declared, not implied (CAP-003).
+    const SVC = {
+      dnsShield: process.env.DNS_SHIELD_URL ?? 'http://localhost:4860',
+      hanumang: process.env.HANUMANG_URL ?? 'http://localhost:4255',
+      lakshmanrekha: process.env.LAKSHMANREKHA_URL ?? 'http://localhost:4256',
+      self: `http://localhost:${process.env.PORT ?? '4481'}`,
+    };
+    const fetchJson = async (url: string, opts?: any, timeoutMs = 8000) => {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const r = await fetch(url, { ...opts, signal: ctrl.signal });
+        return { ok: r.ok, status: r.status, body: await r.json().catch(() => ({})) };
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+
+    // Manifest — what's live vs roadmap. The honest spine of the page (CAP-003).
+    fastify.get('/api/v2/capabilities', async () => ({
+      product: 'xShieldAI (corporate DRP) + AnkrShield (consumer privacy)',
+      generated_at: new Date().toISOString(),
+      live: [
+        {
+          id: 'scan-chain',
+          product: 'xShieldAI',
+          title: 'Tokenless governed scan-chain',
+          claim:
+            'A domain scan is declared deterministic reads, not an LLM loop. llm_calls=0; the watch-add write is proposed, never auto-run.',
+          proof: 'tokenless=true',
+          run: 'POST /api/v2/chains/domain-scan {domain}',
+        },
+        {
+          id: 'report-card',
+          product: 'xShieldAI',
+          title: 'SDGE-signed replayable Report Card',
+          claim:
+            'The scan result is Ed25519-signed on an append-only ledger, dated, replayable by hash.',
+          proof: 'verified=true + ledger seq',
+          run: 'POST /api/v2/chains/domain-scan?sign=1 → verify/:hash',
+        },
+        {
+          id: 'honesty',
+          product: 'xShieldAI',
+          title: 'Honesty discipline (Forja, CA 28)',
+          claim:
+            'STATE reads the registry at runtime (no drift); a SENSE event without before/after is rejected 400.',
+          proof: 'CA mask + SENSE 400',
+          run: 'GET /api/v2/capabilities/honesty',
+        },
+        {
+          id: 'hanumang',
+          product: 'xShieldAI',
+          title: 'HanumanG — agent delegation posture',
+          claim:
+            '7-axis posture for delegated agents (mudrika integrity, mandate bounds, return-with-proof).',
+          proof: '7 axes live',
+          run: 'GET /api/v2/capabilities/sibling?which=hanumang',
+        },
+        {
+          id: 'lakshmanrekha',
+          product: 'xShieldAI',
+          title: 'LakshmanRekha — LLM endpoint posture',
+          claim: '8 replayable attack-probe classifiers; deterministic refusal attestation.',
+          proof: '8 probes live',
+          run: 'GET /api/v2/capabilities/sibling?which=lakshmanrekha',
+        },
+        {
+          id: 'dns-shield',
+          product: 'AnkrShield',
+          title: 'DNS-shield tracker blocking',
+          claim:
+            'Known trackers → NXDOMAIN; normal apps keep working; an app reaching its own domains is never blocked.',
+          proof: 'block / allow / app-exception',
+          run: 'GET /api/v2/capabilities/dns-shield?name=&app=',
+        },
+      ],
+      roadmap: [
+        {
+          id: 'android',
+          product: 'AnkrShield',
+          title: 'On-device Android VPN (DoH + per-app tagging)',
+          status: 'not built (WS1-T4)',
+        },
+        {
+          id: 'web-dashboard',
+          product: 'AnkrShield',
+          title: 'Consumer privacy dashboard',
+          status: 'not built (WS1-T5)',
+        },
+        {
+          id: 'desktop',
+          product: 'AnkrShield',
+          title: 'Desktop system-wide shield',
+          status: 'not built (WS1-T6)',
+        },
+        {
+          id: 'branching',
+          product: 'xShieldAI',
+          title: 'Chain conditional escalation',
+          status: 'not built (WS2-T7)',
+        },
+        {
+          id: 'desk',
+          product: 'xShieldAI',
+          title: 'Operator Desk surface',
+          status: 'not built (WS3-T8)',
+        },
+      ],
+    }));
+
+    // DNS-shield relay — live block/allow/app-exception proof.
+    fastify.get<{ Querystring: { name?: string; app?: string } }>(
+      '/api/v2/capabilities/dns-shield',
+      async (request, reply) => {
+        const name = request.query?.name?.trim();
+        if (!name) return reply.status(400).send({ error: 'name required' });
+        const app = request.query?.app ? `&app=${encodeURIComponent(request.query.app)}` : '';
+        try {
+          const r = await fetchJson(
+            `${SVC.dnsShield}/resolve?name=${encodeURIComponent(name)}${app}`
+          );
+          return { live: true, ...r.body };
+        } catch (e) {
+          return { live: false, error: e instanceof Error ? e.message : String(e) };
+        }
+      }
+    );
+
+    // Sibling posture relay — HanumanG / LakshmanRekha Forja STATE.
+    fastify.get<{ Querystring: { which?: string } }>(
+      '/api/v2/capabilities/sibling',
+      async (request, reply) => {
+        const which = request.query?.which;
+        const url =
+          which === 'hanumang'
+            ? SVC.hanumang
+            : which === 'lakshmanrekha'
+              ? SVC.lakshmanrekha
+              : null;
+        if (!url) return reply.status(400).send({ error: 'which=hanumang|lakshmanrekha' });
+        try {
+          const r = await fetchJson(`${url}/api/v2/forja/state`);
+          const b: any = r.body;
+          return {
+            live: true,
+            service: b.service,
+            product: b.product,
+            trust_mask: b.trust_mask,
+            axes: b.axes,
+            probe_ids: b.probe_ids,
+            live_stats: b.live_stats,
+          };
+        } catch (e) {
+          return { live: false, error: e instanceof Error ? e.message : String(e) };
+        }
+      }
+    );
+
+    // Honesty proof — own Forja STATE summary + a LIVE SENSE-400 (reject without before/after).
+    fastify.get('/api/v2/capabilities/honesty', async () => {
+      const state = await fetchJson(`${SVC.self}/api/v2/forja/state`).catch(() => null);
+      // Prove CA-003 enforcement by deliberately sending a malformed SENSE event.
+      const senseReject = await fetchJson(`${SVC.self}/api/v2/forja/sense/emit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'capability.demo' }),
+      }).catch(() => null);
+      const s: any = state?.body ?? {};
+      return {
+        live: true,
+        claude_ankr_mask: 28,
+        claude_ankr_mask_note:
+          'CA-003 SENSE + CA-004 _meta + CA-005 ai-flag shipped; CA-001/CA-002 honestly not claimed',
+        forja_state: {
+          can_do: (s.can_do ?? []).length,
+          can_answer: (s.can_answer ?? []).length,
+          codex_loaded: s.codex_loaded,
+        },
+        sense_without_before_after: {
+          http: senseReject?.status ?? null,
+          rejected: senseReject?.status === 400,
+          body: senseReject?.body,
+        },
+      };
+    });
 
     // ─── APK download endpoints ───────────────────────────────────────────────
     // GET /download/ankrshield.apk — serve APK directly if present, else redirect to GitHub release

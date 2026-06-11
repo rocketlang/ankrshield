@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>xShieldAI + AnkrShield — Capabilities, Proven Live</title>
+<style>
+  :root { --bg:#0a0e14; --card:#121823; --line:#1e2836; --ink:#e6edf3; --mut:#8b98a8;
+          --ok:#1f9d55; --okbg:#0f2a1c; --block:#dc2626; --blockbg:#2a1414; --amber:#d99c1c; --amberbg:#2a230f; --acc:#3b82f6; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:980px; margin:0 auto; padding:32px 20px 80px; }
+  header h1 { font-size:30px; margin:0 0 6px; letter-spacing:-.5px; }
+  header p { color:var(--mut); margin:0 0 4px; }
+  .pill { display:inline-block; font-size:12px; padding:2px 9px; border-radius:99px; border:1px solid var(--line); color:var(--mut); }
+  .grid { display:grid; gap:14px; margin-top:24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .card h3 { margin:0 0 2px; font-size:17px; }
+  .card .prod { font-size:12px; color:var(--acc); font-weight:600; text-transform:uppercase; letter-spacing:.4px; }
+  .card .claim { color:var(--mut); margin:8px 0 14px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  button { background:var(--acc); color:#fff; border:0; border-radius:9px; padding:8px 16px; font-size:14px; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:wait; }
+  button.ghost { background:transparent; border:1px solid var(--line); color:var(--ink); }
+  input { background:#0a0e14; border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:8px 11px; font-size:14px; }
+  .chip { font-size:13px; font-weight:700; padding:4px 11px; border-radius:8px; border:1px solid; }
+  .chip.ok { color:#7ee2a8; background:var(--okbg); border-color:#1f9d5544; }
+  .chip.block { color:#f6a3a3; background:var(--blockbg); border-color:#dc262644; }
+  .chip.amber { color:#f0cd84; background:var(--amberbg); border-color:#d99c1c44; }
+  pre { background:#070a0f; border:1px solid var(--line); border-radius:8px; padding:11px; overflow:auto; font-size:12px; color:#aebacb; margin:12px 0 0; max-height:240px; }
+  .sec { margin-top:36px; }
+  .sec h2 { font-size:14px; text-transform:uppercase; letter-spacing:.6px; color:var(--mut); border-bottom:1px solid var(--line); padding-bottom:8px; }
+  .road { display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--line); color:var(--mut); font-size:14px; }
+  .road span:last-child { font-size:12px; color:#6b7888; }
+  footer { margin-top:40px; color:#5a6878; font-size:12px; }
+  a { color:var(--acc); }
+  .muted { color:var(--mut); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Capabilities, Proven Live</h1>
+    <p>xShieldAI — corporate DRP · AnkrShield — consumer privacy. Every button below runs against the <b>real production services</b>, right now. Nothing here is staged.</p>
+    <span class="pill" id="manifest-pill">loading…</span>
+  </header>
+
+  <div class="grid" id="cards"></div>
+
+  <!-- Consumer DNS-shield interactive panel -->
+  <div class="sec">
+    <h2>Try the AnkrShield tracker shield</h2>
+    <div class="card">
+      <p class="claim">Type any domain. Known trackers are blocked at the resolver (NXDOMAIN) — normal sites resolve. Add an app package (e.g. <code>com.whatsapp</code>) to see surgical inhibition: an app reaching its own domains is never blocked.</p>
+      <div class="row">
+        <input id="dom" placeholder="doubleclick.net" value="doubleclick.net" size="22" />
+        <input id="app" placeholder="app pkg (optional)" size="18" />
+        <button onclick="tryDomain()">Check</button>
+        <span id="dom-chip"></span>
+      </div>
+      <pre id="dom-out" style="display:none"></pre>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h2>On the roadmap — honestly not built yet</h2>
+    <div id="roadmap"></div>
+  </div>
+
+  <footer>
+    Filmed-as-verification source. If a capability fails here, the capability is broken — not the demo.
+    <span id="gen"></span>
+  </footer>
+</div>
+
+<script>
+// nginx strips the /api/ prefix before proxying to the flagship, but the capability routes
+// are themselves under /api/v2/ — so the public path is /api + /api/v2/... (the house convention).
+const API = '/api';
+const $ = (id) => document.getElementById(id);
+
+async function getJson(url, opts) {
+  const r = await fetch(API + url, opts);
+  return { status: r.status, body: await r.json().catch(() => ({})) };
+}
+
+// proof extractors per capability — the binary truth that makes the claim real
+const PROOF = {
+  'scan-chain': async () => {
+    const r = await getJson('/api/v2/chains/domain-scan', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({domain:'example.com'}) });
+    const rec = r.body.record || {};
+    const ok = rec.tokenless === true && rec.llm_calls === 0;
+    return { ok, label: ok ? `tokenless ✓ · llm_calls=${rec.llm_calls} · ${rec.nodes_ok}/${rec.nodes_total} reads · watch.add ${rec.gated?.[0]?.status||'—'}` : 'unexpected', body: r.body };
+  },
+  'report-card': async () => {
+    const r = await getJson('/api/v2/chains/domain-scan?sign=1', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({domain:'example.com'}) });
+    const sdge = r.body.reportCard?.sdge || {};
+    if (!sdge.document_hash) return { ok:false, label:'sign failed', body:r.body };
+    const v = await getJson('/api/v2/chains/report-card/verify/' + sdge.document_hash);
+    const ok = v.body.verified === true;
+    return { ok, label: ok ? `signed seq ${sdge.ledger_seq} · verified=true · replayable by hash` : 'verify failed', body: { sdge, verify: v.body } };
+  },
+  'honesty': async () => {
+    const r = await getJson('/api/v2/capabilities/honesty');
+    const ok = r.body.sense_without_before_after?.rejected === true;
+    return { ok, label: ok ? `CA mask ${r.body.claude_ankr_mask} · SENSE without before/after → 400 rejected` : 'unexpected', body: r.body };
+  },
+  'hanumang': async () => {
+    const r = await getJson('/api/v2/capabilities/sibling?which=hanumang');
+    const ok = r.body.live && (r.body.axes||[]).length === 7;
+    return { ok, label: ok ? `live · 7 axes · ${JSON.stringify(r.body.live_stats||{})}` : 'down', body: r.body };
+  },
+  'lakshmanrekha': async () => {
+    const r = await getJson('/api/v2/capabilities/sibling?which=lakshmanrekha');
+    const ok = r.body.live && (r.body.probe_ids||[]).length >= 8;
+    return { ok, label: ok ? `live · ${(r.body.probe_ids||[]).length} probes · ${JSON.stringify(r.body.live_stats||{})}` : 'down', body: r.body };
+  },
+  'dns-shield': async () => {
+    const blk = await getJson('/api/v2/capabilities/dns-shield?name=doubleclick.net');
+    const allow = await getJson('/api/v2/capabilities/dns-shield?name=github.com');
+    const exc = await getJson('/api/v2/capabilities/dns-shield?name=graph.facebook.com&app=com.whatsapp');
+    const ok = blk.body.blocked === true && allow.body.blocked === false && exc.body.blocked === false;
+    return { ok, label: ok ? 'doubleclick → blocked · github → allowed · whatsapp→facebook → allowed (app exception)' : 'unexpected', body: { blk:blk.body, allow:allow.body, exc:exc.body } };
+  },
+};
+
+function chip(kind, text) {
+  const c = kind === 'block' ? 'block' : kind === 'amber' ? 'amber' : 'ok';
+  return `<span class="chip ${c}">${text}</span>`;
+}
+
+async function runCard(id, btn) {
+  const out = $('out-'+id), ch = $('chip-'+id);
+  btn.disabled = true; ch.innerHTML = chip('amber','running…'); out.style.display='none';
+  try {
+    const r = await PROOF[id]();
+    ch.innerHTML = chip(r.ok ? 'ok' : 'block', (r.ok?'✓ ':'✗ ') + r.label);
+    out.textContent = JSON.stringify(r.body, null, 2); out.style.display='block';
+  } catch (e) {
+    ch.innerHTML = chip('block', '✗ ' + e.message);
+  } finally { btn.disabled = false; }
+}
+
+async function tryDomain() {
+  const dom = $('dom').value.trim(); const app = $('app').value.trim();
+  if (!dom) return;
+  const ch = $('dom-chip'), out = $('dom-out');
+  ch.innerHTML = chip('amber','checking…');
+  const q = '/api/v2/capabilities/dns-shield?name=' + encodeURIComponent(dom) + (app?('&app='+encodeURIComponent(app)):'');
+  const r = await getJson(q);
+  const b = r.body;
+  ch.innerHTML = b.blocked ? chip('block', '🛑 BLOCKED — known tracker') : chip('ok', '✅ ALLOWED' + (b.ip?(' → '+b.ip):''));
+  out.textContent = JSON.stringify(b, null, 2); out.style.display='block';
+}
+
+async function init() {
+  const m = await getJson('/api/v2/capabilities');
+  $('manifest-pill').textContent = m.body.live.length + ' capabilities live · ' + m.body.roadmap.length + ' on roadmap';
+  $('gen').textContent = '· generated ' + (m.body.generated_at||'');
+  $('cards').innerHTML = m.body.live.map(c => `
+    <div class="card">
+      <div class="prod">${c.product}</div>
+      <h3>${c.title}</h3>
+      <div class="claim">${c.claim}</div>
+      <div class="row">
+        <button onclick="runCard('${c.id}', this)">Run live</button>
+        <span id="chip-${c.id}" class="muted">${c.proof}</span>
+      </div>
+      <pre id="out-${c.id}" style="display:none"></pre>
+    </div>`).join('');
+  $('roadmap').innerHTML = m.body.roadmap.map(r => `<div class="road"><span>${r.title} <em style="color:#6b7888">— ${r.product}</em></span><span>${r.status}</span></div>`).join('');
+}
+init();
+</script>
+</body>
+</html>
