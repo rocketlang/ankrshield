@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AnkrShield — Your Privacy Dashboard</title>
+<style>
+  :root { --bg:#0a0e14; --card:#121823; --line:#1e2836; --ink:#e6edf3; --mut:#8b98a8;
+          --ok:#1f9d55; --block:#dc2626; --acc:#3b82f6; --warn:#d99c1c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:880px; margin:0 auto; padding:32px 20px 80px; }
+  header h1 { font-size:26px; margin:0 0 4px; letter-spacing:-.4px; }
+  header p { color:var(--mut); margin:0; }
+  .hero { display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:14px; margin:24px 0; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; }
+  .stat .n { font-size:34px; font-weight:800; letter-spacing:-1px; }
+  .stat .n.block { color:#f6a3a3; }
+  .stat .l { color:var(--mut); font-size:13px; margin-top:2px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:14px; }
+  .card h3 { margin:0 0 12px; font-size:14px; text-transform:uppercase; letter-spacing:.5px; color:var(--mut); }
+  .bar-row { display:flex; align-items:center; gap:10px; margin:7px 0; }
+  .bar-row .lab { width:130px; font-size:13px; color:var(--ink); text-transform:capitalize; }
+  .bar { flex:1; height:14px; background:#0a0e14; border-radius:7px; overflow:hidden; }
+  .bar > span { display:block; height:100%; background:linear-gradient(90deg,#dc2626,#f87171); }
+  .bar-row .v { width:46px; text-align:right; font-size:13px; color:var(--mut); }
+  .tk { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  .tk .d { font-family:ui-monospace,monospace; color:#cdd7e3; }
+  .tk .c { color:#f6a3a3; font-weight:600; }
+  .feed { font-family:ui-monospace,monospace; font-size:12px; color:#9fb0c2; max-height:220px; overflow:auto; }
+  .feed div { padding:3px 0; border-bottom:1px solid #131a26; }
+  .feed .cat { color:#6b7888; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  input { background:#0a0e14; border:1px solid var(--line); color:var(--ink); border-radius:8px; padding:8px 11px; font-size:14px; }
+  button { background:var(--acc); color:#fff; border:0; border-radius:9px; padding:8px 16px; font-weight:600; cursor:pointer; }
+  .chip { font-size:13px; font-weight:700; padding:4px 11px; border-radius:8px; border:1px solid; }
+  .chip.ok { color:#7ee2a8; background:#0f2a1c; border-color:#1f9d5544; }
+  .chip.block { color:#f6a3a3; background:#2a1414; border-color:#dc262644; }
+  .live { display:inline-block; width:8px; height:8px; border-radius:99px; background:var(--ok); margin-right:6px; animation:p 2s infinite; }
+  @keyframes p { 0%,100%{opacity:1} 50%{opacity:.3} }
+  footer { color:#5a6878; font-size:12px; margin-top:24px; }
+  a { color:var(--acc); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Your Privacy Dashboard</h1>
+    <p><span class="live"></span>AnkrShield — what we blocked for you, live. <span id="blocklist" style="color:#6b7888"></span></p>
+  </header>
+
+  <div class="hero">
+    <div class="stat"><div class="n block" id="blocked">—</div><div class="l">trackers blocked this session</div></div>
+    <div class="stat"><div class="n" id="rate">—</div><div class="l">of DNS traffic was tracking</div></div>
+    <div class="stat"><div class="n" id="allowed">—</div><div class="l">normal sites allowed through</div></div>
+  </div>
+
+  <div class="card">
+    <h3>Blocked by category</h3>
+    <div id="cats"><span style="color:#6b7888">no trackers blocked yet — browse a bit, or try the checker below</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Top trackers cut</h3>
+    <div id="top"><span style="color:#6b7888">—</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Recent blocks</h3>
+    <div class="feed" id="feed"><span style="color:#6b7888">—</span></div>
+  </div>
+
+  <div class="card">
+    <h3>Check a domain</h3>
+    <div class="row">
+      <input id="dom" placeholder="doubleclick.net" value="doubleclick.net" size="22" />
+      <input id="app" placeholder="app pkg (optional)" size="16" />
+      <button onclick="check()">Check</button>
+      <span id="chip"></span>
+    </div>
+  </div>
+
+  <footer>The data above is real — sourced live from the AnkrShield DNS-shield, not a sample. <a href="/capabilities.html">See all capabilities →</a></footer>
+</div>
+
+<script>
+const API = '/api'; // nginx strips /api/ → /api + /api/v2/... reaches the flagship
+const $ = (id) => document.getElementById(id);
+async function getJson(u, o){ const r = await fetch(API+u, o); return r.json(); }
+
+function bars(obj, total) {
+  const max = Math.max(1, ...Object.values(obj));
+  return Object.entries(obj).map(([cat, n]) =>
+    `<div class="bar-row"><div class="lab">${cat.replace(/-/g,' ')}</div><div class="bar"><span style="width:${Math.round(n/max*100)}%"></span></div><div class="v">${n}</div></div>`
+  ).join('') || '<span style="color:#6b7888">none yet</span>';
+}
+
+async function refresh() {
+  const d = await getJson('/api/v2/capabilities/privacy-stats').catch(()=>null);
+  if (!d || d.live === false) return;
+  $('blocklist').textContent = '· ' + (d.blocklist_size||0).toLocaleString() + ' trackers in the shield';
+  $('blocked').textContent = (d.trackers_blocked||0).toLocaleString();
+  $('rate').textContent = (d.tracker_block_rate_pct||0) + '%';
+  $('allowed').textContent = (d.totals?.resolved||0).toLocaleString();
+  if (Object.keys(d.by_category||{}).length) $('cats').innerHTML = bars(d.by_category);
+  $('top').innerHTML = (d.top_trackers||[]).length
+    ? d.top_trackers.map(t=>`<div class="tk"><span class="d">${t.domain}</span><span class="c">${t.hits}×</span></div>`).join('')
+    : '<span style="color:#6b7888">—</span>';
+  $('feed').innerHTML = (d.recent_blocks||[]).length
+    ? d.recent_blocks.map(r=>`<div>🛑 ${r.domain} <span class="cat">· ${r.category}${r.app?(' · '+r.app):''} · ${(r.at||'').slice(11,19)}</span></div>`).join('')
+    : '<span style="color:#6b7888">no blocks yet</span>';
+}
+
+async function check() {
+  const dom = $('dom').value.trim(); const app = $('app').value.trim();
+  if (!dom) return;
+  $('chip').innerHTML = '<span class="chip" style="color:#f0cd84;background:#2a230f;border-color:#d99c1c44">checking…</span>';
+  const q = '/api/v2/capabilities/dns-shield?name='+encodeURIComponent(dom)+(app?('&app='+encodeURIComponent(app)):'');
+  const b = await getJson(q);
+  $('chip').innerHTML = b.blocked
+    ? '<span class="chip block">🛑 BLOCKED — known tracker</span>'
+    : '<span class="chip ok">✅ ALLOWED'+(b.ip?(' → '+b.ip):'')+'</span>';
+  setTimeout(refresh, 400); // reflect the new block in the stats
+}
+
+refresh();
+setInterval(refresh, 4000); // live
+</script>
+</body>
+</html>
