@@ -11,7 +11,8 @@
     "prebuild": "expo prebuild",
     "test": "jest",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:trackers": "node android/build-tracker-db.js  # regenerates the 203k on-device blocklist (needs better-sqlite3)"
   },
   "dependencies": {
     "@react-native-community/netinfo": "^11.1.0",
