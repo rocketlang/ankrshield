@@ -33,7 +33,7 @@ import mercurius from 'mercurius';
 import WS from 'ws';
 
 import { hashPassword, comparePassword } from './auth/password.js';
-import { runScanChain, assembleReportCard } from './chains/run-scan-chain.js';
+import { runScanChain, assembleReportCard, signReportCard } from './chains/run-scan-chain.js';
 import { prisma } from './graphql/builder';
 import type { Context } from './graphql/builder';
 import { schema } from './graphql/schema';
@@ -1029,7 +1029,7 @@ const start = async () => {
     // proposes (never auto-runs) the watch-add write, and yields a deterministic Report
     // Card + a tokenless proof (llm_calls=0). Optional ?narrative=1 adds an explicit,
     // amber-labelled AI opinion that is counted and kept OUT of the deterministic card.
-    fastify.post<{ Body: { domain?: string }; Querystring: { narrative?: string } }>(
+    fastify.post<{ Body: { domain?: string }; Querystring: { narrative?: string; sign?: string } }>(
       '/api/v2/chains/domain-scan',
       async (request, reply) => {
         const t0 = Date.now();
@@ -1040,7 +1040,12 @@ const start = async () => {
             domain,
             baseUrl: `http://localhost:${process.env.PORT ?? '4481'}`,
           });
-          const reportCard = assembleReportCard(domain, record);
+          let reportCard: Record<string, unknown> = assembleReportCard(domain, record);
+          // @rule:Forja-2.0 — ?sign=1 SDGE-signs the card (Slice 3C): dated, tamper-evident,
+          // replayable by hash. Only sign a COMPLETED chain — never seal a partial scan.
+          if ((request.query?.sign === '1' || request.query?.sign === 'true') && record.completed) {
+            reportCard = await signReportCard(reportCard);
+          }
           const out: any = {
             record,
             reportCard,
@@ -1076,6 +1081,48 @@ const start = async () => {
           return reply
             .status(500)
             .send({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    );
+
+    // Report Card verification/replay — the hash is the public, stateless share key.
+    // Proxies the sovereign-doc ledger audit trail: anyone with the hash can confirm the
+    // card was signed, when, and that the ledger chain is intact (tamper-evident replay).
+    fastify.get<{ Params: { hash: string } }>(
+      '/api/v2/chains/report-card/verify/:hash',
+      async (request, reply) => {
+        const t0 = Date.now();
+        const hash = request.params.hash;
+        const sdge =
+          process.env.SOVEREIGN_DOC_URL ?? process.env.SDGE_URL ?? 'http://localhost:4103';
+        try {
+          const r = await fetch(`${sdge}/sdge/audit/${encodeURIComponent(hash)}`);
+          if (!r.ok) {
+            return reply
+              .status(r.status === 404 ? 404 : 502)
+              .send({
+                verified: false,
+                hash,
+                reason: r.status === 404 ? 'no ledger entry for this hash' : `SDGE ${r.status}`,
+              });
+          }
+          const trail: any = await r.json();
+          return {
+            verified: true,
+            hash,
+            ledger_entries: trail.total ?? trail.entries?.length ?? 0,
+            trail: trail.entries ?? [],
+            note: 'Ed25519-signed + hash-chained on the sovereign-doc append-only ledger.',
+            _meta: {
+              duration_ms: Date.now() - t0,
+              computed_at: new Date().toISOString(),
+              trust_mask_applied: 1,
+            },
+          };
+        } catch (e) {
+          return reply
+            .status(502)
+            .send({ verified: false, hash, reason: e instanceof Error ? e.message : String(e) });
         }
       }
     );

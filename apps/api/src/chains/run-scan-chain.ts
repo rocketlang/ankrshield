@@ -257,3 +257,52 @@ export function assembleReportCard(domain: string, record: ChainRecord) {
     },
   };
 }
+
+/**
+ * SDGE-sign a Report Card (Slice 3C): writes it to the sovereign-doc append-only ledger
+ * (Ed25519 + hash chain) so the card becomes dated, tamper-evident, and replayable by hash.
+ * Best-effort (FP-010): if SDGE is down the card is still returned, just unsigned + flagged.
+ */
+export async function signReportCard(
+  card: Record<string, unknown>,
+  fetchImpl: typeof fetch = fetch
+): Promise<Record<string, unknown>> {
+  const sdge = process.env.SOVEREIGN_DOC_URL ?? process.env.SDGE_URL ?? 'http://localhost:4103';
+  const content = JSON.stringify(card);
+  try {
+    const res = await fetchImpl(`${sdge}/sdge/ingest`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      // No security/DRP domain exists in the SDGE enum yet → UNKNOWN is the honest label.
+      body: JSON.stringify({
+        content,
+        filename: `xshield-report-card-${(card as any).domain}.json`,
+        actorId: 'xshieldai',
+        domain: 'UNKNOWN',
+      }),
+    });
+    if (!res.ok) throw new Error(`SDGE ${res.status}`);
+    const sig: any = await res.json();
+    return {
+      ...card,
+      sdge: {
+        signed: true,
+        document_hash: sig.documentHash,
+        ledger_seq: sig.ledgerSeq,
+        threat_level: sig.threatLevel,
+        signed_at: sig.zkReceipt?.timestamp ?? new Date().toISOString(),
+        verify_url: `/api/v2/chains/report-card/verify/${sig.documentHash}`,
+        note: 'Ed25519-signed + hash-chained on the sovereign-doc ledger. Replay via verify_url; the hash is the public, stateless share key.',
+      },
+    };
+  } catch (e) {
+    return {
+      ...card,
+      sdge: {
+        signed: false,
+        error: e instanceof Error ? e.message : String(e),
+        note: 'SDGE unavailable — card returned unsigned (FP-010 floor held).',
+      },
+    };
+  }
+}
