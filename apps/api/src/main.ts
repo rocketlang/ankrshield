@@ -1288,6 +1288,17 @@ const start = async () => {
       }
     );
 
+    // Privacy stats relay (WS1-T3) — real "what AnkrShield blocked" data from the live shield.
+    // Source of truth is the DNS-shield (4860), not a seed table. Feeds the consumer dashboard (T5).
+    fastify.get('/api/v2/capabilities/privacy-stats', async () => {
+      try {
+        const r = await fetchJson(`${SVC.dnsShield}/privacy-summary`);
+        return { live: true, ...r.body };
+      } catch (e) {
+        return { live: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    });
+
     // Honesty proof — own Forja STATE summary + a LIVE SENSE-400 (reject without before/after).
     fastify.get('/api/v2/capabilities/honesty', async () => {
       const state = await fetchJson(`${SVC.self}/api/v2/forja/state`).catch(() => null);

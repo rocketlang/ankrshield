@@ -28,6 +28,55 @@ const UPSTREAM_DOH = process.env.DOH_UPSTREAM ?? 'https://cloudflare-dns.com/dns
 const lookup = new DomainLookup();
 const resolver = new DNSResolver({ blocklist: lookup, cacheEnabled: true });
 
+// ── Privacy stats (WS1-T3) — the real "what AnkrShield blocked" data ──────────
+// The shield IS the source of truth for tracker activity (not a Prisma table). We track
+// category-aware aggregates in memory so the backend/dashboard serves truth, not seed data.
+const privacy = {
+  startedAt: new Date().toISOString(),
+  blocked: 0,
+  allowed: 0,
+  byCategory: new Map<string, number>(),
+  topDomains: new Map<string, number>(),
+  recent: [] as Array<{ domain: string; category: string; app: string | null; at: string }>,
+};
+async function recordBlock(domain: string, app?: string) {
+  // Own counters — resolver.stats.blocked only ticks inside resolve(), which we skip on a block.
+  privacy.blocked++;
+  const info = await lookup.getDomainInfo(domain).catch(() => null);
+  const category = (info as any)?.category ?? 'unknown';
+  privacy.byCategory.set(category, (privacy.byCategory.get(category) ?? 0) + 1);
+  privacy.topDomains.set(domain, (privacy.topDomains.get(domain) ?? 0) + 1);
+  privacy.recent.unshift({ domain, category, app: app ?? null, at: new Date().toISOString() });
+  if (privacy.recent.length > 100) privacy.recent.pop();
+}
+function recordAllow() {
+  privacy.allowed++;
+}
+function privacySummary() {
+  const top = [...privacy.topDomains.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([domain, hits]) => ({ domain, hits }));
+  const byCategory = Object.fromEntries(
+    [...privacy.byCategory.entries()].sort((a, b) => b[1] - a[1])
+  );
+  const totalBlocked = privacy.blocked;
+  const totalResolved = privacy.allowed;
+  const totalSeen = totalBlocked + totalResolved;
+  // Honest metric, not a fuzzy score: how much of this session's DNS traffic was tracking we cut.
+  const trackerBlockRatePct = totalSeen === 0 ? 0 : Math.round((totalBlocked / totalSeen) * 100);
+  return {
+    since: privacy.startedAt,
+    blocklist_size: lookup.getStats().domainsLoaded,
+    totals: { blocked: totalBlocked, resolved: totalResolved, cached: resolver.stats.cached },
+    trackers_blocked: totalBlocked,
+    tracker_block_rate_pct: trackerBlockRatePct,
+    by_category: byCategory,
+    top_trackers: top,
+    recent_blocks: privacy.recent.slice(0, 25),
+  };
+}
+
 function json(
   res: import('node:http').ServerResponse,
   status: number,
@@ -86,6 +135,7 @@ const server = createServer(async (req, res) => {
 
       const blocked = await resolver.isBlocked(name, app);
       if (blocked) {
+        void recordBlock(name, app);
         // NXDOMAIN — RFC 8484 dns-json shape; Comment marks it as a deliberate block.
         return json(
           res,
@@ -104,6 +154,7 @@ const server = createServer(async (req, res) => {
           'application/dns-json'
         );
       }
+      recordAllow();
       const up = await passthroughDoH(name, type);
       return json(res, up.status, up.body, 'application/dns-json');
     }
@@ -114,6 +165,8 @@ const server = createServer(async (req, res) => {
       const app = u.searchParams.get('app') ?? undefined;
       if (!name) return json(res, 400, { error: 'name query param required' });
       const blocked = await resolver.isBlocked(name, app);
+      if (blocked) void recordBlock(name, app);
+      else recordAllow();
       const ip = blocked ? null : await resolver.resolve(name, app);
       return json(res, 200, {
         domain: name,
@@ -129,9 +182,14 @@ const server = createServer(async (req, res) => {
       return json(res, 200, { blocklist: lookup.getStats(), resolver: resolver.stats });
     }
 
+    // ── Privacy summary (WS1-T3) — real tracker/privacy data for the dashboard ──
+    if (path === '/privacy-summary') {
+      return json(res, 200, privacySummary());
+    }
+
     return json(res, 404, {
       error: 'not found',
-      routes: ['/health', '/dns-query', '/resolve', '/stats'],
+      routes: ['/health', '/dns-query', '/resolve', '/stats', '/privacy-summary'],
     });
   } catch (e) {
     return json(res, 500, { error: e instanceof Error ? e.message : String(e) });
