@@ -2,7 +2,7 @@ package com.ankr.shield;
 
 import android.content.ContentResolver;
 import android.content.Context;
-import android.hardware.biometrics.BiometricManager;
+import androidx.biometric.BiometricManager;
 import android.os.Build;
 import android.provider.Settings;
 

@@ -163,6 +163,8 @@ dependencies {
     // WorkManager — LinkedDevicesModule/DeviceHealthModule schedule background work via
     // androidx.work; it is not transitively provided by react-android. (core/annotation are.)
     implementation("androidx.work:work-runtime:2.9.0")
+    // BiometricManager.from()/Authenticators — AndroidX biometric (not the framework class)
+    implementation("androidx.biometric:biometric:1.1.0")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
