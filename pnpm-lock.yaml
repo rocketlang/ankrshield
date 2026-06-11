@@ -6,6 +6,7 @@ settings:
 
 overrides:
   typescript: ^5.9.3
+  chalk: ^4.1.2
 
 importers:
 
@@ -369,8 +370,8 @@ importers:
   apps/warrior-cli:
     dependencies:
       chalk:
-        specifier: ^5.3.0
-        version: 5.6.2
+        specifier: ^4.1.2
+        version: 4.1.2
       commander:
         specifier: ^11.0.0
         version: 11.1.0
@@ -609,8 +610,8 @@ importers:
   packages/ankrshield-cli:
     dependencies:
       chalk:
-        specifier: ^5.3.0
-        version: 5.6.2
+        specifier: ^4.1.2
+        version: 4.1.2
       commander:
         specifier: ^12.0.0
         version: 12.1.0
@@ -4662,17 +4663,9 @@ packages:
     resolution: {integrity: sha512-RITGBfijLkBddZvnn8jdqoTypxvqbOLYQkGGxXzeFjVHvudaPw0HNFD9x928/eUwYWd2dPCugVqspGALTZZQKw==}
     engines: {node: '>=4'}
 
-  chalk@2.4.2:
-    resolution: {integrity: sha512-Mti+f9lpJNcwF4tWV8/OrTTtF1gZi+f8FqlyAdouralcFWFQWF2+NgCHShjkCb+IFBLq9buZwE1xckQU4peSuQ==}
-    engines: {node: '>=4'}
-
   chalk@4.1.2:
     resolution: {integrity: sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA==}
     engines: {node: '>=10'}
-
-  chalk@5.6.2:
-    resolution: {integrity: sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA==}
-    engines: {node: ^12.17.0 || ^14.13 || >=16.0.0}
 
   change-case-all@1.0.15:
     resolution: {integrity: sha512-3+GIFhk3sNuvFAJKU46o26OdzudQlPNBCu1ZQi3cMeMHhty1bhDxu2WrEilVNYaGvqUtR1VSigFcJOiS13dRhQ==}
@@ -6280,10 +6273,6 @@ packages:
   has-bigints@1.1.0:
     resolution: {integrity: sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg==}
     engines: {node: '>= 0.4'}
-
-  has-flag@3.0.0:
-    resolution: {integrity: sha512-sKJf1+ceQBr4SMkvQnBDNDtf4TXpVhVGateu0t918bl30FnbE2m4vNLX+VWe/dpjlb+HugGYzW7uQXH98HPEYw==}
-    engines: {node: '>=4'}
 
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
@@ -8686,6 +8675,7 @@ packages:
   recharts@2.15.4:
     resolution: {integrity: sha512-UT/q6fwS3c1dHbXv2uFgYJ9BMFHu3fwnd7AYZaEQhXuYQ4hgsxLvsUXzGdKeZrW5xopzDCvuA2N41WJ88I7zIw==}
     engines: {node: '>=14'}
+    deprecated: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
     peerDependencies:
       react: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -9410,10 +9400,6 @@ packages:
   sumchecker@3.0.1:
     resolution: {integrity: sha512-MvjXzkz/BOfyVDkG0oFOtBxHX2u3gKbMHIF/dXblZsgD3BWOFLmHovIpZY7BykJdAjcqRCBi1WYBNdEC9yI7vg==}
     engines: {node: '>= 8.0'}
-
-  supports-color@5.5.0:
-    resolution: {integrity: sha512-QjVjwdXIt408MIiAqCX4oUKsgU2EqAGzs2Ppkm4aQYbjm+ZEWEcW4SfFNTr4uMNZma0ey4f5lgLrkB0aX0QMow==}
-    engines: {node: '>=4'}
 
   supports-color@7.2.0:
     resolution: {integrity: sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw==}
@@ -10502,7 +10488,7 @@ snapshots:
   '@babel/highlight@7.25.9':
     dependencies:
       '@babel/helper-validator-identifier': 7.28.5
-      chalk: 2.4.2
+      chalk: 4.1.2
       js-tokens: 4.0.0
       picocolors: 1.1.1
 
@@ -15495,18 +15481,10 @@ snapshots:
       pathval: 1.1.1
       type-detect: 4.1.0
 
-  chalk@2.4.2:
-    dependencies:
-      ansi-styles: 3.2.1
-      escape-string-regexp: 1.0.5
-      supports-color: 5.5.0
-
   chalk@4.1.2:
     dependencies:
       ansi-styles: 4.3.0
       supports-color: 7.2.0
-
-  chalk@5.6.2: {}
 
   change-case-all@1.0.15:
     dependencies:
@@ -17482,8 +17460,6 @@ snapshots:
 
   has-bigints@1.1.0: {}
 
-  has-flag@3.0.0: {}
-
   has-flag@4.0.0: {}
 
   has-property-descriptors@1.0.2:
@@ -18631,7 +18607,7 @@ snapshots:
 
   lint-staged@15.5.2:
     dependencies:
-      chalk: 5.6.2
+      chalk: 4.1.2
       commander: 13.1.0
       debug: 4.4.3
       execa: 8.0.1
@@ -18749,7 +18725,7 @@ snapshots:
 
   log-symbols@2.2.0:
     dependencies:
-      chalk: 2.4.2
+      chalk: 4.1.2
 
   log-symbols@4.1.0:
     dependencies:
@@ -18758,12 +18734,12 @@ snapshots:
 
   log-symbols@5.1.0:
     dependencies:
-      chalk: 5.6.2
+      chalk: 4.1.2
       is-unicode-supported: 1.3.0
 
   log-symbols@6.0.0:
     dependencies:
-      chalk: 5.6.2
+      chalk: 4.1.2
       is-unicode-supported: 1.3.0
 
   log-update@5.0.1:
@@ -19532,7 +19508,7 @@ snapshots:
 
   ora@3.4.0:
     dependencies:
-      chalk: 2.4.2
+      chalk: 4.1.2
       cli-cursor: 2.1.0
       cli-spinners: 2.9.2
       log-symbols: 2.2.0
@@ -19553,7 +19529,7 @@ snapshots:
 
   ora@7.0.1:
     dependencies:
-      chalk: 5.6.2
+      chalk: 4.1.2
       cli-cursor: 4.0.0
       cli-spinners: 2.9.2
       is-interactive: 2.0.0
@@ -19565,7 +19541,7 @@ snapshots:
 
   ora@8.2.0:
     dependencies:
-      chalk: 5.6.2
+      chalk: 4.1.2
       cli-cursor: 5.0.0
       cli-spinners: 2.9.2
       is-interactive: 2.0.0
@@ -21130,10 +21106,6 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
-
-  supports-color@5.5.0:
-    dependencies:
-      has-flag: 3.0.0
 
   supports-color@7.2.0:
     dependencies:

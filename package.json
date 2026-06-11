@@ -18,8 +18,8 @@
     "pegasus-detection",
     "spyware-detection"
   ],
-  "author": "ankrshield Team",
-  "license": "TBD",
+  "author": "xShieldAI Team",
+  "license": "AGPL-3.0-only",
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=8.0.0"
@@ -76,7 +76,8 @@
   },
   "pnpm": {
     "overrides": {
-      "typescript": "^5.9.3"
+      "typescript": "^5.9.3",
+      "chalk": "^4.1.2"
     }
   },
   "prisma": {
