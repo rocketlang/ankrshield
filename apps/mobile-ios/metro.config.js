@@ -30,7 +30,7 @@ const config = {
     // The @ankrshield/* backend packages use two Node builtins that RN lacks: `events`
     // (the events npm polyfill is installed) and `crypto` (only crypto.randomUUID — local shim).
     extraNodeModules: {
-      events: require.resolve('events/'),
+      events: require.resolve('events'),
       crypto: path.resolve(projectRoot, 'shims/crypto.js'),
     },
     // The @ankrshield/* packages are bundled from TS SOURCE (no build step), and their

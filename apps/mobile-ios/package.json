@@ -29,7 +29,8 @@
     "@ankrshield/android-monitor": "workspace:*",
     "@ankrshield/dpdp-scanner": "workspace:*",
     "@ankrshield/privacy-engine": "workspace:*",
-    "@ankrshield/sms-shield": "workspace:*"
+    "@ankrshield/sms-shield": "workspace:*",
+    "events": "^3.3.0"
   },
   "devDependencies": {
     "@babel/core": "^7.23.7",
