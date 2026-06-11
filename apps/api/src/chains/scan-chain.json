@@ -1,0 +1,44 @@
+{
+  "_schema": "ankr-widget-chain-v1",
+  "_note": "xShieldAI operator surface (Slice 2B). Models FreightBox booking-open / mari8x voyage-open. Deterministic DRP reads run as tokenless AOS turns over the shared chain-runtime; the AI narrative is deliberately NOT a chain node so the tokenless proof (llm_calls=0) is real, not an artifact of the proxy-counter missing a direct call. Narrative is an explicit amber-labelled opt-in enrichment on the route.",
+  "chains": [
+    {
+      "id": "domain-scan",
+      "label": "Domain-Scan — full DRP posture in one governed turn",
+      "desc": "When a domain scan is requested, assemble its whole threat picture: deterministic risk grade, DNS/email-auth posture, and the remediation playbook — three declared reads, context (domain) threaded, 0 LLM tokens. Optional gated tail proposes continuous monitoring.",
+      "profile": { "baseUrl": "http://localhost:4481", "gqlPath": "/graphql" },
+      "trigger": { "event": "domain.scan", "payloadKeys": ["domain"] },
+      "nodes": [
+        {
+          "slug": "risk-score",
+          "path": "/risk/score?domain={entity}",
+          "needs": ["domain"],
+          "argsFrom": { "domain": "trigger.domain" },
+          "why": "deterministic multi-source risk grade"
+        },
+        {
+          "slug": "dns-posture",
+          "path": "/dns/lookup?domain={entity}",
+          "needs": ["domain"],
+          "argsFrom": { "domain": "trigger.domain" },
+          "why": "SPF / DMARC / DNSSEC email-auth posture"
+        },
+        {
+          "slug": "remediation-playbook",
+          "path": "/risk/playbook?domain={entity}",
+          "needs": ["domain"],
+          "argsFrom": { "domain": "trigger.domain" },
+          "why": "prioritised remediation steps"
+        }
+      ],
+      "gatedTail": {
+        "action": "watch.add",
+        "gate_tier": "single",
+        "approvals": 1,
+        "commitMode": "pause-only",
+        "argsFrom": { "domain": "trigger.domain" },
+        "note": "Gated write: the chain PAUSES here and proposes adding the domain to continuous monitoring. A read-chain may never silently start a write — the operator (or a principal holding the watch permission) approves. Denying stops the chain; the refusal is the safeguard."
+      }
+    }
+  ]
+}

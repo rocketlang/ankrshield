@@ -33,6 +33,7 @@ import mercurius from 'mercurius';
 import WS from 'ws';
 
 import { hashPassword, comparePassword } from './auth/password.js';
+import { runScanChain, assembleReportCard } from './chains/run-scan-chain.js';
 import { prisma } from './graphql/builder';
 import type { Context } from './graphql/builder';
 import { schema } from './graphql/schema';
@@ -1021,6 +1022,63 @@ const start = async () => {
         _meta: forjaMeta(t0),
       };
     });
+
+    // ── Operator Surface — tokenless governed scan-chains (Slice 2B) ──────────────
+    // The moat: a DRP scan is a governed turn over DECLARED deterministic reads, not an
+    // LLM loop. POST a domain → the chain runs risk/dns/playbook as tokenless AOS turns,
+    // proposes (never auto-runs) the watch-add write, and yields a deterministic Report
+    // Card + a tokenless proof (llm_calls=0). Optional ?narrative=1 adds an explicit,
+    // amber-labelled AI opinion that is counted and kept OUT of the deterministic card.
+    fastify.post<{ Body: { domain?: string }; Querystring: { narrative?: string } }>(
+      '/api/v2/chains/domain-scan',
+      async (request, reply) => {
+        const t0 = Date.now();
+        const domain = request.body?.domain?.trim();
+        if (!domain) return reply.status(400).send({ error: 'domain required in body' });
+        try {
+          const record = await runScanChain({
+            domain,
+            baseUrl: `http://localhost:${process.env.PORT ?? '4481'}`,
+          });
+          const reportCard = assembleReportCard(domain, record);
+          const out: any = {
+            record,
+            reportCard,
+            _meta: {
+              duration_ms: Date.now() - t0,
+              computed_at: new Date().toISOString(),
+              trust_mask_applied: 1,
+            },
+          };
+          // Optional AI narrative — explicit opt-in, counted, NOT folded into the card (CA-005).
+          if (request.query?.narrative === '1' || request.query?.narrative === 'true') {
+            try {
+              const r = await fetch(
+                `http://localhost:${process.env.PORT ?? '4481'}/risk/narrative?domain=${encodeURIComponent(domain)}`
+              );
+              if (r.ok) {
+                out.ai_narrative = {
+                  text: await r.text(),
+                  ai_generated: true,
+                  human_modified: false,
+                  badge: 'amber-opinion',
+                  counted_as_llm: true,
+                };
+                out.record.note =
+                  'narrative requested separately — the chain record above remains tokenless; the narrative is the only LLM call';
+              }
+            } catch {
+              /* FP-010 floor: narrative best-effort, never takes the scan down */
+            }
+          }
+          return out;
+        } catch (err) {
+          return reply
+            .status(500)
+            .send({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    );
 
     // ─── APK download endpoints ───────────────────────────────────────────────
     // GET /download/ankrshield.apk — serve APK directly if present, else redirect to GitHub release
