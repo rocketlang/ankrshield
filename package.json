@@ -77,7 +77,11 @@
   "pnpm": {
     "overrides": {
       "typescript": "^5.9.3",
-      "chalk": "^4.1.2"
+      "chalk": "^4.1.2",
+      "react-native-screens": "3.29.0",
+      "react-native-safe-area-context": "4.8.2",
+      "react-native-svg": "14.1.0",
+      "@react-native-community/netinfo": "11.1.0"
     }
   },
   "prisma": {
