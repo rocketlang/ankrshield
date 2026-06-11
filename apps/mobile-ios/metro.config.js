@@ -27,6 +27,12 @@ const config = {
     ],
     unstable_enableSymlinks: true,
     disableHierarchicalLookup: false,
+    // The @ankrshield/* backend packages use two Node builtins that RN lacks: `events`
+    // (the events npm polyfill is installed) and `crypto` (only crypto.randomUUID — local shim).
+    extraNodeModules: {
+      events: require.resolve('events/'),
+      crypto: path.resolve(projectRoot, 'shims/crypto.js'),
+    },
     // The @ankrshield/* packages are bundled from TS SOURCE (no build step), and their
     // source uses TS NodeNext `.js` extensions in relative imports (e.g.
     // `./iocs/stalkerware-packages.js` where the file is `.ts`). Metro doesn't map .js→.ts,
