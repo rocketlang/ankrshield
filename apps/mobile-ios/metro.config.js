@@ -27,6 +27,20 @@ const config = {
     ],
     unstable_enableSymlinks: true,
     disableHierarchicalLookup: false,
+    // The @ankrshield/* packages are bundled from TS SOURCE (no build step), and their
+    // source uses TS NodeNext `.js` extensions in relative imports (e.g.
+    // `./iocs/stalkerware-packages.js` where the file is `.ts`). Metro doesn't map .js→.ts,
+    // so strip the explicit .js and let Metro resolve the .ts/.tsx source.
+    resolveRequest: (context, moduleName, platform) => {
+      if (moduleName.startsWith('.') && moduleName.endsWith('.js')) {
+        try {
+          return context.resolveRequest(context, moduleName.replace(/\.js$/, ''), platform);
+        } catch (e) {
+          // fall through to the default resolver below
+        }
+      }
+      return context.resolveRequest(context, moduleName, platform);
+    },
   },
 };
 
