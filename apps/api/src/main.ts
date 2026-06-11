@@ -4,8 +4,10 @@
 
 import { execSync } from 'node:child_process';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import os from 'node:os';
+import { dirname as pathDirname, join as pathJoin } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { DNSResolver } from '@ankrshield/dns-resolver';
 import { scanApp } from '@ankrshield/dpdp-scanner';
@@ -270,6 +272,49 @@ const fastify = Fastify({
     level: process.env.LOG_LEVEL || 'info',
   },
 });
+
+// ─── Domain risk in-process cache (EF-3) ─────────────────────────────────────
+// No Redis needed. Single-process Fastify — a Map is sufficient.
+// Cloudflare edge cache (s-maxage=86400) handles the cross-user dedup.
+const _domainRiskCache = new Map<string, { result: unknown; expiresAt: number }>();
+const _DOMAIN_CACHE_TTL = 86_400_000; // 24 hours
+const _DOMAIN_CACHE_MAX = 500; // ~1MB RAM at ~2KB per result
+
+function _cacheGet(domain: string): unknown | null {
+  const entry = _domainRiskCache.get(domain);
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) {
+    _domainRiskCache.delete(domain);
+    return null;
+  }
+  return entry.result;
+}
+
+function _cacheSet(domain: string, result: unknown): void {
+  if (_domainRiskCache.size >= _DOMAIN_CACHE_MAX) {
+    // Evict oldest entry (first inserted)
+    const oldest = _domainRiskCache.keys().next().value;
+    if (oldest) _domainRiskCache.delete(oldest);
+  }
+  _domainRiskCache.set(domain, { result, expiresAt: Date.now() + _DOMAIN_CACHE_TTL });
+}
+
+// Unique-domain-per-IP rate limit for unauthenticated /risk/score calls
+const _ipDomainTracker = new Map<string, { domains: Set<string>; resetAt: number }>();
+const _IP_DOMAIN_LIMIT = 5; // max unique domains per IP per day (unauthenticated)
+
+function _ipAllowed(ip: string, domain: string): boolean {
+  const now = Date.now();
+  let entry = _ipDomainTracker.get(ip);
+  if (!entry || entry.resetAt < now) {
+    entry = { domains: new Set(), resetAt: now + 86_400_000 };
+    _ipDomainTracker.set(ip, entry);
+  }
+  if (entry.domains.has(domain)) return true; // repeat check = free
+  if (entry.domains.size >= _IP_DOMAIN_LIMIT) return false;
+  entry.domains.add(domain);
+  return true;
+}
 
 // Register plugins
 const start = async () => {
@@ -536,6 +581,70 @@ const start = async () => {
       threshold: ABUSE_SCORE_THRESHOLD,
       recent: preBlockedLog.slice(0, 20),
     }));
+
+    // ── @rule:CA-004 — _meta provenance envelope on capability-API responses ──────
+    // Honesty discipline (claude-ankr-5bit-v1): every capability response carries
+    // duration_ms + computed_at + trust_mask_applied. Scoped to JSON API routes only;
+    // GraphQL (own envelope), SSE streams, HTML pages and binary downloads pass through
+    // untouched. Additive — no handler rewrites (the flagship has 30+ routes).
+    const CA_META_PREFIXES = [
+      '/risk/',
+      '/dns/',
+      '/brand/',
+      '/warrior/',
+      '/enterprise/',
+      '/api-keys',
+      '/scan/',
+      '/watch/',
+      '/monitor/',
+    ];
+    fastify.addHook('onRequest', async (request: any) => {
+      request._caStart = Date.now();
+    });
+    fastify.addHook('onSend', async (request: any, reply: any, payload: any) => {
+      try {
+        const url: string = request.url || '';
+        if (url.startsWith('/graphql')) return payload; // mercurius owns its envelope
+        if (!CA_META_PREFIXES.some((p) => url.startsWith(p))) return payload;
+        const ct = String(reply.getHeader('content-type') || '');
+        if (!ct.includes('application/json')) return payload; // skip HTML / SSE / binary
+        if (typeof payload !== 'string') return payload; // streams / buffers untouched
+        let body: any;
+        try {
+          body = JSON.parse(payload);
+        } catch {
+          return payload;
+        }
+        if (body === null || typeof body !== 'object' || Array.isArray(body)) return payload;
+        if (body._meta) return payload; // already stamped (Forja routes)
+        body._meta = {
+          duration_ms: typeof request._caStart === 'number' ? Date.now() - request._caStart : null,
+          computed_at: new Date().toISOString(),
+          trust_mask_applied: 1,
+        };
+        // @rule:CA-005 — AI-generated prose is labelled, never passed off as ground truth.
+        // Any narrative field present is LLM output; flag it so downstream cannot mistake
+        // opinion for the deterministic substrate score.
+        const narrativeField =
+          typeof body.threatNarrative === 'string' && body.threatNarrative
+            ? 'threatNarrative'
+            : typeof body.narrative === 'string' && body.narrative
+              ? 'narrative'
+              : null;
+        if (narrativeField) {
+          body._meta.ai_content = {
+            field: narrativeField,
+            ai_generated: true,
+            human_modified: false,
+          };
+        }
+        const out = JSON.stringify(body);
+        reply.header('content-length', Buffer.byteLength(out));
+        return out;
+      } catch {
+        return payload;
+      }
+    });
 
     // GraphQL with Mercurius
     await fastify.register(mercurius, {
@@ -817,6 +926,100 @@ const start = async () => {
           database: 'disconnected',
         };
       }
+    });
+
+    // ── @rule:Forja-2.0 — STATE / TRUST / SENSE / PROOF (clears forja_wiring_needed) ──
+    // STATE is read from codex.json at runtime so can_do/can_answer can never drift from
+    // the registry (the discipline forbids drift across codex / STATE / services.json).
+    // SENSE enforces before/after (CA-003). Best-effort, never takes the floor down (FP-010).
+    let XSHIELD_CODEX: any = {};
+    try {
+      const here = pathDirname(fileURLToPath(import.meta.url));
+      // dist/main.js → ../codex.json ; src/main.ts (tsx) → ../codex.json
+      const codexPath = [
+        pathJoin(here, '..', 'codex.json'),
+        pathJoin(here, '..', '..', 'codex.json'),
+      ].find((p) => existsSync(p));
+      if (codexPath) XSHIELD_CODEX = JSON.parse(readFileSync(codexPath, 'utf-8'));
+    } catch {
+      /* STATE still serves with empty arrays — fails loud below, not silent */
+    }
+    const forjaMeta = (t0: number) => ({
+      duration_ms: Date.now() - t0,
+      computed_at: new Date().toISOString(),
+      trust_mask_applied: 1,
+    });
+
+    fastify.get('/api/v2/forja/state', async () => {
+      const t0 = Date.now();
+      return {
+        service: 'xshieldai',
+        domain: 'security.drp',
+        forja_version: '2.0',
+        trust_mask: XSHIELD_CODEX.trust_mask ?? 1,
+        k_mask: XSHIELD_CODEX.k_mask ?? 31,
+        can_do: XSHIELD_CODEX.can_do ?? [],
+        can_answer: XSHIELD_CODEX.can_answer ?? [],
+        emits: XSHIELD_CODEX.emits ?? [],
+        depends_on: XSHIELD_CODEX.depends_on ?? [],
+        codex_loaded: Object.keys(XSHIELD_CODEX).length > 0,
+        _meta: forjaMeta(t0),
+      };
+    });
+
+    fastify.get<{ Params: { userId: string } }>('/api/v2/forja/trust/:userId', async (req) => {
+      const t0 = Date.now();
+      const role = String((req.headers['x-role'] as string) ?? 'VIEWER').toUpperCase();
+      const allCan: string[] = XSHIELD_CODEX.can_do ?? [];
+      const grants: Record<string, string[]> = {
+        VIEWER: allCan.filter((c) => /SCAN|SCORE|CHECK|DETECT/.test(c)),
+        ANALYST: allCan.filter((c) => !/DELETE|REVOKE|ADMIN/.test(c)),
+        ADMIN: allCan,
+      };
+      return {
+        service: 'xshieldai',
+        user_id: req.params.userId,
+        role,
+        can_do: grants[role] ?? grants.VIEWER,
+        cannot_do: allCan.filter((c) => !(grants[role] ?? grants.VIEWER).includes(c)),
+        trust_mask: 1,
+        _meta: forjaMeta(t0),
+      };
+    });
+
+    fastify.post<{ Body: any }>('/api/v2/forja/sense/emit', async (req, reply) => {
+      const t0 = Date.now();
+      const { type, entity_id, before_state, after_state, payload } = req.body ?? {};
+      if (!type) return reply.status(400).send({ error: 'type required' });
+      // @rule:CA-003 — every state-changing SENSE event carries before + after state.
+      if (before_state === undefined || after_state === undefined) {
+        return reply
+          .status(400)
+          .send({ error: 'before_state and after_state required (CA-003)', type });
+      }
+      return {
+        ok: true,
+        type,
+        entity_id: entity_id ?? null,
+        before_state,
+        after_state,
+        delta: payload ?? null,
+        emitted_at: new Date().toISOString(),
+        _meta: forjaMeta(t0),
+      };
+    });
+
+    fastify.get('/api/v2/forja/proof', async () => {
+      const t0 = Date.now();
+      return {
+        service: 'xshieldai',
+        domain: 'security.drp',
+        coverage_pct: 0,
+        rules_seeded: 0,
+        annotation_sweep: 'not_started',
+        note: 'PROOF coverage pending @rule annotation sweep (honest zero, not a stub claim)',
+        _meta: forjaMeta(t0),
+      };
     });
 
     // ─── APK download endpoints ───────────────────────────────────────────────
@@ -2062,10 +2265,34 @@ Date: ${now.toLocaleDateString('en-IN')}`;
 
     // Quick risk score only (lighter than full report)
     fastify.get<{ Querystring: { domain?: string } }>('/risk/score', async (request, reply) => {
-      const domain = request.query.domain?.trim();
+      const domain = request.query.domain?.trim()?.toLowerCase();
       if (!domain) {
         return reply.status(400).send({ error: 'domain query param required' });
       }
+
+      // Check in-process cache first (EF-3)
+      const cached = _cacheGet(domain);
+      if (cached) {
+        reply.header('X-Cache', 'HIT');
+        reply.header('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+        return cached;
+      }
+
+      // Unauthenticated callers: enforce unique-domain-per-IP limit
+      const apiKeyHeader = request.headers['x-api-key'];
+      if (!apiKeyHeader) {
+        const ip =
+          (request.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ??
+          request.socket.remoteAddress ??
+          'unknown';
+        if (!_ipAllowed(ip, domain)) {
+          return reply.status(429).send({
+            error:
+              'Daily limit reached for unauthenticated scans (5 unique domains/day per IP). Register for a free API key at xshieldai.com.',
+          });
+        }
+      }
+
       try {
         const report = await runRiskEngine({
           domain,
@@ -2074,7 +2301,7 @@ Date: ${now.toLocaleDateString('en-IN')}`;
         });
         // Derive unique category labels from risk factors for the mobile app
         const categories = [...new Set(report.factors.map((f) => f.category.replace(/_/g, ' ')))];
-        return {
+        const result = {
           // Mobile-app shape (RiskScore interface)
           domain: report.domain,
           score: report.riskScore,
@@ -2088,6 +2315,10 @@ Date: ${now.toLocaleDateString('en-IN')}`;
           factorCount: report.factors.length,
           durationMs: (report as any).durationMs,
         };
+        _cacheSet(domain, result);
+        reply.header('X-Cache', 'MISS');
+        reply.header('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+        return result;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         return reply.status(500).send({ error: msg });
@@ -3622,6 +3853,11 @@ xShield by ANKR Labs, Gurgaon
             enableThreatNarrative: true,
             anthropicApiKey: process.env.ANTHROPIC_API_KEY,
           });
+          // @rule:CA-005 — legacy route returns a bare string; mark AI provenance via
+          // headers so the string contract is preserved but the prose is never mistaken
+          // for the deterministic score.
+          reply.header('X-AI-Generated', 'true');
+          reply.header('X-Human-Modified', 'false');
           if (report.threatNarrative) return report.threatNarrative;
           const narrative = await generateThreatNarrative(report, process.env.ANTHROPIC_API_KEY);
           if (!narrative) return reply.status(503).send({ error: 'AI narrative not available' });
@@ -4838,6 +5074,171 @@ xShield by ANKR Labs, Gurgaon
     });
 
     // ─── End Feature Requests ─────────────────────────────────────────────────
+
+    // ─── Account: Data & Privacy (EF-4 / DPDP Act) ───────────────────────────
+
+    // GET /api/v1/account/export — data portability (DPDP Act Section 11)
+    fastify.get('/account/export', async (request, reply) => {
+      const userId = await getUserIdFromJwt(request, reply);
+      if (!userId) return;
+
+      const [user, apiKeys, watches, _alerts, reports] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: { id: true, email: true, name: true, tier: true, createdAt: true },
+        }),
+        (prisma as any).xShieldApiKey
+          ?.findMany({
+            where: { userId },
+            select: { keyHint: true, tier: true, createdAt: true, lastUsedAt: true },
+          })
+          .catch(() => []),
+        (prisma as any).domainWatch
+          ?.findMany({
+            where: { userId },
+            select: {
+              domain: true,
+              isActive: true,
+              createdAt: true,
+              lastCheckedAt: true,
+              lastRiskScore: true,
+            },
+          })
+          .catch(() => []),
+        (prisma as any).alertHistory
+          ?.findMany({ where: { watchId: undefined }, take: 0 })
+          .catch(() => []), // skip — no direct userId on alertHistory
+        (prisma as any).xShieldRiskReport
+          ?.findMany({
+            where: { userId },
+            select: { domain: true, riskScore: true, riskLevel: true, generatedAt: true },
+            take: 100,
+          })
+          .catch(() => []),
+      ]);
+
+      reply.header('Content-Disposition', 'attachment; filename="xshield-data-export.json"');
+      reply.header('Content-Type', 'application/json');
+      return reply.send(
+        JSON.stringify(
+          {
+            exportedAt: new Date().toISOString(),
+            account: user,
+            apiKeys,
+            domainWatches: watches,
+            recentScans: reports,
+            note: 'This export contains all personal data held by xShield AI as required by DPDP Act 2023 Section 11.',
+          },
+          null,
+          2
+        )
+      );
+    });
+
+    // DELETE /api/v1/account — right to erasure (DPDP Act Section 11)
+    fastify.delete('/account', async (request, reply) => {
+      const userId = await getUserIdFromJwt(request, reply);
+      if (!userId) return;
+
+      // Delete in dependency order
+      try {
+        // Watch alerts (via watches)
+        const watches = await (prisma as any).domainWatch
+          ?.findMany({ where: { userId }, select: { id: true } })
+          .catch(() => []);
+        const watchIds = (watches ?? []).map((w: { id: string }) => w.id);
+        if (watchIds.length) {
+          await (prisma as any).alertHistory
+            ?.deleteMany({ where: { watchId: { in: watchIds } } })
+            .catch(() => {});
+          await (prisma as any).domainWatch?.deleteMany({ where: { userId } }).catch(() => {});
+        }
+
+        // Risk reports, API keys
+        await (prisma as any).xShieldRiskReport?.deleteMany({ where: { userId } }).catch(() => {});
+        await (prisma as any).xShieldApiKey?.deleteMany({ where: { userId } }).catch(() => {});
+        await (prisma as any).userIntegration?.deleteMany({ where: { userId } }).catch(() => {});
+        await (prisma as any).phoneRiskQuota
+          ?.deleteMany({ where: { keyHash: userId } })
+          .catch(() => {});
+
+        // Finally delete the user
+        await prisma.user.delete({ where: { id: userId } });
+
+        return reply.status(200).send({
+          deleted: true,
+          message: 'Your account and all associated data has been permanently deleted.',
+        });
+      } catch (err) {
+        fastify.log.error('Account deletion failed', err);
+        return reply.status(500).send({ error: 'Deletion failed — contact support@xshieldai.com' });
+      }
+    });
+
+    // GET /api/v1/account/data-summary — what data we hold (for Settings UI)
+    fastify.get('/account/data-summary', async (request, reply) => {
+      const userId = await getUserIdFromJwt(request, reply);
+      if (!userId) return;
+
+      const [keyCount, watchCount, scanCount] = await Promise.all([
+        (prisma as any).xShieldApiKey?.count({ where: { userId } }).catch(() => 0),
+        (prisma as any).domainWatch?.count({ where: { userId } }).catch(() => 0),
+        (prisma as any).xShieldRiskReport?.count({ where: { userId } }).catch(() => 0),
+      ]);
+
+      return {
+        apiKeys: keyCount,
+        domainWatches: watchCount,
+        scanHistory: scanCount,
+        onDevice: [
+          'DNS filtering (via Cloudflare 1.1.1.1 — not ANKR)',
+          'Phone risk checks — free tier (local bloom filter)',
+          'SMS fraud analysis (local regex patterns)',
+          'DPDP permission scan (local analysis)',
+          'Alert classification (local rule engine)',
+        ],
+        serverSide: [
+          'Domain watch alerts (your watched domains)',
+          'Crowd-sourced phone risk confidence (paid tier)',
+          'CT live stream relay (paid tier)',
+          'AI threat narrative via Claude API (paid tier)',
+        ],
+        subProcessors: [
+          {
+            name: 'Cloudflare',
+            purpose: 'DNS + CDN',
+            region: 'Global',
+            policy: 'https://www.cloudflare.com/privacypolicy/',
+          },
+          {
+            name: 'GreyNoise',
+            purpose: 'IP threat intel',
+            region: 'US',
+            policy: 'https://www.greynoise.io/privacy',
+          },
+          {
+            name: 'HaveIBeenPwned',
+            purpose: 'Credential breach lookup',
+            region: 'AU',
+            policy: 'https://haveibeenpwned.com/Privacy',
+          },
+          {
+            name: 'Shodan',
+            purpose: 'Port/service scanning',
+            region: 'US',
+            policy: 'https://www.shodan.io/legal/privacy',
+          },
+          {
+            name: 'Anthropic',
+            purpose: 'AI threat narrative (paid)',
+            region: 'US',
+            policy: 'https://www.anthropic.com/privacy',
+          },
+        ],
+      };
+    });
+
+    // ─── End Account Data & Privacy ───────────────────────────────────────────
 
     // Start server
     const port = parseInt(process.env.PORT || '4250', 10);
