@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./src/index.ts"
+      "import": "./dist/index.js"
     }
   },
   "scripts": {
@@ -16,5 +16,7 @@
   "dependencies": {},
   "devDependencies": {
     "typescript": "^5.0.0"
-  }
+  },
+  "type": "module",
+  "react-native": "src/index.ts"
 }
