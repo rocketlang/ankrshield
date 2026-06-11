@@ -160,6 +160,10 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
+    // WorkManager — LinkedDevicesModule/DeviceHealthModule schedule background work via
+    // androidx.work; it is not transitively provided by react-android. (core/annotation are.)
+    implementation("androidx.work:work-runtime:2.9.0")
+
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
     def isWebpAnimatedEnabled = (findProperty('expo.webp.animated') ?: "") == "true";
