@@ -11,8 +11,8 @@
  * Response: { Answer: [{data: '1.2.3.4', ...}] }
  */
 
-import { isAllowedForApp } from './blocklist/app-allowlist';
-import type { DomainLookup } from './blocklist/lookup';
+import { isAllowedForApp } from './blocklist/app-allowlist.js';
+import type { DomainLookup } from './blocklist/lookup.js';
 
 export interface DNSResolverOptions {
   upstream?: string;
