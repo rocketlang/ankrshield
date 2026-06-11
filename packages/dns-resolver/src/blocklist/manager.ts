@@ -8,6 +8,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+
 import { DomainLookup } from './lookup';
 
 export class BlocklistManager {
@@ -50,7 +51,7 @@ export class BlocklistManager {
 
       // Add to lookup structures
       await this.lookup.addDomains(
-        trackers.map(t => ({
+        trackers.map((t) => ({
           domain: t.domain,
           category: t.category,
           threatLevel: t.threatLevel,
@@ -62,7 +63,9 @@ export class BlocklistManager {
 
       // Progress update
       const percentage = ((loaded / totalTrackers) * 100).toFixed(1);
-      process.stdout.write(`\r  Progress: ${loaded.toLocaleString()} / ${totalTrackers.toLocaleString()} (${percentage}%)`);
+      process.stdout.write(
+        `\r  Progress: ${loaded.toLocaleString()} / ${totalTrackers.toLocaleString()} (${percentage}%)`
+      );
     }
 
     console.log('\n✓ Blocklists loaded successfully');
@@ -71,11 +74,28 @@ export class BlocklistManager {
   }
 
   /**
+   * Load blocklists straight from the parsed NDJSON cache (no Postgres) — the data floor.
+   * Use this for the DNS-shield enforcement path; loadFromDatabase() is for categorised
+   * dashboard queries that need the relational Tracker rows.
+   */
+  async loadFromNdjson(
+    filePath?: string
+  ): Promise<{ read: number; loaded: number; skipped: number }> {
+    const { loadNdjsonIntoLookup } = await import('./ndjson-loader.js');
+    const res = await loadNdjsonIntoLookup(this.lookup, filePath);
+    this.isLoaded = true;
+    console.log(
+      `✓ Blocklist floor loaded: ${res.loaded.toLocaleString()} domains (${res.skipped.toLocaleString()} junk skipped)`
+    );
+    return { read: res.read, loaded: res.loaded, skipped: res.skipped };
+  }
+
+  /**
    * Check if a domain is blocked
    */
   async isBlocked(domain: string): Promise<boolean> {
     if (!this.isLoaded) {
-      throw new Error('Blocklists not loaded. Call loadFromDatabase() first.');
+      throw new Error('Blocklists not loaded. Call loadFromDatabase() or loadFromNdjson() first.');
     }
 
     return this.lookup.isBlocked(domain);
