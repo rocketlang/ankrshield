@@ -9,7 +9,9 @@
     "is-this-llm-endpoint-vulnerable-to-prompt-injection",
     "what-is-this-endpoints-refusal-rate",
     "does-this-endpoint-comply-with-ca-006",
-    "what-attack-techniques-succeed-against-this-endpoint"
+    "what-attack-techniques-succeed-against-this-endpoint",
+    "state",
+    "proof"
   ],
   "can_do": [
     "PROBE_RUN",
@@ -56,6 +58,130 @@
     "state": "clean",
     "built": ["PROBE_RUN", "ENDPOINT_SCAN", "ATTESTATION_ISSUE", "REFUSAL_CLASSIFY"],
     "partial": ["REGRESSION_DETECT"],
-    "not_built": []
+    "not_built": [],
+    "can_answer_status": {
+      "is-this-llm-endpoint-vulnerable-to-prompt-injection": "❓",
+      "what-is-this-endpoints-refusal-rate": "❓",
+      "does-this-endpoint-comply-with-ca-006": "❓",
+      "what-attack-techniques-succeed-against-this-endpoint": "❓",
+      "state": "❓",
+      "proof": "❓"
+    },
+    "can_do_status": {
+      "PROBE_RUN": "❓",
+      "ENDPOINT_SCAN": "❓",
+      "ATTESTATION_ISSUE": "❓",
+      "REFUSAL_CLASSIFY": "❓",
+      "REGRESSION_DETECT": "❓"
+    },
+    "counts": {
+      "built": 0,
+      "partial": 0,
+      "unknown": 11,
+      "not_built": 0
+    }
+  },
+  "vivaran_last_scan": "2026-05-08T01:45:13.559Z",
+  "rvf_hook_installed": true,
+  "rvf_k_mask": 61,
+  "rvf_k_mask_schema": "ankr-rvf-8bit-v1",
+  "rvf_baseline": {
+    "captured_at": "2026-05-15T06:35:45.882Z",
+    "captured_by": "ankr-rvf-bulk-install.ts (T-030 rollout)"
+  },
+  "rvf_last_refresh": {
+    "at": "2026-05-15T07:37:13.653Z",
+    "by": "ankr-rvf-bit-refresh.ts",
+    "mask_before": 61,
+    "mask_after": 61,
+    "mask_before_hex": "0x3D",
+    "mask_after_hex": "0x3D",
+    "flipped": [],
+    "layer_status": {
+      "typecheck": "skip",
+      "lint": "skip",
+      "secret_scan": "pass",
+      "port_probe": "pass",
+      "migrate_diff": "pass",
+      "claw_audit": "skip",
+      "capability_reconfirm": "skip",
+      "duration_ms": 175
+    }
+  },
+  "rvf_last_deep_refresh": {
+    "at": "2026-05-15T07:16:00.335Z",
+    "by": "ankr-rvf-deep-refresh.ts",
+    "mask_before": 49,
+    "mask_after": 61,
+    "mask_before_hex": "0x31",
+    "mask_after_hex": "0x3D",
+    "flipped": ["+bit2(claw_audit)", "+bit3(capability_reconfirm)"],
+    "layer_status": {
+      "typecheck": "skip",
+      "lint": "skip",
+      "secret_scan": "pass",
+      "port_probe": "pass",
+      "migrate_diff": "pass",
+      "claw_audit": "pass",
+      "capability_reconfirm": "pass",
+      "duration_ms": 5260
+    }
+  },
+  "cim_mask": 12,
+  "cim_mask_schema": "cim-mask-v1",
+  "cim_mask_last_refresh": {
+    "at": "2026-05-22T10:30:21.386Z",
+    "mask_before": 0,
+    "mask_after": 12,
+    "flipped": ["+bit2(invariants_declared)", "+bit3(invariants_holding)"],
+    "probe_summary": {
+      "pass": 0,
+      "fail": 0,
+      "skip": 1
+    }
+  },
+  "reach_permissions": {
+    "service": 3,
+    "agent": 16777216,
+    "human": 1,
+    "*": 0
+  },
+  "reach_meta": {
+    "schema": "bmos-reach-v1",
+    "derived_from": "depends_on",
+    "derived_at": "2026-06-11T20:11:25.221Z",
+    "callers": ["xshieldai"],
+    "note": "structural default (BMOS-YK-002); tighten per-service as owners review"
+  },
+  "mask_provenance": {
+    "schema": "ankr-mask-provenance-v1",
+    "trust_mask": {
+      "value": 1,
+      "class": "discovery-floor",
+      "classified_at": "2026-06-12",
+      "by": "mask-provenance-classify.mjs (WP-017)"
+    }
+  },
+  "tree_completeness": {
+    "schema": "ankr-tree-completeness-v1",
+    "codex_present": true,
+    "declared_leaves": 11,
+    "docs_on_disk": 5,
+    "mask_audited": false,
+    "bit_registry": false,
+    "observed": false,
+    "measured_at": "2026-06-12"
+  },
+  "readiness": {
+    "schema": "ankr-readiness-8bit-v1",
+    "value": 215,
+    "bits": ["DOCUMENTED", "WIRE_ALIVE", "FORJA_LIVE", "DECLARED_TRUE", "REACHABLE", "PROOF"],
+    "computed_at": "2026-06-12T06:01:59.448Z",
+    "note": "COMPILED VIEW (FP-014 law 2) — recompute with readiness-compute.mjs; never edit by hand",
+    "evidence": {
+      "docs": "5/5",
+      "wire": "health-200",
+      "declared": "live_only:0 declared_only:0"
+    }
   }
 }

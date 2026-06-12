@@ -157,5 +157,44 @@
     "derived_at": "2026-06-11T20:11:25.219Z",
     "callers": ["xshieldai"],
     "note": "structural default (BMOS-YK-002); tighten per-service as owners review"
+  },
+  "mask_provenance": {
+    "schema": "ankr-mask-provenance-v1",
+    "trust_mask": {
+      "value": 63,
+      "class": "audited",
+      "classified_at": "2026-06-12",
+      "by": "mask-provenance-classify.mjs (WP-017)"
+    }
+  },
+  "tree_completeness": {
+    "schema": "ankr-tree-completeness-v1",
+    "codex_present": true,
+    "declared_leaves": 15,
+    "docs_on_disk": 5,
+    "mask_audited": true,
+    "bit_registry": false,
+    "observed": false,
+    "measured_at": "2026-06-12"
+  },
+  "readiness": {
+    "schema": "ankr-readiness-8bit-v1",
+    "value": 223,
+    "bits": [
+      "DOCUMENTED",
+      "WIRE_ALIVE",
+      "FORJA_LIVE",
+      "MASK_AUDITED",
+      "DECLARED_TRUE",
+      "REACHABLE",
+      "PROOF"
+    ],
+    "computed_at": "2026-06-12T06:01:59.448Z",
+    "note": "COMPILED VIEW (FP-014 law 2) — recompute with readiness-compute.mjs; never edit by hand",
+    "evidence": {
+      "docs": "5/5",
+      "wire": "health-200",
+      "declared": "live_only:0 declared_only:0"
+    }
   }
 }

@@ -191,5 +191,49 @@
       "capability_reconfirm": "fail",
       "duration_ms": 1179
     }
+  },
+  "cim_mask": 12,
+  "cim_mask_schema": "cim-mask-v1",
+  "cim_mask_last_refresh": {
+    "at": "2026-05-22T10:30:21.364Z",
+    "mask_before": 0,
+    "mask_after": 12,
+    "flipped": ["+bit2(invariants_declared)", "+bit3(invariants_holding)"],
+    "probe_summary": {
+      "pass": 0,
+      "fail": 0,
+      "skip": 1
+    }
+  },
+  "mask_provenance": {
+    "schema": "ankr-mask-provenance-v1",
+    "trust_mask": {
+      "value": 59,
+      "class": "unknown",
+      "classified_at": "2026-06-12",
+      "by": "mask-provenance-classify.mjs (WP-017)"
+    }
+  },
+  "tree_completeness": {
+    "schema": "ankr-tree-completeness-v1",
+    "codex_present": true,
+    "declared_leaves": 16,
+    "docs_on_disk": 5,
+    "mask_audited": false,
+    "bit_registry": false,
+    "observed": false,
+    "measured_at": "2026-06-12"
+  },
+  "readiness": {
+    "schema": "ankr-readiness-8bit-v1",
+    "value": 135,
+    "bits": ["DOCUMENTED", "WIRE_ALIVE", "FORJA_LIVE", "PROOF"],
+    "computed_at": "2026-06-12T06:01:59.448Z",
+    "note": "COMPILED VIEW (FP-014 law 2) — recompute with readiness-compute.mjs; never edit by hand",
+    "evidence": {
+      "docs": "5/5",
+      "wire": "health-200",
+      "declared": "no-machine-verbs-live"
+    }
   }
 }
