@@ -59,7 +59,7 @@
   "forja_sense": "/api/v2/forja/sense/emit",
   "forja_proof": "/api/v2/forja/proof",
   "forja_version": "2.0",
-  "trust_mask": 1,
+  "trust_mask": 47,
   "trust_mask_schema": "ankr-trust-32bit-v1",
   "trust_mask_status": "provisional",
   "k_mask": 255,
@@ -94,60 +94,27 @@
   "capability_captured_schema": "ankr-archmask-v1",
   "capability_captured_note": "false until req_mask == trust_mask == forja_mask (ArchMask equality, Zenodo 10.5281/zenodo.19417112)",
   "capability_audit": {
-    "audit_status": "phase-4-complete",
-    "last_updated": "2026-05-06",
-    "logics_doc": "xshieldai-varuna--logics--formal--2026-05-05.md",
-    "shastra_rules": 50,
-    "protocol_map": {
-      "engine_protocols": [
-        "Modbus/TCP (VRN-026)",
-        "Modbus/RTU (VRN-027)",
-        "CANbus (VRN-028)",
-        "MAN CEAS/WOIS/K-Chief (VRN-029)",
-        "IEC 62443 zones (VRN-030)",
-        "AMS (VRN-031)"
-      ],
-      "bridge_protocols": [
-        "NMEA 0183 (VRN-032)",
-        "NMEA 2000 (VRN-033)",
-        "IEC 61162-450 (VRN-034)",
-        "AIS (VRN-035)",
-        "GPS/GNSS (VRN-036)",
-        "ECDIS ENC (VRN-037)",
-        "VDR (VRN-038)",
-        "GMDSS (VRN-039)",
-        "Autopilot (VRN-040)"
-      ],
-      "pentest_rules": ["VRN-041 to VRN-050"]
-    },
-    "capabilities": {
-      "ASSESS_VESSEL_OT_POSTURE": "built",
-      "SCORE_IACS_UR_E26_COMPLIANCE": "built",
-      "MONITOR_MODBUS_ANOMALIES": "built",
-      "DETECT_NMEA_INJECTION": "built",
-      "DETECT_AIS_SPOOFING": "built",
-      "DETECT_RUNAWAY_DIESEL_SEQUENCE": "built",
-      "GENERATE_POSTURE_REPORT_CARD": "built",
-      "MAP_VESSEL_PROTOCOL_SURFACE": "built",
-      "SCORE_VESSEL_PROTOCOL_SECURITY": "built",
-      "VALIDATE_OT_PENTEST_SCOPE": "built",
-      "RUN_TESTBED_OT_SIMULATION": "built",
-      "GENERATE_UNIFIED_VAPT_REPORT": "built",
-      "BUILD_MODBUS_BASELINE": "built",
-      "CORRELATE_BRIDGE_PROTOCOL_ANOMALIES": "built"
-    },
-    "counts": {
-      "built": 14,
-      "partial": 0,
-      "unknown": 0,
-      "not_built": 0
-    },
-    "phase_2_built": [
-      "IACS UR E26/E27 25-capability scorer (CAP-01 to CAP-25)",
-      "Protocol posture scorer VRN-026 to VRN-040",
-      "Posture Report Card (JSON + PDF + WhatsApp)",
-      "Three-column evidence pack (VRN + IACS clause + MITRE ATT&CK ICS)",
-      "Score history append-only (P2-005)"
+    "status": "audited",
+    "last_audited": "2026-06-12",
+    "method": "trust-mask-derive.mjs structural verb→class",
+    "source": "codex.json",
+    "derivation": [
+      "can_answer (10 entries) → READ|QUERY",
+      "ASSESS_VESSEL_OT_POSTURE → QUERY",
+      "SCORE_IACS_UR_E26_COMPLIANCE → QUERY",
+      "MONITOR_MODBUS_ANOMALIES → QUERY",
+      "DETECT_NMEA_INJECTION → QUERY",
+      "DETECT_AIS_SPOOFING → QUERY",
+      "DETECT_RUNAWAY_DIESEL_SEQUENCE → QUERY",
+      "GENERATE_POSTURE_REPORT_CARD → WRITE",
+      "MAP_VESSEL_PROTOCOL_SURFACE → QUERY",
+      "SCORE_VESSEL_PROTOCOL_SECURITY → QUERY",
+      "VALIDATE_OT_PENTEST_SCOPE → EXECUTE",
+      "RUN_TESTBED_OT_SIMULATION → EXECUTE",
+      "GENERATE_UNIFIED_VAPT_REPORT → WRITE",
+      "BUILD_MODBUS_BASELINE → WRITE",
+      "CORRELATE_BRIDGE_PROTOCOL_ANOMALIES → EXECUTE",
+      "audit-domain evidence: ASSESS_VESSEL_OT_POSTURE, GENERATE_POSTURE_REPORT_CARD, GENERATE_UNIFIED_VAPT_REPORT, BUILD_MODBUS_BASELINE → AUDIT"
     ]
   },
   "gap_classification": {
@@ -171,14 +138,14 @@
     "external_signals": []
   },
   "proof_config": {
-    "threshold_pct": 90.0,
+    "threshold_pct": 90,
     "annotation_sweep_status": "PASS",
     "rules_seeded": 69,
     "vrn_code_implementable": 26,
     "vrn_procedural_excluded": 24,
     "rules_annotated": 26,
-    "coverage_pct": 100.0,
-    "file_coverage_pct": 100.0,
+    "coverage_pct": 100,
+    "file_coverage_pct": 100,
     "files_annotated": 32,
     "annotation_count_total": 181,
     "last_scanned": "2026-05-06",
@@ -223,5 +190,64 @@
     "codex_written": "2026-05-05",
     "first_build_target": "TBD — pending project doc + todo doc + req_mask finalization",
     "go_to_market": "via Ship8x / Ship8XOS — zero new install footprint"
+  },
+  "vivaran_last_scan": "2026-05-08T01:45:13.571Z",
+  "rvf_hook_installed": true,
+  "rvf_k_mask": 55,
+  "rvf_k_mask_schema": "ankr-rvf-8bit-v1",
+  "rvf_baseline": {
+    "captured_at": "2026-05-15T06:35:47.231Z",
+    "captured_by": "ankr-rvf-bulk-install.ts (T-030 rollout)"
+  },
+  "rvf_last_refresh": {
+    "at": "2026-05-15T07:37:15.891Z",
+    "by": "ankr-rvf-bit-refresh.ts",
+    "mask_before": 55,
+    "mask_after": 55,
+    "mask_before_hex": "0x37",
+    "mask_after_hex": "0x37",
+    "flipped": [],
+    "layer_status": {
+      "typecheck": "pass",
+      "lint": "skip",
+      "secret_scan": "pass",
+      "port_probe": "pass",
+      "migrate_diff": "pass",
+      "claw_audit": "skip",
+      "capability_reconfirm": "skip",
+      "duration_ms": 1056
+    }
+  },
+  "rvf_last_deep_refresh": {
+    "at": "2026-05-15T07:16:07.644Z",
+    "by": "ankr-rvf-deep-refresh.ts",
+    "mask_before": 51,
+    "mask_after": 55,
+    "mask_before_hex": "0x33",
+    "mask_after_hex": "0x37",
+    "flipped": ["+bit2(claw_audit)"],
+    "layer_status": {
+      "typecheck": "pass",
+      "lint": "skip",
+      "secret_scan": "pass",
+      "port_probe": "pass",
+      "migrate_diff": "pass",
+      "claw_audit": "pass",
+      "capability_reconfirm": "fail",
+      "duration_ms": 997
+    }
+  },
+  "cim_mask": 12,
+  "cim_mask_schema": "cim-mask-v1",
+  "cim_mask_last_refresh": {
+    "at": "2026-05-22T10:30:21.388Z",
+    "mask_before": 0,
+    "mask_after": 12,
+    "flipped": ["+bit2(invariants_declared)", "+bit3(invariants_holding)"],
+    "probe_summary": {
+      "pass": 0,
+      "fail": 0,
+      "skip": 1
+    }
   }
 }
