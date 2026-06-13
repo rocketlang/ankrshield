@@ -35,6 +35,22 @@ await app.register(agentRoutes);
 await app.register(observeRoutes);
 await app.register(attestationRoutes);
 
+// @rule:HNG — Shatru-commanded containment: revoke an agent's delegation identity (the WHO
+// half of a capability-kill). HanumanG owns the agent register; Shatru commands, we record.
+const revoked = new Set<string>();
+app.post<{ Body: { agentId?: string; reason?: string } }>('/api/v2/agent/revoke', async (req) => {
+  const { agentId, reason } = req.body ?? {};
+  if (agentId) revoked.add(agentId);
+  return {
+    revoked: true,
+    agentId: agentId ?? null,
+    reason: reason ?? null,
+    register_revoked: revoked.size,
+    at: new Date().toISOString(),
+  };
+});
+app.get('/api/v2/agent/revoked', async () => ({ revoked: [...revoked] }));
+
 app.get('/health', async () => ({
   service: 'xshieldai-hanumang',
   brand: 'HanumanG',
