@@ -123,6 +123,16 @@ export async function registerForjaRoutes(app: FastifyInstance): Promise<void> {
       emits: EMITS,
       depends_on: ['xshieldai', 'ship8x', 'superdomain', 'ai-proxy'],
       trust_mask: 1,
+      k_mask: 255,
+      // @rule:VRN-ARCH-007 honesty floor — every runtime DetectorResult/factor/card/tile
+      // carries data_source ∈ {testbed, live_vessel}; never imply a live-vessel scan on
+      // testbed data. Phase 0: no detectors shipped yet → runtime surface is BUILDING.
+      data_source: {
+        current: 'testbed',
+        available: ['testbed', 'live_vessel'],
+        live_capture: false,
+        note: 'Phase 0 — detector-registry pre-build (dashboard BUILDING). Live-vessel capture lands at Phase 4 (source-swap only, VRN-YK-011); the flip is backed by a real capture, never asserted.',
+      },
       lifecycle_status: 'phase-0-forja-wire',
       regulatory_anchors: [
         'IACS UR E26',
