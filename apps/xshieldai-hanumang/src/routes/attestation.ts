@@ -8,6 +8,7 @@ import type { FastifyInstance } from 'fastify';
 
 import { computePostureScore } from '../axes/scorer.js';
 import type { Axis } from '../axes/scorer.js';
+import { isRevoked } from '../core/containment.js';
 import { issueAttestation, getAttestation, listAttestations, getAxisHistory } from '../core/db.js';
 
 const GRANTHX_URL = process.env['GRANTHX_URL'] ?? 'http://localhost:4130';
@@ -41,6 +42,17 @@ export async function attestationRoutes(app: FastifyInstance) {
       return reply
         .status(400)
         .send({ error: 'agent_id, customer_id, period_start, period_end required' });
+    }
+    // @rule:HNG — a Shatru-revoked agent cannot be attested: its delegation identity is gone.
+    if (isRevoked(agent_id)) {
+      return reply
+        .status(409)
+        .send({
+          attested: false,
+          revoked: true,
+          agent_id,
+          reason: 'delegation revoked (Shatru capability-kill) — no attestation can be issued',
+        });
     }
 
     // Compute posture from observations in the period

@@ -6,6 +6,7 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import Fastify from 'fastify';
 
+import { revoked } from './core/containment.js';
 import { getDb } from './core/db.js';
 import { agentRoutes } from './routes/agents.js';
 import { attestationRoutes } from './routes/attestation.js';
@@ -36,8 +37,8 @@ await app.register(observeRoutes);
 await app.register(attestationRoutes);
 
 // @rule:HNG — Shatru-commanded containment: revoke an agent's delegation identity (the WHO
-// half of a capability-kill). HanumanG owns the agent register; Shatru commands, we record.
-const revoked = new Set<string>();
+// half of a capability-kill). HanumanG owns the agent register; Shatru commands, we record +
+// ENFORCE — a revoked agent fails attestation (see routes/attestation).
 app.post<{ Body: { agentId?: string; reason?: string } }>('/api/v2/agent/revoke', async (req) => {
   const { agentId, reason } = req.body ?? {};
   if (agentId) revoked.add(agentId);
