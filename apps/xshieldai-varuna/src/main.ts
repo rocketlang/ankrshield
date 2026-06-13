@@ -13,6 +13,7 @@ import Fastify from 'fastify';
 import { registerAISRoutes } from './ais/routes.js';
 import { registerCrewRoutes } from './crew/routes.js';
 import { registerEvidenceRoutes } from './evidence/routes.js';
+import { registerFactorRoutes } from './factors/routes.js';
 import { registerForjaRoutes } from './forja/routes.js';
 import { registerIACSRoutes } from './iacs/routes.js';
 import { registerModbusRoutes } from './modbus/routes.js';
@@ -84,6 +85,7 @@ await registerReportRoutes(app);
 await registerCrewRoutes(app);
 await registerTAXIIRoutes(app);
 await registerPentestRoutes(app);
+await registerFactorRoutes(app);
 
 // ─── Background monitor (hook must be before listen) ─────────────────────────
 let monitorHandle: ReturnType<typeof setInterval> | undefined;

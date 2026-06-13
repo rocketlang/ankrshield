@@ -154,6 +154,11 @@ export function listVessels(): string[] {
   return [...store.keys()];
 }
 
+/** Drop a vessel's state so a fresh testbed run starts clean (testbed harness only). */
+export function resetVessel(vessel_id: string): void {
+  store.delete(vessel_id);
+}
+
 export function tupleKey(t: ModbusTuple): string {
   return `${t.src_ip}:${t.unit_id}:${t.function_code}:${t.register}`;
 }

@@ -280,5 +280,516 @@
       "wire": "health-200",
       "declared": "live_only:0 declared_only:2"
     }
+  },
+  "slug_registry": {
+    "schema": "rest-forge-registry-v1",
+    "service": "xshieldai-varuna",
+    "bit_next": 15,
+    "slugs": {
+      "assess-vessel-ot-posture": {
+        "alias": ["ASSESS_VESSEL_OT_POSTURE"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 0,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": "/api/v2/posture/:vesselId",
+        "method": "GET",
+        "source": "live /api/v2/capabilities",
+        "compiled_at": "2026-06-12"
+      },
+      "monitor-modbus-anomalies": {
+        "alias": ["MONITOR_MODBUS_ANOMALIES"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 1,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": "/api/v1/modbus/anomalies/:vesselId",
+        "method": "GET",
+        "source": "live /api/v2/capabilities",
+        "compiled_at": "2026-06-12"
+      },
+      "build-modbus-baseline": {
+        "alias": ["BUILD_MODBUS_BASELINE"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 2,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": "/api/v1/modbus/baseline/:vesselId",
+        "method": "GET",
+        "source": "live /api/v2/capabilities",
+        "compiled_at": "2026-06-12"
+      },
+      "score-iacs-ur-e26-compliance": {
+        "alias": ["SCORE_IACS_UR_E26_COMPLIANCE"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 3,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": "/api/v1/iacs/:vesselId",
+        "method": "GET",
+        "source": "live /api/v2/capabilities",
+        "compiled_at": "2026-06-12"
+      },
+      "generate-posture-report-card": {
+        "alias": ["GENERATE_POSTURE_REPORT_CARD"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 4,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": "/api/v1/report/:vesselId",
+        "method": "GET",
+        "source": "live /api/v2/capabilities",
+        "compiled_at": "2026-06-12"
+      },
+      "run-testbed-ot-simulation": {
+        "alias": ["RUN_TESTBED_OT_SIMULATION"],
+        "kind": "rest-mutation",
+        "verb": "can_act",
+        "bit": 5,
+        "risk": "high",
+        "risk_provenance": "default QRF-004 — unclassified REST act; reclassify only via recorded audit act",
+        "reversibility": "unknown",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": "/api/v2/testbed/run",
+        "method": "POST",
+        "source": "live /api/v2/capabilities",
+        "compiled_at": "2026-06-12"
+      },
+      "ingest-modbus-frame": {
+        "alias": ["INGEST_MODBUS_FRAME"],
+        "kind": "rest-mutation",
+        "verb": "can_act",
+        "bit": 6,
+        "risk": "high",
+        "risk_provenance": "default QRF-004 — unclassified REST act; reclassify only via recorded audit act",
+        "reversibility": "unknown",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": "/api/v1/ingest/modbus",
+        "method": "POST",
+        "source": "live /api/v2/capabilities",
+        "compiled_at": "2026-06-12"
+      },
+      "detect-nmea-injection": {
+        "alias": ["DETECT_NMEA_INJECTION"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 7,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "detect-ais-spoofing": {
+        "alias": ["DETECT_AIS_SPOOFING"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 8,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "detect-runaway-diesel-sequence": {
+        "alias": ["DETECT_RUNAWAY_DIESEL_SEQUENCE"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 9,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "map-vessel-protocol-surface": {
+        "alias": ["MAP_VESSEL_PROTOCOL_SURFACE"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 10,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "score-vessel-protocol-security": {
+        "alias": ["SCORE_VESSEL_PROTOCOL_SECURITY"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 11,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "validate-ot-pentest-scope": {
+        "alias": ["VALIDATE_OT_PENTEST_SCOPE"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 12,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "generate-unified-vapt-report": {
+        "alias": ["GENERATE_UNIFIED_VAPT_REPORT"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 13,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "correlate-bridge-protocol-anomalies": {
+        "alias": ["CORRELATE_BRIDGE_PROTOCOL_ANOMALIES"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 14,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      }
+    },
+    "compiled_at": "2026-06-12",
+    "source": "rest-forge: live /api/v2/capabilities → codex.can_do"
+  },
+  "widget_registry": {
+    "schema": "widget-forge-registry-v1",
+    "service": "xshieldai-varuna",
+    "widgets": {
+      "assess-vessel-ot-posture": {
+        "slug": "assess-vessel-ot-posture",
+        "bit": 0,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": "/api/v2/posture/:vesselId",
+          "method": "GET",
+          "field": "ASSESS_VESSEL_OT_POSTURE"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "monitor-modbus-anomalies": {
+        "slug": "monitor-modbus-anomalies",
+        "bit": 1,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": "/api/v1/modbus/anomalies/:vesselId",
+          "method": "GET",
+          "field": "MONITOR_MODBUS_ANOMALIES"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "build-modbus-baseline": {
+        "slug": "build-modbus-baseline",
+        "bit": 2,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": "/api/v1/modbus/baseline/:vesselId",
+          "method": "GET",
+          "field": "BUILD_MODBUS_BASELINE"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "score-iacs-ur-e26-compliance": {
+        "slug": "score-iacs-ur-e26-compliance",
+        "bit": 3,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": "/api/v1/iacs/:vesselId",
+          "method": "GET",
+          "field": "SCORE_IACS_UR_E26_COMPLIANCE"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "generate-posture-report-card": {
+        "slug": "generate-posture-report-card",
+        "bit": 4,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": "/api/v1/report/:vesselId",
+          "method": "GET",
+          "field": "GENERATE_POSTURE_REPORT_CARD"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "run-testbed-ot-simulation": {
+        "slug": "run-testbed-ot-simulation",
+        "bit": 5,
+        "kind": "act",
+        "layout": "action-card",
+        "wire": {
+          "kind": "rest",
+          "route": "/api/v2/testbed/run",
+          "method": "POST",
+          "field": "RUN_TESTBED_OT_SIMULATION"
+        },
+        "governed": true,
+        "pause": true,
+        "proof_capture": true,
+        "status": "generated-pending-pause-ux",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "ingest-modbus-frame": {
+        "slug": "ingest-modbus-frame",
+        "bit": 6,
+        "kind": "act",
+        "layout": "action-card",
+        "wire": {
+          "kind": "rest",
+          "route": "/api/v1/ingest/modbus",
+          "method": "POST",
+          "field": "INGEST_MODBUS_FRAME"
+        },
+        "governed": true,
+        "pause": true,
+        "proof_capture": true,
+        "status": "generated-pending-pause-ux",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "detect-nmea-injection": {
+        "slug": "detect-nmea-injection",
+        "bit": 7,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "DETECT_NMEA_INJECTION"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "detect-ais-spoofing": {
+        "slug": "detect-ais-spoofing",
+        "bit": 8,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "DETECT_AIS_SPOOFING"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "detect-runaway-diesel-sequence": {
+        "slug": "detect-runaway-diesel-sequence",
+        "bit": 9,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "DETECT_RUNAWAY_DIESEL_SEQUENCE"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "map-vessel-protocol-surface": {
+        "slug": "map-vessel-protocol-surface",
+        "bit": 10,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "MAP_VESSEL_PROTOCOL_SURFACE"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "score-vessel-protocol-security": {
+        "slug": "score-vessel-protocol-security",
+        "bit": 11,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "SCORE_VESSEL_PROTOCOL_SECURITY"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "validate-ot-pentest-scope": {
+        "slug": "validate-ot-pentest-scope",
+        "bit": 12,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "VALIDATE_OT_PENTEST_SCOPE"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "generate-unified-vapt-report": {
+        "slug": "generate-unified-vapt-report",
+        "bit": 13,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "GENERATE_UNIFIED_VAPT_REPORT"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "correlate-bridge-protocol-anomalies": {
+        "slug": "correlate-bridge-protocol-anomalies",
+        "bit": 14,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "CORRELATE_BRIDGE_PROTOCOL_ANOMALIES"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      }
+    },
+    "generated_at": "2026-06-13T04:12:15.170Z"
   }
 }
