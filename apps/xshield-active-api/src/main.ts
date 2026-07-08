@@ -11,6 +11,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { registerForjaRoutes } from './forja/routes.js';
 import { registerConsentRoutes } from './consent/routes.js';
@@ -59,6 +60,49 @@ await app.register(rateLimit, {
   }),
 });
 
+// ─── Service-auth gate — @rule:XSACT-001 (KGT-T2.3, 2026-07-08) ──────────────
+// xshield-active fires REAL active defense (takedowns, DMCA, beacons). Every
+// state-changing route was anonymous: anyone could POST /action/execute, approve
+// a queued takedown, or self-sign the legal addendum. Fix = deny-by-default
+// bearer-token gate. Fail-closed: in production the token MUST come from env; in
+// dev an unguessable ephemeral is minted so no known key exists in source.
+function loadServiceToken(): string {
+  const v = process.env['XSHIELD_ACTIVE_TOKEN'];
+  if (v && v.length >= 16) return v;
+  if (process.env['NODE_ENV'] === 'production') {
+    throw new Error(
+      '[xshield-active] XSHIELD_ACTIVE_TOKEN must be set (>=16 chars) in production — ' +
+        'refusing to serve live-fire routes unauthenticated (fail-closed, KGT-T2.3).'
+    );
+  }
+  const eph = randomBytes(32).toString('hex');
+  console.warn(
+    '[xshield-active] XSHIELD_ACTIVE_TOKEN unset — mutations require a token nobody ' +
+      'holds this boot (dev ephemeral). Set the env to enable authenticated calls.'
+  );
+  return eph;
+}
+const SERVICE_TOKEN = loadServiceToken();
+
+/** Routes that MUST stay anonymous by design. */
+function isPublicRoute(method: string, url: string): boolean {
+  const path = url.split('?')[0] ?? url;
+  // Reads + CORS preflight never fire actions.
+  if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return true;
+  // The beacon trap: planted credentials phone home from attacker infra — must be anonymous.
+  if (path === '/api/v1/auth/beacon') return true;
+  // SIEM push authenticates itself via the per-client token hash (option-b/routes.ts).
+  if (path === '/api/v1/siem/push') return true;
+  return false;
+}
+
+function tokenMatches(presented: string | undefined): boolean {
+  if (!presented) return false;
+  const a = Buffer.from(presented);
+  const b = Buffer.from(SERVICE_TOKEN);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 // ─── Trust preHandler — @rule:CA-005 ─────────────────────────────────────────
 // Attaches xsactTrust context to every request so routes don't re-fetch consent state.
 // Resolves claw_mask bit 5: per-route addendum checks are now backed by a uniform context.
@@ -73,7 +117,22 @@ declare module 'fastify' {
   }
 }
 
-app.addHook('preHandler', async (request) => {
+app.addHook('preHandler', async (request, reply) => {
+  // @rule:XSACT-001 — authenticate the caller before any state change / live fire.
+  if (!isPublicRoute(request.method, request.url)) {
+    const auth = request.headers['authorization'];
+    const bearer = auth?.startsWith('Bearer ')
+      ? auth.slice(7)
+      : (request.headers['x-service-token'] as string | undefined);
+    if (!tokenMatches(bearer)) {
+      reply.status(401).send({
+        error: 'unauthorized',
+        message: 'xshield-active live-fire routes require a valid service token (KGT-T2.3).',
+      });
+      return;
+    }
+  }
+
   const clientId =
     (request.params as Record<string, string>)?.['clientId'] ??
     (request.body as Record<string, string> | null)?.['client_id'] ??
