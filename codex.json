@@ -479,7 +479,9 @@
       "CLIPBOARD_HYGIENE",
       "UPI_GUARD",
       "HEALTH_PRIVACY_WITNESS",
-      "NETWORK_QUARANTINE"
+      "NETWORK_QUARANTINE",
+      "TAME",
+      "EVIDENCE_PACK_DPDP_GDPR"
     ],
     "capability_audit": {
       "device_management": {
@@ -803,7 +805,13 @@
       }
     },
     "last_audited": "2026-07-10",
-    "capability_nodes": ["ankrshield-caught-in-the-act", "ankrshield-scope-transparency"]
+    "capability_nodes": [
+      "ankrshield-caught-in-the-act",
+      "ankrshield-evidence-pack",
+      "ankrshield-scope-transparency",
+      "ankrshield-tame",
+      "xshieldai-evidence-notary"
+    ]
   },
   "claw_mask": 42092,
   "claw_mask_schema": "claw-design-16bit-v1",
