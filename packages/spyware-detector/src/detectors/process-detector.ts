@@ -53,6 +53,55 @@ const PROCESS_SIGNATURES: ProcessSignature[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Benign-collision allowlist (false-positive suppression)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ubiquitous OS / developer-tool process names that COLLIDE with (mostly iOS)
+ * spyware artifact IOCs but are entirely legitimate on a Linux/Android/Termux
+ * device. e.g. 'logind' is a real Pegasus iOS crash-log artifact AND the name
+ * of systemd-logind and Termux's login daemon — matching it on Android is a
+ * guaranteed false positive. These names must NEVER, on their own, produce a
+ * spyware verdict (honesty: a confident wrong answer is worse than silence).
+ * The XZ/CVE and domain-C2 detectors are unaffected — this only gates generic
+ * process-NAME matches.
+ */
+const BENIGN_COLLISION_NAMES = new Set<string>([
+  'logind',
+  'systemd-logind',
+  'login',
+  'sshd',
+  'ssh',
+  'dropbear',
+  'bash',
+  'sh',
+  'zsh',
+  'dash',
+  'fish',
+  'python',
+  'python3',
+  'node',
+  'perl',
+  'ruby',
+  'php',
+  'init',
+  'systemd',
+  'cron',
+  'crond',
+  'dbus',
+  'dbus-daemon',
+  'gsm',
+  'msg',
+  'bh',
+  'payload',
+  'launchd', // iOS-artifact names, FP-prone on *nix
+]);
+
+function isBenignCollision(name: string): boolean {
+  return BENIGN_COLLISION_NAMES.has(name.toLowerCase());
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -115,6 +164,9 @@ export class ProcessDetector {
 
     for (const sig of PROCESS_SIGNATURES) {
       if (seen.has(sig.name)) continue;
+      // Skip names that collide with ubiquitous OS/dev processes — matching them
+      // is a false positive on any Linux/Android/Termux device (e.g. 'logind').
+      if (isBenignCollision(sig.name)) continue;
 
       const sigLower = sig.name.toLowerCase();
 
@@ -174,6 +226,7 @@ export class ProcessDetector {
 
     for (const sig of PROCESS_SIGNATURES) {
       if (seen.has(sig.name)) continue;
+      if (isBenignCollision(sig.name)) continue; // e.g. 'logind' in Termux — false positive
       if (procOutput.toLowerCase().includes(sig.name.toLowerCase())) {
         indicators.push({
           id: randomUUID(),
