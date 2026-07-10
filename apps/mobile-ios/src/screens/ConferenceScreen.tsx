@@ -189,17 +189,17 @@ export function ConferenceScreen(_props: { navigation: unknown }) {
         {/* Status line */}
         <View style={styles.statusLine}>
           <View style={styles.pulseDot} />
-          <Text style={styles.statusText}>Sending tracker data every 5 seconds…</Text>
+          <Text style={styles.statusText}>Forwarding your real tracker blocks as they happen…</Text>
         </View>
 
         {/* Privacy notice */}
         <View style={styles.privacyBox}>
           <Text style={styles.privacyTitle}>🔒 Privacy Notice</Text>
           <Text style={styles.privacyText}>
-            Your device appears as <Text style={styles.highlight}>{session.name}</Text> — no
-            personal data is shared. Events are anonymized tracker domain names only (e.g.
-            "google-analytics.com was blocked"). No IP address, no identity, no real browsing data
-            leaves this device.
+            Your device appears as <Text style={styles.highlight}>{session.name}</Text>. Only real
+            tracker events are shared — the tracker domain, the app that called it, and whether it
+            was blocked (e.g. "Instagram → graph.facebook.com, blocked"). No IP address, no
+            identity, no page content, no browsing history leaves this device.
           </Text>
         </View>
 
