@@ -17,6 +17,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -629,8 +631,33 @@ public class DnsVpnService extends VpnService {
         if (result != null) return result;
         // Fallback to Google DoH
         result = dohPost(DOH_FALLBACK, query);
-        if (result == null) Log.w(TAG, "Both DoH resolvers failed");
-        return result;
+        if (result != null) return result;
+        // FAIL-OPEN (never take down all internet): if encrypted DoH is
+        // unreachable (slow/blocked carrier, captive network, Termux traffic),
+        // degrade to plain UDP DNS for this CLEAN domain rather than black-holing
+        // it. Trackers are still blocked upstream; only non-tracker lookups take
+        // this path. Our package is excluded from the VPN, so this socket goes
+        // straight to the internet.
+        Log.w(TAG, "Both DoH resolvers failed — failing open to plain DNS");
+        return plainDnsFallback(query);
+    }
+
+    /** Last-resort plain UDP DNS (1.1.1.1:53) so a DoH outage never kills resolution. */
+    private static byte[] plainDnsFallback(byte[] query) {
+        try (DatagramSocket sock = new DatagramSocket()) {
+            sock.setSoTimeout(3000);
+            InetAddress upstream = InetAddress.getByName("1.1.1.1");
+            sock.send(new DatagramPacket(query, query.length, upstream, 53));
+            byte[] buf = new byte[4096];
+            DatagramPacket resp = new DatagramPacket(buf, buf.length);
+            sock.receive(resp);
+            byte[] out = new byte[resp.getLength()];
+            System.arraycopy(buf, 0, out, 0, resp.getLength());
+            return out;
+        } catch (Exception e) {
+            Log.w(TAG, "plain DNS fallback failed: " + e.getMessage());
+            return null;
+        }
     }
 
     private static byte[] dohPost(String endpoint, byte[] dnsWireQuery) {

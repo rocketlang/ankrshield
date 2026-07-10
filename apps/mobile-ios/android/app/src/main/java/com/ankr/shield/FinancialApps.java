@@ -59,14 +59,29 @@ final class FinancialApps {
         "in.gov.uidai.mAadhaar"
     ));
 
-    /** Curated ∩ installed — the set Intelligent mode seeds as auto-bypass. */
+    // Terminal / developer apps: connectivity-critical and prone to breaking
+    // under DNS interception (custom resolvers, TCP DNS). Auto-bypassed in
+    // Intelligent mode so a developer's shell (e.g. Claude Code in Termux)
+    // never loses the network. The fail-open DNS path protects everyone else.
+    static final Set<String> DEV_TOOLS = new HashSet<>(Arrays.asList(
+        "com.termux",
+        "com.termux.api",
+        "com.termux.boot",
+        "com.server.auditor.ssh.client",  // Termius
+        "org.connectbot",
+        "com.google.android.apps.cloudconsole"
+    ));
+
+    /** Curated (banking ∪ dev-tools) ∩ installed — the Intelligent-mode auto-bypass seed. */
     static Set<String> installedFinancial(Context ctx) {
         Set<String> found = new HashSet<>();
         try {
             PackageManager pm = ctx.getPackageManager();
             List<ApplicationInfo> apps = pm.getInstalledApplications(0);
             for (ApplicationInfo app : apps) {
-                if (CURATED.contains(app.packageName)) found.add(app.packageName);
+                if (CURATED.contains(app.packageName) || DEV_TOOLS.contains(app.packageName)) {
+                    found.add(app.packageName);
+                }
             }
         } catch (Exception ignored) {}
         return found;
