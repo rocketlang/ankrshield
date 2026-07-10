@@ -49,6 +49,7 @@ interface InstalledApp {
   packageName: string;
   appName: string;
   bypassed: boolean;
+  autoBypassed?: boolean;
 }
 
 const COLORS = {
@@ -71,7 +72,9 @@ export default function SplitTunnelScreen() {
   const [savingPkg, setSavingPkg] = useState<string | null>(null);
 
   const loadApps = useCallback(async () => {
-    if (Platform.OS !== 'android' || !DnsVpn) return;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
     setLoading(true);
     try {
       const [list, passive] = await Promise.all([
@@ -80,10 +83,14 @@ export default function SplitTunnelScreen() {
       ]);
       // Sort: bypassed first, then recommended, then alphabetical
       list.sort((a, b) => {
-        if (a.bypassed !== b.bypassed) return a.bypassed ? -1 : 1;
+        if (a.bypassed !== b.bypassed) {
+          return a.bypassed ? -1 : 1;
+        }
         const aRec = RECOMMENDED_BYPASS.has(a.packageName);
         const bRec = RECOMMENDED_BYPASS.has(b.packageName);
-        if (aRec !== bRec) return aRec ? -1 : 1;
+        if (aRec !== bRec) {
+          return aRec ? -1 : 1;
+        }
         return a.appName.localeCompare(b.appName);
       });
       setApps(list);
@@ -110,7 +117,9 @@ export default function SplitTunnelScreen() {
   );
 
   const handleToggle = async (pkg: string, newVal: boolean) => {
-    if (Platform.OS !== 'android' || !DnsVpn) return;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
     setSavingPkg(pkg);
     try {
       await DnsVpn.toggleBypassApp(pkg, newVal);
@@ -121,7 +130,9 @@ export default function SplitTunnelScreen() {
   };
 
   const handlePassiveMode = async (val: boolean) => {
-    if (Platform.OS !== 'android' || !DnsVpn) return;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
     await DnsVpn.setPassiveMode(val);
     setPassiveMode(val);
   };
@@ -138,6 +149,9 @@ export default function SplitTunnelScreen() {
           <Text style={styles.pkg} numberOfLines={1}>
             {item.packageName}
           </Text>
+          {item.bypassed && item.autoBypassed && (
+            <Text style={styles.recTag}>🏦 Auto-excluded — Intelligent mode (unwitnessed)</Text>
+          )}
           {isRec && !item.bypassed && <Text style={styles.recTag}>⭐ Recommended bypass</Text>}
         </View>
         {saving ? (

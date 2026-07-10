@@ -191,13 +191,15 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
     }
 
 
-    /** Returns list of installed user apps {packageName, appName, icon}. */
+    /** Returns list of installed user apps {packageName, appName, bypassed, autoBypassed}. */
     @ReactMethod
     public void getInstalledApps(Promise promise) {
         PackageManager pm = getReactApplicationContext().getPackageManager();
         List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
         WritableArray result = new WritableNativeArray();
         String myPkg = getReactApplicationContext().getPackageName();
+        java.util.Set<String> effective = ShieldPrefs.effectiveBypass(getReactApplicationContext());
+        java.util.Set<String> auto      = ShieldPrefs.getAutoBypass(getReactApplicationContext());
         for (ApplicationInfo app : apps) {
             // Skip system apps and ourselves
             if ((app.flags & ApplicationInfo.FLAG_SYSTEM) != 0) continue;
@@ -205,47 +207,112 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
             WritableNativeMap entry = new WritableNativeMap();
             entry.putString("packageName", app.packageName);
             entry.putString("appName", (String) pm.getApplicationLabel(app));
-            entry.putBoolean("bypassed", DnsVpnService.bypassPackages.contains(app.packageName));
+            entry.putBoolean("bypassed", effective.contains(app.packageName));
+            entry.putBoolean("autoBypassed", auto.contains(app.packageName));
             result.pushMap(entry);
         }
         promise.resolve(result);
     }
 
-    /** Set the full bypass list; restarts VPN interface if running. */
+    /** Set the full USER bypass list (auto set untouched); rebuilds if running. */
     @ReactMethod
     public void setBypassApps(ReadableArray packages, Promise promise) {
-        DnsVpnService.bypassPackages.clear();
+        java.util.Set<String> user = new java.util.HashSet<>();
         for (int i = 0; i < packages.size(); i++) {
-            DnsVpnService.bypassPackages.add(packages.getString(i));
+            user.add(packages.getString(i));
         }
-        if (DnsVpnService.running) {
-            // Rebuild VPN to apply new bypass list
-            Intent intent = new Intent(getReactApplicationContext(), DnsVpnService.class);
-            intent.setAction("REBUILD");
-            getReactApplicationContext().startService(intent);
-        }
+        ShieldPrefs.replaceUserBypass(getReactApplicationContext(), user);
+        syncAndRebuild();
         promise.resolve(null);
     }
 
-    /** Toggle one package in/out of the bypass list. */
+    /** Toggle one package in/out of the bypass list. Persists (ASCT-T2.4). */
     @ReactMethod
     public void toggleBypassApp(String packageName, boolean bypass, Promise promise) {
-        if (bypass) DnsVpnService.bypassPackages.add(packageName);
-        else        DnsVpnService.bypassPackages.remove(packageName);
-        if (DnsVpnService.running) {
-            Intent intent = new Intent(getReactApplicationContext(), DnsVpnService.class);
-            intent.setAction("REBUILD");
-            getReactApplicationContext().startService(intent);
-        }
+        ShieldPrefs.setUserToggle(getReactApplicationContext(), packageName, bypass);
+        syncAndRebuild();
         promise.resolve(null);
     }
 
-    /** Get current bypass list as array of package name strings. */
+    /** Get current effective bypass list as array of package name strings. */
     @ReactMethod
     public void getBypassApps(Promise promise) {
         WritableArray result = new WritableNativeArray();
-        for (String pkg : DnsVpnService.bypassPackages) result.pushString(pkg);
+        for (String pkg : ShieldPrefs.effectiveBypass(getReactApplicationContext())) {
+            result.pushString(pkg);
+        }
         promise.resolve(result);
+    }
+
+    // ─── Mode: intelligent (default) vs guard (ASCT scope-transparency) ─────
+
+    /** 'intelligent' = non-intrusive, banking auto-bypassed, max info. 'guard' = overreach guards, auto bypasses ignored. */
+    @ReactMethod
+    public void setMode(String mode, Promise promise) {
+        ShieldPrefs.setMode(getReactApplicationContext(), mode);
+        syncAndRebuild();
+        promise.resolve(null);
+    }
+
+    @ReactMethod
+    public void getMode(Promise promise) {
+        promise.resolve(ShieldPrefs.getMode(getReactApplicationContext()));
+    }
+
+    // ─── Scope ledger (ASCT-T2.1/T2.3) ───────────────────────────────────────
+
+    /** Per-app rollups. Live ledger when VPN runs, read-only file otherwise. */
+    @ReactMethod
+    public void getScopeSummary(Promise promise) {
+        List<java.util.Map<String, Object>> rows = DnsVpnService.running
+            ? DnsVpnService.ledgerSummary()
+            : ScopeLedger.readSummary(getReactApplicationContext());
+        promise.resolve(toWritableArray(rows));
+    }
+
+    /** Domain-level receipts for one app — the citations behind its verdict. */
+    @ReactMethod
+    public void getScopeDetail(String app, Promise promise) {
+        List<java.util.Map<String, Object>> rows = DnsVpnService.running
+            ? DnsVpnService.ledgerDetail(app)
+            : ScopeLedger.readDetail(getReactApplicationContext(), app);
+        promise.resolve(toWritableArray(rows));
+    }
+
+    /** Wipe the on-device scope ledger (user right — ASCT-004). */
+    @ReactMethod
+    public void clearScopeLedger(Promise promise) {
+        if (DnsVpnService.running) {
+            DnsVpnService.ledgerClear();
+        } else {
+            ScopeLedger.deleteFile(getReactApplicationContext());
+        }
+        promise.resolve(null);
+    }
+
+    private void syncAndRebuild() {
+        DnsVpnService.bypassPackages.clear();
+        DnsVpnService.bypassPackages.addAll(ShieldPrefs.effectiveBypass(getReactApplicationContext()));
+        if (DnsVpnService.running) {
+            Intent intent = new Intent(getReactApplicationContext(), DnsVpnService.class);
+            intent.setAction("REBUILD");
+            getReactApplicationContext().startService(intent);
+        }
+    }
+
+    private static WritableArray toWritableArray(List<java.util.Map<String, Object>> rows) {
+        WritableArray arr = new WritableNativeArray();
+        for (java.util.Map<String, Object> row : rows) {
+            WritableNativeMap m = new WritableNativeMap();
+            for (java.util.Map.Entry<String, Object> e : row.entrySet()) {
+                Object v = e.getValue();
+                if (v instanceof String)      m.putString(e.getKey(), (String) v);
+                else if (v instanceof Long)   m.putDouble(e.getKey(), (Long) v);
+                else if (v instanceof Number) m.putDouble(e.getKey(), ((Number) v).doubleValue());
+            }
+            arr.pushMap(m);
+        }
+        return arr;
     }
 
     /** Enable or disable passive mode (detect but never block). */

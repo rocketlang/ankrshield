@@ -60,6 +60,36 @@ export interface InstalledApp {
   packageName: string;
   appName: string;
   bypassed: boolean;
+  /** True when excluded by Intelligent mode's financial auto-seed, not by the user. */
+  autoBypassed?: boolean;
+}
+
+/** 'intelligent' = non-intrusive by itself, max info (banking auto-excluded).
+ *  'guard' = overreach guards: auto exclusions ignored, only explicit ones honored. */
+export type ShieldMode = 'intelligent' | 'guard';
+
+/** Per-app rollup from the on-device scope ledger (aggregates only, never raw logs). */
+export interface ScopeSummaryRow {
+  app: string; // '' = unattributed (Android <10 or kernel flow)
+  contacts: number;
+  beyondScope: number;
+  beyondBlocked: number;
+  vendorCount: number;
+  maxRisk: number;
+  firstTs: number;
+  lastTs: number;
+}
+
+/** Domain-level receipt — the citation behind a verdict line. */
+export interface ScopeDetailRow {
+  domain: string;
+  category: string;
+  vendor: string;
+  risk: number;
+  blocked: number;
+  allowed: number;
+  firstTs: number;
+  lastTs: number;
 }
 
 class AnkrShieldVpn {
@@ -218,6 +248,45 @@ class AnkrShieldVpn {
       return false;
     }
     return DnsVpn.isPassiveMode() as Promise<boolean>;
+  }
+
+  /** Set shield mode: 'intelligent' (default) or 'guard'. Persists; rebuilds VPN if running. */
+  async setMode(mode: ShieldMode): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
+    await DnsVpn.setMode(mode);
+  }
+
+  async getMode(): Promise<ShieldMode> {
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return 'intelligent';
+    }
+    return DnsVpn.getMode() as Promise<ShieldMode>;
+  }
+
+  /** Per-app scope rollups from the on-device ledger (works with VPN on or off). */
+  async getScopeSummary(): Promise<ScopeSummaryRow[]> {
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return [];
+    }
+    return DnsVpn.getScopeSummary() as Promise<ScopeSummaryRow[]>;
+  }
+
+  /** Domain receipts for one app — the citations behind its verdict. */
+  async getScopeDetail(app: string): Promise<ScopeDetailRow[]> {
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return [];
+    }
+    return DnsVpn.getScopeDetail(app) as Promise<ScopeDetailRow[]>;
+  }
+
+  /** Wipe the on-device scope ledger (user right; nothing ever left the phone). */
+  async clearScopeLedger(): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
+    await DnsVpn.clearScopeLedger();
   }
 }
 

@@ -90,6 +90,7 @@ public class DnsVpnService extends VpnService {
     private ParcelFileDescriptor vpnInterface;
     private Thread               packetThread;
     private SQLiteDatabase       trackerDb;
+    private final ScopeLedger    scopeLedger = new ScopeLedger();
     private ConnectivityManager  connectivityManager;
     // uid → package name(s); lives for the service lifetime (uid reuse across
     // uninstall/reinstall is rare enough to accept until VPN restart)
@@ -122,7 +123,8 @@ public class DnsVpnService extends VpnService {
             return START_STICKY;
         }
         if ("REBUILD".equals(action)) {
-            // Rebuild VPN interface to apply new bypass list
+            // Rebuild VPN interface to apply new bypass list (mode/toggles persist in prefs)
+            loadBypassFromPrefs();
             if (vpnInterface != null) {
                 try {
                     vpnInterface.close();
@@ -154,7 +156,9 @@ public class DnsVpnService extends VpnService {
         if (running) return;
 
         try {
+            loadBypassFromPrefs();
             openTrackerDb();
+            scopeLedger.open(this);
             establishVpnInterface();
             shouldStop.set(false);
             running = true;
@@ -193,8 +197,30 @@ public class DnsVpnService extends VpnService {
             trackerDb = null;
         }
 
+        scopeLedger.close();
+
         stopSelf();
         Log.i(TAG, "AnkrShield DNS VPN stopped");
+    }
+
+    // ─── Bypass persistence + Intelligent-mode financial seed (ASCT-T2.4) ────
+
+    /**
+     * Rebuild the in-memory bypass set from persisted prefs. On the first run
+     * in Intelligent mode, seed the auto set with installed financial apps so
+     * banking/UPI apps play normal without any configuration. A bypassed app
+     * is UNWITNESSED, never "safe" (ASCT-003).
+     */
+    private void loadBypassFromPrefs() {
+        if (!ShieldPrefs.isSeeded(this)
+                && ShieldPrefs.MODE_INTELLIGENT.equals(ShieldPrefs.getMode(this))) {
+            Set<String> fin = FinancialApps.installedFinancial(this);
+            fin.removeAll(ShieldPrefs.getAutoRemoved(this));
+            ShieldPrefs.saveSeed(this, fin);
+            Log.i(TAG, "Intelligent mode: auto-excluded " + fin.size() + " financial apps");
+        }
+        bypassPackages.clear();
+        bypassPackages.addAll(ShieldPrefs.effectiveBypass(this));
     }
 
     // ─── VPN Interface ───────────────────────────────────────────────────────
@@ -422,6 +448,8 @@ public class DnsVpnService extends VpnService {
                 TrackerMatch match = paused ? null : lookupTracker(domain);
                 if (passiveMode && match != null) {
                     // report as advisory, then pass through
+                    scopeLedger.record(app, domain, match.category, match.vendor,
+                                       match.riskLevel, false);
                     broadcastDnsEvent(domain, app, false, match.category + ":advisory", match.vendor);
                     match = null;
                 }
@@ -434,6 +462,8 @@ public class DnsVpnService extends VpnService {
                                                             ipHeaderLen, len);
                     if (response != null) out.write(response);
 
+                    scopeLedger.record(app, domain, match.category, match.vendor,
+                                       match.riskLevel, true);
                     broadcastDnsEvent(domain, app, true, match.category, match.vendor);
                     Log.d(TAG, "BLOCKED " + domain + " [" + match.category + "]"
                             + (app.isEmpty() ? "" : " app=" + app));
@@ -450,6 +480,7 @@ public class DnsVpnService extends VpnService {
                         if (response != null) out.write(response);
                     }
 
+                    scopeLedger.record(app, domain, "clean", "", 0, false);
                     broadcastDnsEvent(domain, app, false, "clean", "");
                 }
             }
@@ -580,6 +611,23 @@ public class DnsVpnService extends VpnService {
     }
 
     private static DnsVpnService instance;
+
+    // ─── Scope-ledger accessors for the RN module (empty when VPN not running) ─
+
+    static java.util.List<java.util.Map<String, Object>> ledgerSummary() {
+        DnsVpnService s = instance;
+        return (s != null && running) ? s.scopeLedger.summary() : new java.util.ArrayList<>();
+    }
+
+    static java.util.List<java.util.Map<String, Object>> ledgerDetail(String app) {
+        DnsVpnService s = instance;
+        return (s != null && running) ? s.scopeLedger.detail(app) : new java.util.ArrayList<>();
+    }
+
+    static void ledgerClear() {
+        DnsVpnService s = instance;
+        if (s != null) s.scopeLedger.clear();
+    }
 
     @Override
     public void onCreate() {
