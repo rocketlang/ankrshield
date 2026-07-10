@@ -210,6 +210,22 @@ bulkInsert([
   ['geographyandhistory.com', 'apt', 'NSO Group', 4],
 ]);
 
+// ── 2b. Mercenary-spyware C2 (published IOCs only) ────────────────────────────
+// 4,949 exact-FQDN indicators from Amnesty Security Lab + mvt-project (Citizen Lab,
+// Google TAG, Meta, Cisco Talos, MSTIC, Recorded Future, Kaspersky, Lookout, iVerify).
+// NSO/Cytrox-Predator/Candiru/QuaDream/RCS Lab/FinFisher/Wintego/Variston-linked +
+// Operation Triangulation. EXACT-FQDN only (lookup walks parents but these zones are
+// never bare), risk 4. These are mostly 2016-2025 infra (much dead/sinkholed) — real
+// defensive value + honesty; do NOT market as covering *current* NSO infra.
+const MERC_IOCS = path.resolve(__dirname, 'mercenary-spyware-iocs.json');
+if (fs.existsSync(MERC_IOCS)) {
+  const merc = JSON.parse(fs.readFileSync(MERC_IOCS, 'utf8'));
+  bulkInsert(merc);
+  console.log(`  + ${merc.length.toLocaleString()} mercenary-spyware C2 domains (published IOCs)`);
+} else {
+  console.warn('  ! mercenary-spyware-iocs.json not found — skipping mercenary C2 layer');
+}
+
 // ── 3. Data brokers ───────────────────────────────────────────────────────────
 bulkInsert([
   ['acxiom.com', 'data_broker', 'Acxiom', 3],
@@ -256,17 +272,33 @@ if (fs.existsSync(NDJSON)) {
     !d.endsWith('.') &&
     !d.startsWith('-') &&
     !d.includes('..');
-  const catMap = { 'ads-tracking': 'advertising', ads: 'advertising', tracking: 'analytics', malware: 'malware', social: 'social' };
+  const catMap = {
+    'ads-tracking': 'advertising',
+    ads: 'advertising',
+    tracking: 'analytics',
+    malware: 'malware',
+    social: 'social',
+  };
   const lines = fs.readFileSync(NDJSON, 'utf8').split('\n');
   let added = 0;
   const ingest = db.transaction(() => {
     for (const line of lines) {
       if (!line) continue;
       let e;
-      try { e = JSON.parse(line); } catch { continue; }
+      try {
+        e = JSON.parse(line);
+      } catch {
+        continue;
+      }
       const d = (e.domain || '').toLowerCase().trim();
       if (!d || !valid(d) || !DNS_OK.has(e.format)) continue;
-      insert.run(d, catMap[e.category] || 'tracking', null, e.category === 'malware' ? 4 : 2, today);
+      insert.run(
+        d,
+        catMap[e.category] || 'tracking',
+        null,
+        e.category === 'malware' ? 4 : 2,
+        today
+      );
       added++;
     }
   });
