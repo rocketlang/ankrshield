@@ -26,6 +26,7 @@ import { StatsCard } from '../components/StatsCard';
 import { MdmStorage } from '../mdm/storage';
 import { startBlocklistSync, getBlocklistStats } from '../services/ioc-sync';
 import { PrivacyService } from '../services/PrivacyService';
+import { getLastScan } from '../services/ScanStore';
 import { startReporting } from '../services/StatsReporter';
 import { vpnService, VpnStats } from '../services/VpnService';
 
@@ -381,18 +382,21 @@ export function HomeScreen({ navigation }: any) {
         )}
       </View>
       <View style={styles.purposePills}>
-        <View style={styles.pill}>
-          <Text style={styles.pillTxt}>🌐 Stops trackers</Text>
-        </View>
-        <View style={styles.pill}>
-          <Text style={styles.pillTxt}>🔬 Finds spyware</Text>
-        </View>
-        <View style={styles.pill}>
-          <Text style={styles.pillTxt}>⚔️ AI defence</Text>
-        </View>
-        <View style={styles.pill}>
-          <Text style={styles.pillTxt}>📵 Blocks ads</Text>
-        </View>
+        {/* Lit = this defence is live right now. Grey = capability idle (not yet turned
+            on / not yet scanned). Never lit unless the underlying state is truly active. */}
+        {[
+          { txt: '🌐 Stops trackers', on: vpnStats.running },
+          { txt: '🔬 Finds spyware', on: getLastScan() != null },
+          { txt: '⚔️ AI defence', on: score != null },
+          { txt: '📵 Blocks ads', on: vpnStats.running },
+        ].map((p) => (
+          <View key={p.txt} style={[styles.pill, p.on && styles.pillOn]}>
+            <Text style={[styles.pillTxt, p.on && styles.pillTxtOn]}>
+              {p.on ? '✓ ' : ''}
+              {p.txt}
+            </Text>
+          </View>
+        ))}
       </View>
 
       {/* Protection Tools grid */}
@@ -806,7 +810,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
+  pillOn: {
+    backgroundColor: '#0c2a1a',
+    borderColor: '#16a34a',
+  },
   pillTxt: { color: '#94a3b8', fontSize: 11, fontWeight: '600' },
+  pillTxtOn: { color: '#4ade80', fontWeight: '700' },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
