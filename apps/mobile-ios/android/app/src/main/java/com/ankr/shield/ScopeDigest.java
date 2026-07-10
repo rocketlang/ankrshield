@@ -145,6 +145,22 @@ final class ScopeDigest {
               .setAutoCancel(true);
             PendingIntent pi = openApp(ctx);
             if (pi != null) nb.setContentIntent(pi);
+
+            // Containment action: single attributable package → one-tap network
+            // quarantine (every DNS query from it → NXDOMAIN, survives restarts).
+            if (app != null && !app.isEmpty() && !app.contains(",")) {
+                Intent qIntent = new Intent(ctx, DnsVpnService.class)
+                    .setAction("QUARANTINE")
+                    .putExtra("pkg", app);
+                int qFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    qFlags |= PendingIntent.FLAG_IMMUTABLE;
+                }
+                PendingIntent qpi = PendingIntent.getService(
+                    ctx, app.hashCode(), qIntent, qFlags);
+                nb.addAction(new Notification.Action.Builder(
+                    null, "Quarantine app", qpi).build());
+            }
             nm.notify(domain.hashCode(), nb.build());
         } catch (Exception ignored) {}
     }

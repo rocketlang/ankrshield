@@ -281,6 +281,30 @@ class AnkrShieldVpn {
     return DnsVpn.getScopeDetail(app) as Promise<ScopeDetailRow[]>;
   }
 
+  /** Network-quarantine a red-flagged app: every DNS query from it → NXDOMAIN.
+   *  Containment pending user decision — the app still runs (a non-OEM app
+   *  cannot freeze processes); its network is cut at the DNS layer. */
+  async quarantineApp(packageName: string): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
+    await DnsVpn.quarantineApp(packageName);
+  }
+
+  async unquarantineApp(packageName: string): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
+    await DnsVpn.unquarantineApp(packageName);
+  }
+
+  async getQuarantinedApps(): Promise<string[]> {
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return [];
+    }
+    return DnsVpn.getQuarantinedApps() as Promise<string[]>;
+  }
+
   /** Wipe the on-device scope ledger (user right; nothing ever left the phone). */
   async clearScopeLedger(): Promise<void> {
     if (Platform.OS !== 'android' || !DnsVpn) {

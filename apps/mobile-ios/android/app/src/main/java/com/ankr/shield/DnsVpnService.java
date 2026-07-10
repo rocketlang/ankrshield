@@ -84,6 +84,8 @@ public class DnsVpnService extends VpnService {
 
     // Split-tunnel bypass: package names in this set bypass DNS filtering (VPN excluded)
     static final Set<String> bypassPackages = Collections.synchronizedSet(new HashSet<>());
+    // Network quarantine: every DNS query from these packages → NXDOMAIN (trojan containment)
+    static final Set<String> quarantinePackages = Collections.synchronizedSet(new HashSet<>());
     // Passive mode: intercept + log but never block
     static volatile boolean passiveMode = false;
 
@@ -121,6 +123,26 @@ public class DnsVpnService extends VpnService {
             paused = false;
             pauseUntilMs = 0;
             Log.i(TAG, "AnkrShield DNS resumed manually");
+            return START_STICKY;
+        }
+        if ("QUARANTINE".equals(action)) {
+            // From the critical-alert action button or the JS module:
+            // network-contain a red-flagged app pending the user's decision.
+            String pkg = intent.getStringExtra("pkg");
+            if (pkg != null && !pkg.isEmpty()) {
+                ShieldPrefs.setQuarantine(this, pkg, true);
+                loadBypassFromPrefs();
+                Log.w(TAG, "QUARANTINED " + pkg + " — all DNS from it now NXDOMAIN");
+                // Re-establish so a formerly-bypassed app routes through us again
+                if (vpnInterface != null && running) {
+                    try {
+                        vpnInterface.close();
+                        establishVpnInterface();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Rebuild after quarantine failed", e);
+                    }
+                }
+            }
             return START_STICKY;
         }
         if ("REBUILD".equals(action)) {
@@ -234,8 +256,22 @@ public class DnsVpnService extends VpnService {
             ShieldPrefs.saveSeed(this, fin);
             Log.i(TAG, "Intelligent mode: auto-excluded " + fin.size() + " financial apps");
         }
+        quarantinePackages.clear();
+        quarantinePackages.addAll(ShieldPrefs.getQuarantine(this));
         bypassPackages.clear();
         bypassPackages.addAll(ShieldPrefs.effectiveBypass(this));
+        // Quarantine beats bypass: a quarantined app must route THROUGH the VPN
+        // so we can contain it — never exclude it from the interface.
+        bypassPackages.removeAll(quarantinePackages);
+    }
+
+    /** True when the attributed app (possibly comma-joined shared-UID set) is quarantined. */
+    private static boolean isQuarantined(String app) {
+        if (app == null || app.isEmpty() || quarantinePackages.isEmpty()) return false;
+        for (String pkg : app.split(",")) {
+            if (quarantinePackages.contains(pkg)) return true;
+        }
+        return false;
     }
 
     // ─── VPN Interface ───────────────────────────────────────────────────────
@@ -451,6 +487,18 @@ public class DnsVpnService extends VpnService {
 
                 // Attribute the query to its owning app while the flow is live
                 String app = resolveAppForFlow(buf, ipHeaderLen);
+
+                // Quarantined app: EVERY query → NXDOMAIN (network containment).
+                // Checked before pause/passive — containment never takes a break.
+                if (isQuarantined(app)) {
+                    blockedCount.incrementAndGet();
+                    byte[] qResponse = buildNxdomainResponse(buf, udpPayloadOffset, udpPayloadLen,
+                                                             ipHeaderLen, len);
+                    if (qResponse != null) out.write(qResponse);
+                    scopeLedger.record(app, domain, "quarantined", "", 0, true);
+                    broadcastDnsEvent(domain, app, true, "quarantined", "");
+                    continue;
+                }
 
                 // Auto-expire timed pauses (manual bypass window)
                 if (paused && pauseUntilMs > 0 && System.currentTimeMillis() >= pauseUntilMs) {

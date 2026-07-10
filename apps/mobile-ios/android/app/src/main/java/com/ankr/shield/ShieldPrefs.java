@@ -32,12 +32,13 @@ final class ShieldPrefs {
     static final String MODE_INTELLIGENT = "intelligent";
     static final String MODE_GUARD       = "guard";
 
-    private static final String STORE        = "ankrshield_dns";
-    private static final String KEY_USER     = "bypass_user";
-    private static final String KEY_AUTO     = "bypass_auto";
-    private static final String KEY_REMOVED  = "bypass_auto_removed";
-    private static final String KEY_SEEDED   = "bypass_seeded_v1";
-    private static final String KEY_MODE     = "shield_mode";
+    private static final String STORE          = "ankrshield_dns";
+    private static final String KEY_USER       = "bypass_user";
+    private static final String KEY_AUTO       = "bypass_auto";
+    private static final String KEY_REMOVED    = "bypass_auto_removed";
+    private static final String KEY_SEEDED     = "bypass_seeded_v1";
+    private static final String KEY_MODE       = "shield_mode";
+    private static final String KEY_QUARANTINE = "quarantine_set";
 
     private ShieldPrefs() {}
 
@@ -99,6 +100,21 @@ final class ShieldPrefs {
 
     static void replaceUserBypass(Context ctx, Set<String> user) {
         prefs(ctx).edit().putStringSet(KEY_USER, user).apply();
+    }
+
+    // ── Network quarantine (trojan containment, ASCT-T6) ────────────────────
+    // A quarantined package gets EVERY DNS query answered NXDOMAIN — network
+    // containment pending the user's decision. Quarantine beats bypass: a
+    // package in both sets is quarantined.
+
+    static Set<String> getQuarantine(Context ctx) {
+        return new HashSet<>(prefs(ctx).getStringSet(KEY_QUARANTINE, Collections.emptySet()));
+    }
+
+    static void setQuarantine(Context ctx, String pkg, boolean quarantined) {
+        Set<String> q = getQuarantine(ctx);
+        if (quarantined) q.add(pkg); else q.remove(pkg);
+        prefs(ctx).edit().putStringSet(KEY_QUARANTINE, q).apply();
     }
 
     /** Effective set the VPN should exclude, given the current mode. */

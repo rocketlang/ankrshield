@@ -259,6 +259,36 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
         promise.resolve(ShieldPrefs.getMode(getReactApplicationContext()));
     }
 
+    // ─── Network quarantine — trojan containment (ASCT-T6) ──────────────────
+
+    /** Contain a red-flagged app: every DNS query from it → NXDOMAIN. Persists. */
+    @ReactMethod
+    public void quarantineApp(String packageName, Promise promise) {
+        Intent intent = new Intent(getReactApplicationContext(), DnsVpnService.class);
+        intent.setAction("QUARANTINE");
+        intent.putExtra("pkg", packageName);
+        getReactApplicationContext().startService(intent);
+        promise.resolve(null);
+    }
+
+    /** Release an app from network quarantine. */
+    @ReactMethod
+    public void unquarantineApp(String packageName, Promise promise) {
+        ShieldPrefs.setQuarantine(getReactApplicationContext(), packageName, false);
+        syncAndRebuild();
+        DnsVpnService.quarantinePackages.remove(packageName);
+        promise.resolve(null);
+    }
+
+    @ReactMethod
+    public void getQuarantinedApps(Promise promise) {
+        WritableArray result = new WritableNativeArray();
+        for (String pkg : ShieldPrefs.getQuarantine(getReactApplicationContext())) {
+            result.pushString(pkg);
+        }
+        promise.resolve(result);
+    }
+
     // ─── Scope ledger (ASCT-T2.1/T2.3) ───────────────────────────────────────
 
     /** Per-app rollups. Live ledger when VPN runs, read-only file otherwise. */

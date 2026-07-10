@@ -41,6 +41,7 @@ const CAT_LABEL: Record<string, string> = {
   stalkerware: 'Stalkerware',
   apt: 'Spyware infra',
   sdk: 'Tracking SDK',
+  quarantined: 'Quarantined — contained',
   clean: 'No known tracker',
 };
 
