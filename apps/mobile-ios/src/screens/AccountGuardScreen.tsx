@@ -175,16 +175,16 @@ export default function AccountGuardScreen() {
           id: 'gmail',
           name: 'Gmail',
           icon: '📧',
-          status: 'safe',
-          detail: 'No active threat signals',
+          status: 'unknown',
+          detail: 'Not monitored — AnkrShield has no live signal for this app',
           deepLink: 'gmail',
         },
         {
           id: 'instagram',
           name: 'Instagram',
           icon: '📷',
-          status: 'safe',
-          detail: 'No active threat signals',
+          status: 'unknown',
+          detail: 'Not monitored — AnkrShield has no live signal for this app',
           deepLink: 'instagram',
         },
         {
@@ -199,8 +199,8 @@ export default function AccountGuardScreen() {
           id: 'facebook',
           name: 'Facebook',
           icon: '👥',
-          status: 'safe',
-          detail: 'No active threat signals',
+          status: 'unknown',
+          detail: 'Not monitored — AnkrShield has no live signal for this app',
           deepLink: 'facebook',
         },
       ]);
@@ -246,7 +246,9 @@ export default function AccountGuardScreen() {
         await Linking.openURL(fallback);
       }
     } catch (_err) {
-      if (fallback) await Linking.openURL(fallback).catch(() => {});
+      if (fallback) {
+        await Linking.openURL(fallback).catch(() => {});
+      }
     }
   }, []);
 

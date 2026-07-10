@@ -10,6 +10,7 @@
  * the UI never shows an error screen on first open.
  */
 import { API_BASE } from '../config';
+import { MdmStorage } from '../mdm/storage';
 
 import { getLastScan, scanAppScore } from './ScanStore';
 import { vpnService } from './VpnService';
@@ -155,22 +156,38 @@ export class PrivacyService {
     };
   }
 
-  async getScoreHistory(days: number) {
-    // The server has no historical endpoint yet — derive a plausible trend
-    // from the current threat score (recent days cluster around today's score).
-    const live = await fetchLive().catch(() => null);
-    const baseScore = live ? Math.max(0, 100 - live.warrior.overallThreatScore) : 75;
-    const now = Date.now();
+  /**
+   * REAL score history — one point per day, persisted on-device. No fabrication:
+   * we record today's actual privacy score once per day and return the real
+   * accumulated points. A new user sees a single point; the trend builds as they
+   * use AnkrShield. (Previously this synthesised a fake trend with random jitter.)
+   */
+  async getScoreHistory(days: number): Promise<{ timestamp: Date; score: number }[]> {
+    const HISTORY_KEY = '@ankrshield/score-history';
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-    return Array.from({ length: days }, (_, i) => {
-      const dayOffset = days - 1 - i;
-      // Small ±10 jitter to make the graph look real
-      const jitter = Math.round((Math.random() - 0.5) * 10);
-      return {
-        timestamp: new Date(now - dayOffset * 24 * 60 * 60 * 1000),
-        score: Math.min(100, Math.max(0, baseScore + jitter)),
-      };
-    });
+    let history: { date: string; score: number }[] = [];
+    try {
+      const raw = await MdmStorage.getItem(HISTORY_KEY);
+      if (raw) {
+        history = JSON.parse(raw);
+      }
+    } catch {
+      /* corrupt or absent — start fresh */
+    }
+
+    // Record today's REAL score once per day.
+    if (!history.some((h) => h.date === today)) {
+      const score = await this.getPrivacyScore().catch(() => null);
+      if (score) {
+        history.push({ date: today, score: score.totalScore });
+        history = history.slice(-60); // keep two months max
+        await MdmStorage.setItem(HISTORY_KEY, JSON.stringify(history)).catch(() => {});
+      }
+    }
+
+    // Return only real points, newest `days` window.
+    return history.slice(-days).map((h) => ({ timestamp: new Date(h.date), score: h.score }));
   }
 
   async getScoreBreakdown() {
