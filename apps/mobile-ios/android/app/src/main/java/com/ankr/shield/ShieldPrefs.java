@@ -39,11 +39,21 @@ final class ShieldPrefs {
     private static final String KEY_SEEDED     = "bypass_seeded_v1";
     private static final String KEY_MODE       = "shield_mode";
     private static final String KEY_QUARANTINE = "quarantine_set";
+    private static final String KEY_CLIP_HYG   = "clipboard_hygiene";
 
     private ShieldPrefs() {}
 
     private static SharedPreferences prefs(Context ctx) {
         return ctx.getSharedPreferences(STORE, Context.MODE_PRIVATE);
+    }
+
+    /** Clipboard hygiene: auto-clear a copied OTP/UPI after a short delay. Default ON. */
+    static boolean isClipboardHygiene(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_CLIP_HYG, true);
+    }
+
+    static void setClipboardHygiene(Context ctx, boolean enabled) {
+        prefs(ctx).edit().putBoolean(KEY_CLIP_HYG, enabled).apply();
     }
 
     static String getMode(Context ctx) {

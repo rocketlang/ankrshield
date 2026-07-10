@@ -259,6 +259,18 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
         promise.resolve(ShieldPrefs.getMode(getReactApplicationContext()));
     }
 
+    /** Clipboard hygiene: auto-clear a copied OTP/UPI after ~60s (needs the accessibility service). */
+    @ReactMethod
+    public void setClipboardHygiene(boolean enabled, Promise promise) {
+        ShieldPrefs.setClipboardHygiene(getReactApplicationContext(), enabled);
+        promise.resolve(null);
+    }
+
+    @ReactMethod
+    public void getClipboardHygiene(Promise promise) {
+        promise.resolve(ShieldPrefs.isClipboardHygiene(getReactApplicationContext()));
+    }
+
     // ─── Network quarantine — trojan containment (ASCT-T6) ──────────────────
 
     /** Contain a red-flagged app: every DNS query from it → NXDOMAIN. Persists. */

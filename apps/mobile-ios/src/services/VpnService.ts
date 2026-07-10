@@ -276,6 +276,21 @@ class AnkrShieldVpn {
     return DnsVpn.getMode() as Promise<ShieldMode>;
   }
 
+  /** Clipboard hygiene: auto-clear a copied OTP/UPI after ~60s. Needs the accessibility service. */
+  async setClipboardHygiene(enabled: boolean): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn || !DnsVpn.setClipboardHygiene) {
+      return;
+    }
+    await DnsVpn.setClipboardHygiene(enabled);
+  }
+
+  async getClipboardHygiene(): Promise<boolean> {
+    if (Platform.OS !== 'android' || !DnsVpn || !DnsVpn.getClipboardHygiene) {
+      return true;
+    }
+    return DnsVpn.getClipboardHygiene() as Promise<boolean>;
+  }
+
   /** Per-app scope rollups from the on-device ledger (works with VPN on or off). */
   async getScopeSummary(): Promise<ScopeSummaryRow[]> {
     if (Platform.OS !== 'android' || !DnsVpn) {

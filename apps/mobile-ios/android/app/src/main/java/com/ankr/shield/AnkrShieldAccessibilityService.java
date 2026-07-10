@@ -131,6 +131,15 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
     private static final java.util.regex.Pattern UPI_VPA_PATTERN =
         java.util.regex.Pattern.compile("^[\\w.\\-]{2,64}@[\\w]{2,20}$");
 
+    // OTP pattern: a standalone 4–8 digit code copied to the clipboard.
+    private static final java.util.regex.Pattern OTP_PATTERN =
+        java.util.regex.Pattern.compile("^\\d{4,8}$");
+
+    // Clipboard hygiene: auto-clear a copied OTP/UPI after this delay if still present.
+    private static final String CLIP_HYGIENE_CHANNEL = "clipboard_hygiene";
+    private static final long   CLIP_CLEAR_DELAY_MS  = 60_000;
+    private final Handler       hygieneHandler = new Handler(Looper.getMainLooper());
+
     // Similarity thresholds
     private static final double IMPERSONATION_THRESHOLD = 0.80;
     private static final double PHISHING_THRESHOLD = 0.82;
@@ -303,6 +312,12 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
         Log.w(TAG, "Accessibility service interrupted");
     }
 
+    @Override
+    public void onDestroy() {
+        try { hygieneHandler.removeCallbacksAndMessages(null); } catch (Exception ignored) {}
+        super.onDestroy();
+    }
+
     // ── Overlay Attack Detection ──────────────────────────────────────────────
 
     /**
@@ -427,35 +442,104 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
                     if (text.equals(lastCheckedClip)) return;
                     lastCheckedClip = text;
 
-                    if (UPI_VPA_PATTERN.matcher(text).matches()) {
+                    boolean isUpi = UPI_VPA_PATTERN.matcher(text).matches();
+                    boolean isOtp = OTP_PATTERN.matcher(text).matches();
+
+                    if (isUpi) {
                         long now = System.currentTimeMillis();
-                        if (now - lastClipAlertTs < 30_000) return; // 30s dedup
-                        lastClipAlertTs = now;
+                        if (now - lastClipAlertTs >= 30_000) { // 30s dedup for the redirect warning
+                            lastClipAlertTs = now;
 
-                        // Check if clipboard was written by a non-UPI app
-                        String ctx = lastForegroundPkg.isEmpty() ? "unknown" : lastForegroundPkg;
-                        boolean isUpiApp = ctx.contains("paytm") || ctx.contains("phonepe") ||
-                                           ctx.contains("google") || ctx.contains("bhim") ||
-                                           ctx.contains("npci") || ctx.contains("upi");
+                            // Check if clipboard was written by a non-UPI app
+                            String ctx = lastForegroundPkg.isEmpty() ? "unknown" : lastForegroundPkg;
+                            boolean isUpiApp = ctx.contains("paytm") || ctx.contains("phonepe") ||
+                                               ctx.contains("google") || ctx.contains("bhim") ||
+                                               ctx.contains("npci") || ctx.contains("upi");
 
-                        if (!isUpiApp) {
-                            OverlayAttackAlert alert = new OverlayAttackAlert(
-                                ctx, "", "clipboard_upi",
-                                "UPI VPA '" + text + "' copied to clipboard by '" + ctx +
-                                "' — verify the recipient before paying"
-                            );
-                            emitOverlayAlert(alert);
-                            Log.w(TAG, "CLIPBOARD UPI: VPA=" + text + " copied by " + ctx);
+                            if (!isUpiApp) {
+                                OverlayAttackAlert alert = new OverlayAttackAlert(
+                                    ctx, "", "clipboard_upi",
+                                    "UPI VPA '" + text + "' copied to clipboard by '" + ctx +
+                                    "' — verify the recipient before paying"
+                                );
+                                emitOverlayAlert(alert);
+                                Log.w(TAG, "CLIPBOARD UPI: VPA=" + text + " copied by " + ctx);
+                            }
                         }
+                    }
+
+                    // Clipboard hygiene (C): a copied OTP or UPI ID is a payment/login secret.
+                    // If it is still on the clipboard after CLIP_CLEAR_DELAY_MS, clear it so the
+                    // secret can't be lifted later. Guards YOUR clipboard only — Android already
+                    // blocks background apps from reading it; this stops a lingering leftover.
+                    if ((isUpi || isOtp) && ShieldPrefs.isClipboardHygiene(getApplicationContext())) {
+                        scheduleClipboardClear(text, isOtp ? "OTP" : "UPI ID");
                     }
                 } catch (Exception e) {
                     Log.w(TAG, "Clipboard check error: " + e.getMessage());
                 }
             });
+            createClipHygieneChannel();
             Log.i(TAG, "Clipboard UPI monitoring started");
         } catch (Exception e) {
             Log.w(TAG, "Could not start clipboard monitoring: " + e.getMessage());
         }
+    }
+
+    /**
+     * Schedule a one-shot clipboard clear. Fires only if, after the delay, the clipboard
+     * STILL holds the same sensitive text — so a value the user already pasted-and-replaced
+     * is never clobbered. Best-effort: if the OS blocks the write, it degrades silently.
+     */
+    private void scheduleClipboardClear(final String sensitiveText, final String kind) {
+        hygieneHandler.postDelayed(() -> {
+            try {
+                if (clipboardManager == null) return;
+                if (!ShieldPrefs.isClipboardHygiene(getApplicationContext())) return;
+                ClipData cur = clipboardManager.getPrimaryClip();
+                String now = (cur != null && cur.getItemCount() > 0)
+                    ? cur.getItemAt(0).coerceToText(getApplicationContext()).toString().trim() : "";
+                if (!now.equals(sensitiveText)) return; // user copied something else — leave it
+                clipboardManager.setPrimaryClip(ClipData.newPlainText("", ""));
+                lastCheckedClip = "";
+                sendClipHygieneNotification(kind);
+                Log.i(TAG, "clipboard hygiene: cleared lingering " + kind);
+            } catch (Exception e) {
+                Log.w(TAG, "clipboard clear failed: " + e.getMessage());
+            }
+        }, CLIP_CLEAR_DELAY_MS);
+    }
+
+    private void createClipHygieneChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel ch = new NotificationChannel(
+                CLIP_HYGIENE_CHANNEL,
+                "Clipboard Hygiene",
+                NotificationManager.IMPORTANCE_LOW); // calm, not an alarm
+            ch.setDescription("Tells you when a copied OTP/UPI ID was auto-cleared from the clipboard");
+            NotificationManager nm =
+                (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.createNotificationChannel(ch);
+        }
+    }
+
+    private void sendClipHygieneNotification(String kind) {
+        NotificationManager nm =
+            (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        String body = "A copied " + kind + " was still on your clipboard after a minute, so "
+            + "AnkrShield cleared it. Copy it again if you still need it. "
+            + "(This guards your own clipboard — Android already blocks other apps from reading it.)";
+        Notification n = new NotificationCompat.Builder(this, CLIP_HYGIENE_CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_menu_delete)
+            .setContentTitle("🧹 Clipboard cleared — " + kind + " protected")
+            .setContentText("A copied " + kind + " was auto-cleared from your clipboard.")
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setAutoCancel(true)
+            .setColor(0xFF22C55E)
+            .build();
+        nm.notify(9700 + (int)(System.currentTimeMillis() % 100), n);
     }
 
     // ── Autofill Hijack Detection ─────────────────────────────────────────────

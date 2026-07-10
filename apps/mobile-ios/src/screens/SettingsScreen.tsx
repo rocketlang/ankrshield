@@ -60,12 +60,22 @@ export function SettingsScreen({ navigation }: any) {
   const [notifsLoading, setNotifsLoading] = useState(false);
   const [protectionMode, setProtectionModeState] = useState<ProtectionMode>('smart');
   const [simpleMode, setSimpleMode] = useState(false);
+  const [clipHygiene, setClipHygiene] = useState(true);
 
   useEffect(() => {
     MdmStorage.getItem('@ankrshield/mode')
       .then((m) => setSimpleMode(m !== 'tech')) // default is Simple
       .catch(() => {});
+    vpnService
+      .getClipboardHygiene()
+      .then(setClipHygiene)
+      .catch(() => {});
   }, []);
+
+  async function handleClipHygieneToggle(v: boolean) {
+    setClipHygiene(v);
+    await vpnService.setClipboardHygiene(v).catch(() => {});
+  }
 
   function handleLangChange(lang: Lang) {
     setLanguage(lang);
@@ -368,6 +378,27 @@ export function SettingsScreen({ navigation }: any) {
             disabled={notifsLoading || Platform.OS !== 'android'}
             trackColor={{ false: '#333', true: '#4CAF50' }}
             thumbColor={notifsLoading ? '#888' : '#fff'}
+          />
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Privacy Guards</Text>
+
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>🧹 Clipboard Hygiene</Text>
+            <Text style={styles.settingDescription}>
+              Auto-clear a copied OTP or UPI ID after a minute so it can't linger. Guards your own
+              clipboard (needs the accessibility guard on).
+            </Text>
+          </View>
+          <Switch
+            value={clipHygiene}
+            onValueChange={handleClipHygieneToggle}
+            disabled={Platform.OS !== 'android'}
+            trackColor={{ false: '#333', true: '#4CAF50' }}
+            thumbColor="#fff"
           />
         </View>
       </View>
