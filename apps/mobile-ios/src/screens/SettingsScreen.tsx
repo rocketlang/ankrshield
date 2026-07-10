@@ -22,6 +22,7 @@ import {
 import { setLanguage, getLanguage, supportedLanguages, type Lang } from '../i18n';
 import { MdmStorage } from '../mdm/storage';
 import { vpnService } from '../services/VpnService';
+import { APP_VERSION } from '../appVersion';
 
 const { WhatsAppGuard, BitwardenBridge } = NativeModules;
 
@@ -123,8 +124,12 @@ export function SettingsScreen({ navigation }: any) {
   }, []);
 
   function pauseLabel(): string {
-    if (!dnsPaused) return '';
-    if (pauseUntilMs === 0) return 'Paused — phone call active';
+    if (!dnsPaused) {
+      return '';
+    }
+    if (pauseUntilMs === 0) {
+      return 'Paused — phone call active';
+    }
     const mins = Math.max(0, Math.round((pauseUntilMs - Date.now()) / 60000));
     return `Paused — resumes in ${mins} min`;
   }
@@ -150,7 +155,9 @@ export function SettingsScreen({ navigation }: any) {
   }
 
   async function handleNotificationsToggle(value: boolean) {
-    if (notifsLoading || Platform.OS !== 'android' || !WhatsAppGuard) return;
+    if (notifsLoading || Platform.OS !== 'android' || !WhatsAppGuard) {
+      return;
+    }
     setNotifsLoading(true);
     try {
       if (value) {
@@ -183,7 +190,9 @@ export function SettingsScreen({ navigation }: any) {
   }
 
   async function handleDnsToggle(value: boolean) {
-    if (dnsLoading) return;
+    if (dnsLoading) {
+      return;
+    }
     setDnsLoading(true);
     try {
       if (value) {
@@ -446,7 +455,7 @@ export function SettingsScreen({ navigation }: any) {
 
         <TouchableOpacity style={styles.settingRow}>
           <Text style={styles.settingLabel}>Version</Text>
-          <Text style={styles.settingValue}>1.3.3</Text>
+          <Text style={styles.settingValue}>{APP_VERSION}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

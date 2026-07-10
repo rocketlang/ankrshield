@@ -797,8 +797,12 @@ public class DnsVpnService extends VpnService {
         out[2] = (byte) ((totalLen >> 8) & 0xFF);
         out[3] = (byte) (totalLen & 0xFF);
 
-        // Clear checksum (let kernel recalculate or set to 0)
-        out[10] = 0; out[11] = 0;
+        // IP header checksum — MUST be computed. The kernel does NOT recompute
+        // checksums for packets written to the TUN fd; it validates them on
+        // ingress and DROPS any with a bad checksum. A zero here silently dropped
+        // every DNS response → all resolution failed → "internet blocked". This
+        // is the fix that makes the shield actually usable.
+        writeIpChecksum(out, ipHdrLen);
 
         // UDP header
         int udpLen = 8 + dnsPayload.length;
@@ -818,6 +822,23 @@ public class DnsVpnService extends VpnService {
         System.arraycopy(dnsPayload, 0, out, ipHdrLen + 8, dnsPayload.length);
 
         return out;
+    }
+
+    /**
+     * Compute and write the IPv4 header checksum (RFC 791): 16-bit one's-complement
+     * sum of the header words, complemented. Covers the IP header only (ipHdrLen
+     * bytes), never the payload. IPv4 UDP checksum stays 0 (valid = "not computed").
+     */
+    private static void writeIpChecksum(byte[] pkt, int ipHdrLen) {
+        pkt[10] = 0; pkt[11] = 0; // zero the field before summing
+        int sum = 0;
+        for (int i = 0; i < ipHdrLen; i += 2) {
+            sum += ((pkt[i] & 0xFF) << 8) | (pkt[i + 1] & 0xFF);
+        }
+        while ((sum >> 16) != 0) sum = (sum & 0xFFFF) + (sum >> 16);
+        int cksum = ~sum & 0xFFFF;
+        pkt[10] = (byte) ((cksum >> 8) & 0xFF);
+        pkt[11] = (byte) (cksum & 0xFF);
     }
 
     // ─── React Native event bridge ───────────────────────────────────────────

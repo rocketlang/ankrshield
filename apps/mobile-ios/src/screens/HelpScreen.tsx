@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { APP_VERSION } from '../appVersion';
 
 interface Section {
   id: string;
@@ -178,7 +179,7 @@ export function HelpScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.intro}>AnkrShield v1.3.3 — tap any topic to expand.</Text>
+      <Text style={styles.intro}>{`AnkrShield v${APP_VERSION} — tap any topic to expand.`}</Text>
 
       {SECTIONS.map((s) => {
         const open = expanded === s.id;
