@@ -7,6 +7,7 @@
 
 import type { FastifyBaseLogger } from 'fastify';
 
+import { appendEdge } from '../edge/ledger.js';
 import { computePostureScore } from '../posture/scorer.js';
 import { emitSense } from '../sense/emit.js';
 import { appendScoreHistory, getVessel, listVessels } from '../store/vessel.js';
@@ -26,6 +27,10 @@ export async function runMonitorCycle(log: FastifyBaseLogger): Promise<void> {
     const vessel = getVessel(vessel_id);
     const prev = vessel.postureScore;
     const { score: newScore, band, findings } = computePostureScore(vessel);
+
+    // @rule:VRN-EDGE-001 persist the posture snapshot on-disk each cycle — the Box's
+    // offline-first 24/7 record, survives power cycle, buffered until sync-on-connect.
+    appendEdge({ vessel_id, posture_score: newScore, posture_band: band, kind: 'posture' });
 
     if (prev === null) {
       // First time scoring — just set, no degradation event

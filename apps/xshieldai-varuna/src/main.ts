@@ -12,6 +12,7 @@ import Fastify from 'fastify';
 
 import { registerAISRoutes } from './ais/routes.js';
 import { registerCrewRoutes } from './crew/routes.js';
+import { registerEdgeRoutes } from './edge/routes.js';
 import { registerEvidenceRoutes } from './evidence/routes.js';
 import { registerFactorRoutes } from './factors/routes.js';
 import { registerForjaRoutes } from './forja/routes.js';
@@ -73,6 +74,7 @@ app.get('/health', async () => ({
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 await registerForjaRoutes(app);
+await registerEdgeRoutes(app);
 await registerModbusRoutes(app);
 await registerNMEARoutes(app);
 await registerAISRoutes(app);
