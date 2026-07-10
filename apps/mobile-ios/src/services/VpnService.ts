@@ -79,6 +79,7 @@ export interface ScopeSummaryRow {
   firstTs: number;
   lastTs: number;
   receiptCount: number; // distinct domains = number of receipt rows on drill-down
+  stalkerware: number; // >0 = contacted a real stalkerware/apt-category endpoint
 }
 
 /** Caught-in-act row — an app that contacted a tracker while the screen was OFF. */

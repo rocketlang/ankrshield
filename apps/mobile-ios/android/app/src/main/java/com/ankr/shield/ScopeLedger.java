@@ -250,7 +250,10 @@ final class ScopeLedger {
                 "SUM(CASE WHEN category IN (" + beyond + ") THEN blocked ELSE 0 END) AS beyond_blocked, " +
                 "COUNT(DISTINCT CASE WHEN vendor!='' THEN vendor END) AS vendors, " +
                 "MAX(risk) AS max_risk, MIN(first_ts) AS first_ts, MAX(last_ts) AS last_ts, " +
-                "COUNT(DISTINCT domain) AS domains " +  // = number of receipt rows for this app
+                "COUNT(DISTINCT domain) AS domains, " +  // = number of receipt rows for this app
+                // TRUE stalkerware/APT category contact — the only thing that earns a red card.
+                // High-risk advertising/analytics is aggressive, not stalkerware; kept separate.
+                "SUM(CASE WHEN category IN ('stalkerware','apt') THEN blocked+allowed ELSE 0 END) AS stalkerware " +
                 "FROM scope_rollup GROUP BY app ORDER BY beyond DESC", null)) {
             while (c.moveToNext()) {
                 Map<String, Object> row = new HashMap<>();
@@ -263,6 +266,7 @@ final class ScopeLedger {
                 row.put("firstTs",       c.getLong(6));
                 row.put("lastTs",        c.getLong(7));
                 row.put("receiptCount",  c.getLong(8));
+                row.put("stalkerware",   c.getLong(9));  // >0 = real stalkerware/apt contact
                 out.add(row);
             }
         } catch (Exception e) {

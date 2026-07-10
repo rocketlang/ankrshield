@@ -17,6 +17,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -44,6 +45,25 @@ const CAT_LABEL: Record<string, string> = {
   quarantined: 'Quarantined — contained',
   clean: 'No known tracker',
 };
+
+// Browsers generate tracker calls for every site the USER visits — that traffic is
+// the web, not the app. Flag it so the number isn't misread as the browser spying.
+const BROWSER_PKGS = new Set([
+  'com.android.chrome',
+  'com.google.android.apps.chrome',
+  'org.mozilla.firefox',
+  'org.mozilla.fenix',
+  'com.microsoft.emmx',
+  'com.brave.browser',
+  'com.opera.mini.native',
+  'com.opera.browser',
+  'com.sec.android.app.sbrowser',
+  'com.UCMobile.intl',
+  'com.duckduckgo.mobile.android',
+  'com.kiwibrowser.browser',
+  'mark.via.gp',
+]);
+const isBrowser = (pkg: string) => BROWSER_PKGS.has(pkg.split(',')[0]);
 
 function timeAgo(ts: number): string {
   if (!ts) {
@@ -147,6 +167,27 @@ export function ScopeReportScreen() {
   const trackedApps = witnessed.filter((v) => v.beyondScope > 0).length;
   const vendorMax = witnessed.reduce((n, v) => Math.max(n, v.vendorCount), 0);
   const nullPct = Math.round((report?.nullShare ?? 0) * 100);
+  const totalBlocked = witnessed.reduce((n, v) => n + v.beyondBlocked, 0);
+  const topOffenders = witnessed
+    .filter((v) => v.beyondScope > 0)
+    .sort((a, b) => b.beyondScope - a.beyondScope)
+    .slice(0, 3);
+
+  const shareSummary = async () => {
+    const top = topOffenders
+      .map((v) => `${v.appName} (${v.beyondScope.toLocaleString()})`)
+      .join(', ');
+    await Share.share({
+      message:
+        `🛡️ AnkrShield caught ${totalBeyond.toLocaleString()} beyond-scope tracker contacts this ` +
+        `month across ${trackedApps} app${trackedApps === 1 ? '' : 's'}` +
+        (totalBlocked > 0 ? ` — ${totalBlocked.toLocaleString()} blocked` : '') +
+        '.\n\n' +
+        (top ? `Top offenders: ${top}.\n\n` : '') +
+        'On-device — every number a counted event, every vendor a cited database row. ' +
+        'Nothing guessed.\n\nGet AnkrShield (free): https://xshieldai.com',
+    }).catch(() => {});
+  };
 
   // Shield off with nothing yet witnessed → lead with the one action that lights
   // up the whole report. (If there's past data we still show it, plus a resume CTA.)
@@ -211,6 +252,11 @@ export function ScopeReportScreen() {
           contacts beyond app scope, by {trackedApps} app{trackedApps === 1 ? '' : 's'}
         </Text>
         <Text style={s.heroCalm}>Your apps kept working normally the whole time.</Text>
+        {totalBeyond > 0 && (
+          <TouchableOpacity style={s.shareBtn} onPress={shareSummary}>
+            <Text style={s.shareBtnText}>📤 Share this report</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* ── Mode ─────────────────────────────────────────────────── */}
@@ -274,7 +320,7 @@ export function ScopeReportScreen() {
       {witnessed.map((v) => (
         <TouchableOpacity
           key={v.packageName}
-          style={[s.card, v.critical && s.cardCritical]}
+          style={[s.card, v.critical && s.cardCritical, v.aggressive && s.cardAggressive]}
           onPress={() => toggleExpand(v)}
           activeOpacity={0.7}
         >
@@ -285,6 +331,11 @@ export function ScopeReportScreen() {
               </Text>
               {v.critical ? (
                 <Text style={s.criticalTag}>⚠ stalkerware/spyware-grade contact — act now</Text>
+              ) : v.aggressive ? (
+                <Text style={s.aggressiveTag}>
+                  ⚠ aggressive data collection · {v.beyondScope.toLocaleString()} beyond-scope ·{' '}
+                  {v.vendorCount} vendor{v.vendorCount === 1 ? '' : 's'}
+                </Text>
               ) : v.beyondScope > 0 ? (
                 <Text style={s.trackedTag}>
                   {v.beyondScope.toLocaleString()} beyond-scope · {v.vendorCount} named vendor
@@ -293,6 +344,11 @@ export function ScopeReportScreen() {
                 </Text>
               ) : (
                 <Text style={s.cleanTag}>no known tracker contacted</Text>
+              )}
+              {isBrowser(v.packageName) && v.beyondScope > 0 && (
+                <Text style={s.browserNote}>
+                  🌐 Browser traffic — reflects every website you visited, not the browser itself.
+                </Text>
               )}
             </View>
             <View style={s.cardRight}>
@@ -500,6 +556,17 @@ const s = StyleSheet.create({
   cardInfo: { flex: 1, marginRight: 8 },
   appName: { color: '#f1f5f9', fontSize: 14, fontWeight: '700' },
   criticalTag: { color: '#f87171', fontSize: 12, marginTop: 3, fontWeight: '700' },
+  aggressiveTag: { color: '#fbbf24', fontSize: 12, marginTop: 3, fontWeight: '700' },
+  cardAggressive: { borderColor: '#b45309' },
+  browserNote: { color: '#93c5fd', fontSize: 11, marginTop: 4, lineHeight: 15 },
+  shareBtn: {
+    marginTop: 16,
+    backgroundColor: '#1d4ed8',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  shareBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
   trackedTag: { color: '#f59e0b', fontSize: 12, marginTop: 3 },
   cleanTag: { color: '#4ade80', fontSize: 12, marginTop: 3 },
   cardRight: { alignItems: 'flex-end' },

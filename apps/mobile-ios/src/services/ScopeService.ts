@@ -30,9 +30,12 @@ export interface AppScopeVerdict {
   beyondBlocked: number;
   totalContacts: number;
   vendorCount: number;
-  /** 1-4 from tracker-db risk_level; 3+ = stalkerware/APT territory. */
+  /** 1-4 from tracker-db risk_level; 3+ = high-risk, not necessarily stalkerware. */
   maxRisk: number;
+  /** RED tier — actually contacted a stalkerware/apt-category endpoint (an IOC match). */
   critical: boolean;
+  /** AMBER tier — aggressive data collection (high risk/volume) but NOT stalkerware. */
+  aggressive: boolean;
   autoBypassed: boolean;
   receiptCount: number; // distinct domains behind this app = rows shown on tap
   firstTs: number;
@@ -86,7 +89,10 @@ export async function buildScopeReport(): Promise<ScopeReport> {
       totalContacts: row.contacts,
       vendorCount: row.vendorCount,
       maxRisk: row.maxRisk,
-      critical: row.maxRisk >= CRITICAL_RISK,
+      // RED only for a real stalkerware/apt IOC contact. High-risk advertising/analytics
+      // on a normal consumer app is AMBER (aggressive), not "stalkerware — act now".
+      critical: (row.stalkerware ?? 0) > 0,
+      aggressive: (row.stalkerware ?? 0) === 0 && row.maxRisk >= CRITICAL_RISK,
       autoBypassed: false,
       receiptCount: row.receiptCount ?? 0,
       firstTs: row.firstTs,
@@ -108,6 +114,7 @@ export async function buildScopeReport(): Promise<ScopeReport> {
         vendorCount: 0,
         maxRisk: 0,
         critical: false,
+        aggressive: false,
         autoBypassed: !!app.autoBypassed,
         receiptCount: 0,
         firstTs: 0,
@@ -120,6 +127,9 @@ export async function buildScopeReport(): Promise<ScopeReport> {
   verdicts.sort((a, b) => {
     if (a.critical !== b.critical) {
       return a.critical ? -1 : 1;
+    }
+    if (a.aggressive !== b.aggressive) {
+      return a.aggressive ? -1 : 1;
     }
     if ((a.status === 'UNWITNESSED') !== (b.status === 'UNWITNESSED')) {
       return a.status === 'UNWITNESSED' ? 1 : -1;
