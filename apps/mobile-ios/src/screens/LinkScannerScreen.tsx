@@ -2,6 +2,7 @@
  * LinkScannerScreen — scan any URL for phishing, malware, and reputation issues.
  * Accepts pasted URLs and shared text from other apps (WhatsApp, Chrome, etc.).
  */
+import { timeoutSignal } from '../util/timeoutSignal';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -36,7 +37,9 @@ const LEVEL_META = {
 function extractDomain(rawUrl: string): string {
   try {
     let url = rawUrl.trim();
-    if (!url.startsWith('http')) url = 'https://' + url;
+    if (!url.startsWith('http')) {
+      url = 'https://' + url;
+    }
     const u = new URL(url);
     return u.hostname.replace(/^www\./, '');
   } catch (_e) {
@@ -71,15 +74,20 @@ export function LinkScannerScreen({ route }: any) {
       setUrl(domain);
       setTimeout(() => scanDomain(domain), 400);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
 
   const scanDomain = useCallback(
     async (rawInput?: string) => {
       const target = (rawInput ?? url).trim();
-      if (!target) return;
+      if (!target) {
+        return;
+      }
 
       const domain = extractDomain(extractFirstUrl(target));
-      if (!domain) return;
+      if (!domain) {
+        return;
+      }
 
       setScanning(true);
       setError(null);
@@ -89,10 +97,12 @@ export function LinkScannerScreen({ route }: any) {
         const response = await fetch(
           `${API_BASE}/risk/score?domain=${encodeURIComponent(domain)}`,
           {
-            signal: AbortSignal.timeout ? AbortSignal.timeout(12_000) : undefined,
+            signal: timeoutSignal(12_000),
           }
         );
-        if (!response.ok) throw new Error(`Server error ${response.status}`);
+        if (!response.ok) {
+          throw new Error(`Server error ${response.status}`);
+        }
         const data: RiskScore = await response.json();
         setResult(data);
         setRecentScans((prev) =>
@@ -209,7 +219,9 @@ export function LinkScannerScreen({ route }: any) {
               style={s.openBtn}
               onPress={() => {
                 let link = url.trim();
-                if (!link.startsWith('http')) link = 'https://' + link;
+                if (!link.startsWith('http')) {
+                  link = 'https://' + link;
+                }
                 Linking.openURL(link).catch(() => {});
               }}
             >

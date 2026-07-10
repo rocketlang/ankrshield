@@ -10,6 +10,7 @@
  *   Falls back to on-device check if server is unreachable.
  */
 
+import { timeoutSignal } from '../util/timeoutSignal';
 import { useCallback, useState } from 'react';
 
 import { getBlocklistChecker } from './useBlocklist';
@@ -74,7 +75,9 @@ export function usePhoneRisk() {
   const checkNumber = useCallback(async (rawNumber: string): Promise<PhoneRiskResult | null> => {
     const key = rawNumber.replace(/\s/g, '');
     const cached = CACHE.get(key);
-    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.result;
+    if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
+      return cached.result;
+    }
 
     setLoading(true);
     setError(null);
@@ -94,9 +97,11 @@ export function usePhoneRisk() {
       try {
         const res = await fetch(`${API_BASE}/risk/phone?number=${encodeURIComponent(key)}`, {
           headers: { Accept: 'application/json', 'X-API-Key': apiKey },
-          signal: AbortSignal.timeout(8_000),
+          signal: timeoutSignal(8_000),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
         const result: PhoneRiskResult = await res.json();
         CACHE.set(key, { result, ts: Date.now() });
         return result;

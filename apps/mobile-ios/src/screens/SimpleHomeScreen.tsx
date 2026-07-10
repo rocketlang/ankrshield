@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 
 import { MdmStorage } from '../mdm/storage';
+import { syncBlocklist } from '../services/ioc-sync';
 import { buildScopeReport } from '../services/ScopeService';
 import { vpnService } from '../services/VpnService';
 
@@ -69,6 +70,9 @@ export function SimpleHomeScreen({ navigation }: { navigation: any }) {
       if (next) {
         await vpnService.start(); // OS VPN prompt; Intelligent mode auto-handles banking/dev
         setOn(true);
+        // Refresh the IOC/tracker blocklist on shield activation (founder ask —
+        // no longer waits for the tech Home screen to mount). Fire-and-forget.
+        syncBlocklist().catch(() => {});
       } else {
         await vpnService.stop();
         setOn(false);

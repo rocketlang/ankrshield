@@ -15,6 +15,7 @@
  * Generator: scripts/generate-blocklists.mjs
  */
 
+import { timeoutSignal } from '../util/timeoutSignal';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
@@ -69,9 +70,15 @@ async function hashToUint32(input: string): Promise<number> {
  */
 function toE164(raw: string): string {
   const cleaned = raw.replace(/[\s\-().]/g, '');
-  if (/^[6-9]\d{9}$/.test(cleaned)) return `+91${cleaned}`;
-  if (cleaned.startsWith('+')) return cleaned;
-  if (/^\d{10}$/.test(cleaned)) return `+91${cleaned}`;
+  if (/^[6-9]\d{9}$/.test(cleaned)) {
+    return `+91${cleaned}`;
+  }
+  if (cleaned.startsWith('+')) {
+    return cleaned;
+  }
+  if (/^\d{10}$/.test(cleaned)) {
+    return `+91${cleaned}`;
+  }
   return cleaned;
 }
 
@@ -85,9 +92,14 @@ function binarySearch(arr: Uint32Array, target: number): boolean {
   while (lo <= hi) {
     const mid = (lo + hi) >>> 1;
     const val = arr[mid];
-    if (val === target) return true;
-    if (val < target) lo = mid + 1;
-    else hi = mid - 1;
+    if (val === target) {
+      return true;
+    }
+    if (val < target) {
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
   }
   return false;
 }
@@ -113,9 +125,11 @@ function parseBinary(buffer: ArrayBuffer): Uint32Array {
 async function fetchBinary(url: string): Promise<ArrayBuffer> {
   const res = await fetch(url, {
     headers: { Accept: 'application/octet-stream' },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    signal: timeoutSignal(FETCH_TIMEOUT_MS),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status} from ${url}`);
+  }
   return res.arrayBuffer();
 }
 
@@ -125,13 +139,17 @@ async function loadBlocklists(): Promise<void> {
   try {
     // 1. Fetch manifest (tiny JSON, ~500 bytes)
     const manifestRes = await fetch(MANIFEST_URL, {
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: timeoutSignal(FETCH_TIMEOUT_MS),
     });
-    if (!manifestRes.ok) throw new Error(`Manifest fetch failed: ${manifestRes.status}`);
+    if (!manifestRes.ok) {
+      throw new Error(`Manifest fetch failed: ${manifestRes.status}`);
+    }
     const manifest: Manifest = await manifestRes.json();
 
     // 2. Skip if already loaded at this version
-    if (loadedVersion === manifest.phoneVersion && phoneList && domainList) return;
+    if (loadedVersion === manifest.phoneVersion && phoneList && domainList) {
+      return;
+    }
 
     // 3. Download + parse phone blocklist
     const phoneBuf = await fetchBinary(manifest.phoneUrl);
@@ -161,11 +179,15 @@ export function useBlocklist() {
     mounted.current = true;
     if (!loadPromise) {
       loadPromise = loadBlocklists().then(() => {
-        if (mounted.current) setReady(true);
+        if (mounted.current) {
+          setReady(true);
+        }
       });
     } else {
       loadPromise.then(() => {
-        if (mounted.current) setReady(true);
+        if (mounted.current) {
+          setReady(true);
+        }
       });
     }
     return () => {
@@ -178,7 +200,9 @@ export function useBlocklist() {
    * Returns false (safe) if blocklist is not yet loaded.
    */
   const checkPhone = useCallback(async (rawNumber: string): Promise<boolean> => {
-    if (!phoneList) return false; // not loaded yet — fail open (don't block)
+    if (!phoneList) {
+      return false;
+    } // not loaded yet — fail open (don't block)
     try {
       const e164 = toE164(rawNumber);
       const target = await hashToUint32(e164);
@@ -194,11 +218,15 @@ export function useBlocklist() {
    * Returns false if blocklist not loaded.
    */
   const checkDomain = useCallback(async (domain: string): Promise<boolean> => {
-    if (!domainList) return false;
+    if (!domainList) {
+      return false;
+    }
     try {
       const d = domain.toLowerCase().trim();
       const target = await hashToUint32(d);
-      if (binarySearch(domainList, target)) return true;
+      if (binarySearch(domainList, target)) {
+        return true;
+      }
 
       // Check parent domain
       const dot = d.indexOf('.');
@@ -206,7 +234,9 @@ export function useBlocklist() {
         const parent = d.slice(dot + 1);
         if (parent.includes('.')) {
           const parentTarget = await hashToUint32(parent);
-          if (binarySearch(domainList, parentTarget)) return true;
+          if (binarySearch(domainList, parentTarget)) {
+            return true;
+          }
         }
       }
       return false;
@@ -229,13 +259,17 @@ export async function getBlocklistChecker() {
   await loadPromise;
   return {
     checkPhone: async (rawNumber: string) => {
-      if (!phoneList) return false;
+      if (!phoneList) {
+        return false;
+      }
       const e164 = toE164(rawNumber);
       const target = await hashToUint32(e164);
       return binarySearch(phoneList, target);
     },
     checkDomain: async (domain: string) => {
-      if (!domainList) return false;
+      if (!domainList) {
+        return false;
+      }
       const target = await hashToUint32(domain.toLowerCase());
       return binarySearch(domainList, target);
     },

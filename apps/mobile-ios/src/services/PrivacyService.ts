@@ -64,22 +64,33 @@ interface MonitorStatsResponse {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// Higher = safer. Thresholds match PrivacyScoreCircle so label + colour agree.
 function scoreToLevel(score: number): string {
-  if (score <= 20) return 'excellent';
-  if (score <= 40) return 'good';
-  if (score <= 60) return 'fair';
+  if (score >= 85) {
+    return 'excellent';
+  }
+  if (score >= 70) {
+    return 'good';
+  }
+  if (score >= 50) {
+    return 'fair';
+  }
   return 'poor';
 }
 
 async function fetchLive(): Promise<LiveThreatsResponse> {
   const res = await fetch(`${API_BASE}/warrior/threats/live`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
   return res.json() as Promise<LiveThreatsResponse>;
 }
 
 async function fetchMonitorStats(): Promise<MonitorStatsResponse> {
   const res = await fetch(`${API_BASE}/monitor/stats`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
   return res.json() as Promise<MonitorStatsResponse>;
 }
 
@@ -93,7 +104,6 @@ export class PrivacyService {
     ]);
 
     const serverPenalty = Math.min(20, Math.round(live.warrior.overallThreatScore * 0.2));
-    const _chainPenalty = Math.min(15, live.warrior.attackChainsTotal * 2);
 
     // DNS score: dynamic — based on on-device block rate when VPN is running
     const blockRate =
@@ -175,16 +185,22 @@ export class PrivacyService {
     if (score.totalScore >= 80) {
       recommendations.push('Excellent privacy protection — keep it up!');
     } else {
-      if (score.dnsScore < 60) recommendations.push('Enable DNS filtering to block more trackers.');
-      if (score.networkScore < 60)
+      if (score.dnsScore < 60) {
+        recommendations.push('Enable DNS filtering to block more trackers.');
+      }
+      if (score.networkScore < 60) {
         recommendations.push('High server load detected — consider reducing active connections.');
-      if (score.appScore < 60)
+      }
+      if (score.appScore < 60) {
         recommendations.push('Attack chains detected — check Threat Alerts screen.');
+      }
     }
-    if (!getLastScan())
+    if (!getLastScan()) {
       recommendations.push('Run the App Scanner to include installed-app risk in your score.');
-    if (recommendations.length === 0 || (recommendations.length === 1 && !getLastScan()))
+    }
+    if (recommendations.length === 0 || (recommendations.length === 1 && !getLastScan())) {
       recommendations.push('Good protection. Review Threat Alerts for details.');
+    }
 
     return {
       totalScore: score.totalScore,

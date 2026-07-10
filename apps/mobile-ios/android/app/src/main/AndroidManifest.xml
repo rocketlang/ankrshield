@@ -27,6 +27,10 @@
   <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
   <!-- A11 — WorkManager background work -->
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
+  <!-- App Trust / scope grading must SEE every installed app to grade it. A
+       security scanner is the sanctioned use of this permission. Android 11+
+       otherwise hides most apps (why only ~7 showed). -->
+  <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>

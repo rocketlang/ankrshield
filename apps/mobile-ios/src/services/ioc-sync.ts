@@ -8,6 +8,7 @@
 
 import { API_BASE } from '../config';
 import { MdmStorage } from '../mdm/storage';
+import { timeoutSignal } from '../util/timeoutSignal';
 
 const BLOCKLIST_KEY = '@ankrshield/ioc_blocklist';
 const LAST_SYNC_KEY = '@ankrshield/ioc_last_sync';
@@ -64,7 +65,9 @@ export async function syncBlocklist(): Promise<{
   removed?: number;
   error?: string;
 }> {
-  if (state.syncInProgress) return { synced: false, count: state.count };
+  if (state.syncInProgress) {
+    return { synced: false, count: state.count };
+  }
   state.syncInProgress = true;
   try {
     if (state.lastSyncAt) {
@@ -80,8 +83,10 @@ export async function syncBlocklist(): Promise<{
 }
 
 async function _fullSync(): Promise<{ synced: boolean; count: number }> {
-  const res = await fetch(FEED_URL, { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const res = await fetch(FEED_URL, { signal: timeoutSignal(15000) });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
   const text = await res.text();
   const domains = text
     .split('\n')
@@ -108,8 +113,10 @@ async function _deltaSync(): Promise<{
 }> {
   const since = state.lastSyncAt!.toISOString();
   const url = `${DELTA_FEED_URL}?since=${encodeURIComponent(since)}&minScore=60`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-  if (!res.ok) throw new Error(`Delta HTTP ${res.status}`);
+  const res = await fetch(url, { signal: timeoutSignal(15000) });
+  if (!res.ok) {
+    throw new Error(`Delta HTTP ${res.status}`);
+  }
 
   const json = (await res.json()) as {
     add: string[];
@@ -120,8 +127,12 @@ async function _deltaSync(): Promise<{
   const add: string[] = (json.add ?? []).map((d) => d.trim().toLowerCase()).filter(Boolean);
   const remove: string[] = (json.remove ?? []).map((d) => d.trim().toLowerCase()).filter(Boolean);
 
-  for (const d of add) state.domains.add(d);
-  for (const d of remove) state.domains.delete(d);
+  for (const d of add) {
+    state.domains.add(d);
+  }
+  for (const d of remove) {
+    state.domains.delete(d);
+  }
   state.count = state.domains.size;
   state.lastSyncAt = json.timestamp ? new Date(json.timestamp) : new Date();
 
@@ -138,13 +149,19 @@ async function _deltaSync(): Promise<{
  * Checks exact match + parent domain (e.g., sub.malware.ru → malware.ru).
  */
 export function isDomainBlocked(domain: string): boolean {
-  if (!domain) return false;
+  if (!domain) {
+    return false;
+  }
   const d = domain.toLowerCase();
-  if (state.domains.has(d)) return true;
+  if (state.domains.has(d)) {
+    return true;
+  }
   const parts = d.split('.');
   if (parts.length > 2) {
     const parent = parts.slice(-2).join('.');
-    if (state.domains.has(parent)) return true;
+    if (state.domains.has(parent)) {
+      return true;
+    }
   }
   return false;
 }
