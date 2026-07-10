@@ -33,15 +33,28 @@ import com.facebook.react.bridge.Arguments;
  */
 public class BitwardenBridgeModule extends ReactContextBaseJavaModule {
 
-    private static final String MODULE_NAME = "BitwardenBridge";
+    private static final String MODULE_NAME = "BitwardenBridge"; // JS name kept for compat
 
-    // Both free and premium APK package names
-    private static final String BITWARDEN_PKG       = "com.x8bit.bitwarden";
-    private static final String BITWARDEN_BETA_PKG  = "com.x8bit.bitwarden.beta";
+    // Recommended default when none is installed (open-source, auditable, free).
+    private static final String RECOMMENDED_PKG = "com.x8bit.bitwarden";
 
-    // Bitwarden's autofill service component
-    private static final String BITWARDEN_AUTOFILL_SERVICE =
-        "com.x8bit.bitwarden/.autofill.BitwardenAutofillService";
+    // Known password managers, package → display name. Bitwarden first (recommended).
+    // Detection is brand-neutral: whichever the user already uses is honoured.
+    private static final String[][] PASSWORD_MANAGERS = {
+        {"com.x8bit.bitwarden",                 "Bitwarden"},
+        {"com.x8bit.bitwarden.beta",            "Bitwarden (Beta)"},
+        {"proton.android.pass",                 "Proton Pass"},
+        {"com.kunzisoft.keepass.free",          "KeePassDX"},
+        {"com.kunzisoft.keepass.libre",         "KeePassDX"},
+        {"keepass2android.keepass2android",     "KeePass2Android"},
+        {"keepass2android.keepass2android_nonet","KeePass2Android Offline"},
+        {"com.lastpass.lpandroid",              "LastPass"},
+        {"com.agilebits.onepassword",           "1Password"},
+        {"io.enpass.app",                       "Enpass"},
+        {"com.dashlane",                        "Dashlane"},
+        {"com.nordpass.android.app",            "NordPass"},
+        {"com.zoho.vault",                      "Zoho Vault"},
+    };
 
     public BitwardenBridgeModule(@NonNull ReactApplicationContext context) {
         super(context);
@@ -53,17 +66,34 @@ public class BitwardenBridgeModule extends ReactContextBaseJavaModule {
         return MODULE_NAME;
     }
 
-    // ── isInstalled helper ────────────────────────────────────────────────────
+    // ── detection ─────────────────────────────────────────────────────────────
 
-    private String getInstalledPkg() {
+    /** Returns {package, displayName} of the first installed manager, or null. */
+    private String[] getInstalledManager() {
         PackageManager pm = getReactApplicationContext().getPackageManager();
-        for (String pkg : new String[]{BITWARDEN_PKG, BITWARDEN_BETA_PKG}) {
+        for (String[] mgr : PASSWORD_MANAGERS) {
             try {
-                pm.getPackageInfo(pkg, 0);
-                return pkg;
+                pm.getPackageInfo(mgr[0], 0);
+                return mgr;
             } catch (PackageManager.NameNotFoundException ignored) {}
         }
         return null;
+    }
+
+    /** True if the given package is the device's selected autofill service, or has an
+     *  enabled accessibility service (older autofill path). */
+    private boolean isAutofillActive(String pkg) {
+        try {
+            String autofill = android.provider.Settings.Secure.getString(
+                getReactApplicationContext().getContentResolver(), "autofill_service");
+            if (autofill != null && autofill.contains(pkg)) return true;
+            String a11y = android.provider.Settings.Secure.getString(
+                getReactApplicationContext().getContentResolver(),
+                android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            return a11y != null && a11y.contains(pkg);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     // ── getStatus ─────────────────────────────────────────────────────────────
@@ -71,23 +101,14 @@ public class BitwardenBridgeModule extends ReactContextBaseJavaModule {
     @ReactMethod
     public void getStatus(Promise promise) {
         try {
-            String pkg = getInstalledPkg();
-            boolean installed = pkg != null;
-
-            // Check if Bitwarden's accessibility service is enabled
-            boolean autofillEnabled = false;
-            if (installed) {
-                String enabledServices = android.provider.Settings.Secure.getString(
-                    getReactApplicationContext().getContentResolver(),
-                    android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-                autofillEnabled = enabledServices != null &&
-                    enabledServices.contains(BITWARDEN_AUTOFILL_SERVICE);
-            }
+            String[] mgr = getInstalledManager();
+            boolean installed = mgr != null;
 
             WritableMap result = Arguments.createMap();
             result.putBoolean("installed",       installed);
-            result.putBoolean("autofillEnabled", autofillEnabled);
-            result.putString("packageName",      pkg != null ? pkg : "");
+            result.putBoolean("autofillEnabled", installed && isAutofillActive(mgr[0]));
+            result.putString("packageName",      installed ? mgr[0] : "");
+            result.putString("managerName",      installed ? mgr[1] : "");
 
             promise.resolve(result);
         } catch (Exception e) {
@@ -99,7 +120,8 @@ public class BitwardenBridgeModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void openVault() {
-        String pkg = getInstalledPkg();
+        String[] mgr = getInstalledManager();
+        String pkg = mgr != null ? mgr[0] : null;
         if (pkg == null) return;
 
         try {
@@ -142,7 +164,7 @@ public class BitwardenBridgeModule extends ReactContextBaseJavaModule {
         try {
             Intent intent = new Intent(
                 Intent.ACTION_VIEW,
-                Uri.parse("https://play.google.com/store/apps/details?id=" + BITWARDEN_PKG));
+                Uri.parse("https://play.google.com/store/apps/details?id=" + RECOMMENDED_PKG));
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getReactApplicationContext().startActivity(intent);
         } catch (Exception e) {

@@ -51,6 +51,7 @@ export function SettingsScreen({ navigation }: any) {
   const [activeLang, setActiveLang] = useState<Lang>(getLanguage());
   const [bwInstalled, setBwInstalled] = useState<boolean | null>(null);
   const [bwAutofill, setBwAutofill] = useState(false);
+  const [bwName, setBwName] = useState('');
   const [dnsFiltering, setDnsFiltering] = useState(false);
   const [dnsLoading, setDnsLoading] = useState(false);
   const [dnsPaused, setDnsPaused] = useState(false);
@@ -120,9 +121,10 @@ export function SettingsScreen({ navigation }: any) {
     // Bitwarden status (Android only)
     if (Platform.OS === 'android' && BitwardenBridge) {
       BitwardenBridge.getStatus()
-        .then((s: { installed: boolean; autofillEnabled: boolean }) => {
+        .then((s: { installed: boolean; autofillEnabled: boolean; managerName?: string }) => {
           setBwInstalled(s.installed);
           setBwAutofill(s.autofillEnabled);
+          setBwName(s.managerName || '');
         })
         .catch(() => setBwInstalled(false));
     }
@@ -424,15 +426,17 @@ export function SettingsScreen({ navigation }: any) {
           <Text style={styles.sectionTitle}>Password Manager</Text>
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>🔑 Bitwarden</Text>
+              <Text style={styles.settingLabel}>
+                🔑 {bwInstalled && bwName ? bwName : 'Password Manager'}
+              </Text>
               <Text style={styles.settingDescription}>
                 {bwInstalled === null
                   ? 'Checking…'
                   : bwInstalled
                     ? bwAutofill
-                      ? '✅ Installed · Autofill active'
-                      : '⚠️ Installed · Autofill not enabled'
-                    : 'Not installed — tap to get it free'}
+                      ? `✅ Already using ${bwName} · Autofill active`
+                      : `✅ Already using ${bwName} · tap to enable autofill`
+                    : 'None detected — tap to install Bitwarden (free, open-source)'}
               </Text>
             </View>
             <TouchableOpacity
@@ -453,7 +457,9 @@ export function SettingsScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
           <Text style={styles.bwNote}>
-            AnkrShield never reads your vault. Bitwarden is open-source and end-to-end encrypted.
+            AnkrShield never reads your vault. We detect any password manager you already use
+            (Bitwarden, Proton Pass, KeePassDX, 1Password…) and recommend Bitwarden — open-source
+            and end-to-end encrypted — if you don't have one.
           </Text>
         </View>
       )}
