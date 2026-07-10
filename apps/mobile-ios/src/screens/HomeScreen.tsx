@@ -56,6 +56,7 @@ const PROTECTION_TOOLS = [
   { icon: '🏥', name: 'Dev Health', desc: 'Security hygiene', route: 'DeviceHealth' },
   // Network & corporate
   { icon: '📊', name: 'Privacy Report', desc: 'Who tracked you, cited', route: 'ScopeReport' },
+  { icon: '🌙', name: 'Caught in Act', desc: 'Spied while screen off', route: 'CaughtInAct' },
   {
     icon: '⌚',
     name: 'Health Privacy',

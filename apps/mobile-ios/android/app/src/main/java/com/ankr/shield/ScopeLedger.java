@@ -51,6 +51,7 @@ final class ScopeLedger {
         int    risk     = 0;
         long   blocked  = 0;
         long   allowed  = 0;
+        long   bg       = 0;   // beyond-scope contacts made while the screen was OFF (caught-in-act)
         long   firstTs  = 0;
         long   lastTs   = 0;
     }
@@ -70,6 +71,10 @@ final class ScopeLedger {
                        "blocked INTEGER NOT NULL, allowed INTEGER NOT NULL," +
                        "first_ts INTEGER NOT NULL, last_ts INTEGER NOT NULL," +
                        "PRIMARY KEY (app, domain))");
+            // Additive migration for the caught-in-act witness (older installs lack this column).
+            // ALTER throws "duplicate column" on second run — that is the success path, so swallow it.
+            try { db.execSQL("ALTER TABLE scope_rollup ADD COLUMN bg_hits INTEGER NOT NULL DEFAULT 0"); }
+            catch (Exception ignored) { /* column already present */ }
             db.execSQL("DELETE FROM scope_rollup WHERE last_ts < " +
                        (System.currentTimeMillis() - RETAIN_MS));
             open = true;
@@ -91,6 +96,17 @@ final class ScopeLedger {
 
     /** Called from the packet loop — in-memory only, no I/O. */
     void record(String app, String domain, String category, String vendor, int risk, boolean blocked) {
+        record(app, domain, category, vendor, risk, blocked, false);
+    }
+
+    /**
+     * Background-aware record (caught-in-act witness). When {@code background} is true
+     * AND the contact is beyond-scope (a real tracker category), it counts as a
+     * "caught in the act" hit — an app phoning a tracker while the screen was OFF.
+     * Foreground contacts and clean/quarantined events never increment bg.
+     */
+    void record(String app, String domain, String category, String vendor, int risk,
+                boolean blocked, boolean background) {
         if (!open) return;
         String key = (app == null ? "" : app) + " " + domain;
         Pending p = pending.get(key);
@@ -109,6 +125,9 @@ final class ScopeLedger {
             }
             if (vendor != null && !vendor.isEmpty()) p.vendor = vendor;
             if (risk > p.risk) p.risk = risk;
+            if (background && category != null && BEYOND_SCOPE_CATEGORIES.contains(category)) {
+                p.bg++;
+            }
         }
     }
 
@@ -120,14 +139,14 @@ final class ScopeLedger {
             db.beginTransaction();
             SQLiteStatement up = db.compileStatement(
                 "UPDATE scope_rollup SET " +
-                "blocked=blocked+?, allowed=allowed+?, " +
+                "blocked=blocked+?, allowed=allowed+?, bg_hits=bg_hits+?, " +
                 "category=CASE WHEN ?!='clean' THEN ? ELSE category END, " +
                 "vendor=CASE WHEN ?!='' THEN ? ELSE vendor END, " +
                 "risk=MAX(risk,?), last_ts=? " +
                 "WHERE app=? AND domain=?");
             SQLiteStatement ins = db.compileStatement(
-                "INSERT INTO scope_rollup (app,domain,category,vendor,risk,blocked,allowed,first_ts,last_ts) " +
-                "VALUES (?,?,?,?,?,?,?,?,?)");
+                "INSERT INTO scope_rollup (app,domain,category,vendor,risk,blocked,allowed,bg_hits,first_ts,last_ts) " +
+                "VALUES (?,?,?,?,?,?,?,?,?,?)");
             for (Map.Entry<String, Pending> e : batch.entrySet()) {
                 String[] parts = e.getKey().split(" ", 2);
                 String app    = parts[0];
@@ -137,14 +156,15 @@ final class ScopeLedger {
                     up.clearBindings();
                     up.bindLong(1, p.blocked);
                     up.bindLong(2, p.allowed);
-                    up.bindString(3, p.category);
+                    up.bindLong(3, p.bg);
                     up.bindString(4, p.category);
-                    up.bindString(5, p.vendor);
+                    up.bindString(5, p.category);
                     up.bindString(6, p.vendor);
-                    up.bindLong(7, p.risk);
-                    up.bindLong(8, p.lastTs);
-                    up.bindString(9, app);
-                    up.bindString(10, domain);
+                    up.bindString(7, p.vendor);
+                    up.bindLong(8, p.risk);
+                    up.bindLong(9, p.lastTs);
+                    up.bindString(10, app);
+                    up.bindString(11, domain);
                     if (up.executeUpdateDelete() == 0) {
                         ins.clearBindings();
                         ins.bindString(1, app);
@@ -154,8 +174,9 @@ final class ScopeLedger {
                         ins.bindLong(5, p.risk);
                         ins.bindLong(6, p.blocked);
                         ins.bindLong(7, p.allowed);
-                        ins.bindLong(8, p.firstTs);
-                        ins.bindLong(9, p.lastTs);
+                        ins.bindLong(8, p.bg);
+                        ins.bindLong(9, p.firstTs);
+                        ins.bindLong(10, p.lastTs);
                         ins.executeInsert();
                     }
                 }
@@ -193,6 +214,20 @@ final class ScopeLedger {
         SQLiteDatabase ro = openReadOnly(ctx);
         if (ro == null) return new ArrayList<>();
         try { return queryDetail(ro, app); } finally { ro.close(); }
+    }
+
+    /** Caught-in-act: apps that contacted a tracker while the screen was OFF. Flushes first. */
+    List<Map<String, Object>> caughtInAct() {
+        if (!open) return new ArrayList<>();
+        flush();
+        return queryCaught(db);
+    }
+
+    /** Read-only caught-in-act for the UI when the VPN service is not running. */
+    static List<Map<String, Object>> readCaughtInAct(Context ctx) {
+        SQLiteDatabase ro = openReadOnly(ctx);
+        if (ro == null) return new ArrayList<>();
+        try { return queryCaught(ro); } finally { ro.close(); }
     }
 
     private static SQLiteDatabase openReadOnly(Context ctx) {
@@ -256,6 +291,32 @@ final class ScopeLedger {
             }
         } catch (Exception e) {
             Log.w(TAG, "detail failed: " + e.getMessage());
+        }
+        return out;
+    }
+
+    private static List<Map<String, Object>> queryCaught(SQLiteDatabase db) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        try (Cursor c = db.rawQuery(
+                "SELECT app, " +
+                "SUM(bg_hits) AS bg, " +                                   // background tracker contacts
+                "COUNT(DISTINCT CASE WHEN vendor!='' THEN vendor END) AS vendors, " +
+                "COUNT(DISTINCT domain) AS domains, " +                    // distinct tracker endpoints (receipts)
+                "MAX(risk) AS max_risk, MAX(last_ts) AS last_ts " +
+                "FROM scope_rollup WHERE bg_hits > 0 GROUP BY app " +
+                "ORDER BY bg DESC", null)) {
+            while (c.moveToNext()) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("app",          c.getString(0));
+                row.put("bgHits",       c.getLong(1));
+                row.put("vendorCount",  c.getLong(2));
+                row.put("receiptCount", c.getLong(3));
+                row.put("maxRisk",      c.getLong(4));
+                row.put("lastTs",       c.getLong(5));
+                out.add(row);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "caught summary failed: " + e.getMessage());
         }
         return out;
     }

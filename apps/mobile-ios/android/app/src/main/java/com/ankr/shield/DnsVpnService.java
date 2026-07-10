@@ -1,12 +1,16 @@
 package com.ankr.shield;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.net.ConnectivityManager;
 import android.net.VpnService;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
+import android.os.PowerManager;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
 import android.util.Log;
@@ -105,6 +109,12 @@ public class DnsVpnService extends VpnService {
     private TelephonyManager  telephonyManager;
     private PhoneStateListener phoneStateListener;
 
+    // Caught-in-act witness: track screen on/off cheaply so the packet loop can stamp
+    // a beyond-scope contact made while the user wasn't looking. A volatile boolean
+    // updated by a broadcast receiver — no polling, no per-packet syscall.
+    private volatile boolean  screenOff = false;
+    private BroadcastReceiver screenReceiver;
+
     // ─── Lifecycle ───────────────────────────────────────────────────────────
 
     @Override
@@ -184,6 +194,7 @@ public class DnsVpnService extends VpnService {
             loadBypassFromPrefs();
             openTrackerDb();
             scopeLedger.open(this);
+            registerScreenReceiver();
             establishVpnInterface();
             shouldStop.set(false);
             running = true;
@@ -237,9 +248,51 @@ public class DnsVpnService extends VpnService {
         }
 
         scopeLedger.close();
+        unregisterScreenReceiver();
 
         stopSelf();
         Log.i(TAG, "AnkrShield DNS VPN stopped");
+    }
+
+    // ─── Screen state (caught-in-act witness) ─────────────────────────────────
+
+    private void registerScreenReceiver() {
+        try {
+            // Seed from the current state so a query in the first seconds is attributed right.
+            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+            screenOff = pm != null && !pm.isInteractive();
+
+            screenReceiver = new BroadcastReceiver() {
+                @Override public void onReceive(Context ctx, Intent intent) {
+                    String a = intent != null ? intent.getAction() : null;
+                    if (Intent.ACTION_SCREEN_OFF.equals(a)) screenOff = true;
+                    else if (Intent.ACTION_SCREEN_ON.equals(a)) screenOff = false;
+                }
+            };
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(Intent.ACTION_SCREEN_ON);
+            filter.addAction(Intent.ACTION_SCREEN_OFF);
+            // targetSdk 34: a dynamic receiver must declare export intent on API 33+.
+            // We only ever receive the system SCREEN_ON/OFF broadcasts → NOT_EXPORTED.
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(screenReceiver, filter);
+            }
+        } catch (Exception e) {
+            // Witness degrades gracefully — without the receiver, screenOff stays false
+            // and nothing is falsely flagged as caught-in-act.
+            screenReceiver = null;
+            Log.w(TAG, "screen receiver register failed: " + e.getMessage());
+        }
+    }
+
+    private void unregisterScreenReceiver() {
+        if (screenReceiver != null) {
+            try { unregisterReceiver(screenReceiver); } catch (Exception ignored) {}
+            screenReceiver = null;
+        }
+        screenOff = false;
     }
 
     // ─── Bypass persistence + Intelligent-mode financial seed (ASCT-T2.4) ────
@@ -514,7 +567,7 @@ public class DnsVpnService extends VpnService {
                 if (passiveMode && match != null) {
                     // report as advisory, then pass through
                     scopeLedger.record(app, domain, match.category, match.vendor,
-                                       match.riskLevel, false);
+                                       match.riskLevel, false, screenOff);
                     ScopeDigest.maybeCriticalAlert(this, app, domain,
                                                    match.category, match.riskLevel);
                     broadcastDnsEvent(domain, app, false, match.category + ":advisory", match.vendor);
@@ -530,7 +583,7 @@ public class DnsVpnService extends VpnService {
                     if (response != null) out.write(response);
 
                     scopeLedger.record(app, domain, match.category, match.vendor,
-                                       match.riskLevel, true);
+                                       match.riskLevel, true, screenOff);
                     ScopeDigest.maybeCriticalAlert(this, app, domain,
                                                    match.category, match.riskLevel);
                     broadcastDnsEvent(domain, app, true, match.category, match.vendor);
@@ -716,6 +769,11 @@ public class DnsVpnService extends VpnService {
     static java.util.List<java.util.Map<String, Object>> ledgerDetail(String app) {
         DnsVpnService s = instance;
         return (s != null && running) ? s.scopeLedger.detail(app) : new java.util.ArrayList<>();
+    }
+
+    static java.util.List<java.util.Map<String, Object>> ledgerCaughtInAct() {
+        DnsVpnService s = instance;
+        return (s != null && running) ? s.scopeLedger.caughtInAct() : new java.util.ArrayList<>();
     }
 
     static void ledgerClear() {

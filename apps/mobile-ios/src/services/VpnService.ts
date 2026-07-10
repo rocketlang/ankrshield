@@ -81,6 +81,16 @@ export interface ScopeSummaryRow {
   receiptCount: number; // distinct domains = number of receipt rows on drill-down
 }
 
+/** Caught-in-act row — an app that contacted a tracker while the screen was OFF. */
+export interface CaughtInActRow {
+  app: string;
+  bgHits: number; // beyond-scope contacts made while the screen was off
+  vendorCount: number;
+  receiptCount: number; // distinct tracker endpoints
+  maxRisk: number;
+  lastTs: number;
+}
+
 /** Domain-level receipt — the citation behind a verdict line. */
 export interface ScopeDetailRow {
   domain: string;
@@ -280,6 +290,14 @@ class AnkrShieldVpn {
       return [];
     }
     return DnsVpn.getScopeDetail(app) as Promise<ScopeDetailRow[]>;
+  }
+
+  /** Caught-in-act: apps that phoned a tracker while the screen was OFF. */
+  async getCaughtInAct(): Promise<CaughtInActRow[]> {
+    if (Platform.OS !== 'android' || !DnsVpn || !DnsVpn.getCaughtInAct) {
+      return [];
+    }
+    return DnsVpn.getCaughtInAct() as Promise<CaughtInActRow[]>;
   }
 
   /** Network-quarantine a red-flagged app: every DNS query from it → NXDOMAIN.

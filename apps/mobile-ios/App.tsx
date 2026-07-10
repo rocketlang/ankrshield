@@ -33,6 +33,7 @@ import { AppConsentScreen } from './src/screens/AppConsentScreen';
 import { AppTrustScreen } from './src/screens/AppTrustScreen';
 import { AvScannerScreen } from './src/screens/AvScannerScreen';
 import { CallProtectionScreen } from './src/screens/CallProtectionScreen';
+import { CaughtInActScreen } from './src/screens/CaughtInActScreen';
 import { ConferenceScreen } from './src/screens/ConferenceScreen';
 import ContactRiskScreen from './src/screens/ContactRiskScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
@@ -562,6 +563,15 @@ function App(): React.JSX.Element {
             component={eb(ScopeReportScreen, 'ScopeReport')}
             options={{
               title: 'Privacy Report',
+              headerStyle: { backgroundColor: '#080c14' },
+              headerTintColor: '#60a5fa',
+            }}
+          />
+          <Stack.Screen
+            name="CaughtInAct"
+            component={eb(CaughtInActScreen, 'CaughtInAct')}
+            options={{
+              title: 'Caught in the Act',
               headerStyle: { backgroundColor: '#080c14' },
               headerTintColor: '#60a5fa',
             }}

@@ -309,6 +309,15 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
         promise.resolve(toWritableArray(rows));
     }
 
+    /** Caught-in-act: apps that contacted a tracker while the screen was OFF. */
+    @ReactMethod
+    public void getCaughtInAct(Promise promise) {
+        List<java.util.Map<String, Object>> rows = DnsVpnService.running
+            ? DnsVpnService.ledgerCaughtInAct()
+            : ScopeLedger.readCaughtInAct(getReactApplicationContext());
+        promise.resolve(toWritableArray(rows));
+    }
+
     /** Wipe the on-device scope ledger (user right — ASCT-004). */
     @ReactMethod
     public void clearScopeLedger(Promise promise) {
