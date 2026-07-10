@@ -16,6 +16,7 @@ import Developers from './pages/Developers';
 import Devices from './pages/Devices';
 import Docs from './pages/Docs';
 import EvidenceReport from './pages/EvidenceReport';
+import FleetPosture from './pages/FleetPosture';
 import Landing from './pages/Landing';
 import LiveThreats from './pages/LiveThreats';
 import Login from './pages/Login';
@@ -27,6 +28,7 @@ import Register from './pages/Register';
 import Settings from './pages/Settings';
 import Setup from './pages/Setup';
 import SupplyChain from './pages/SupplyChain';
+import VendorVetting from './pages/VendorVetting';
 import VerifyMagicLink from './pages/VerifyMagicLink';
 import WatchDetail from './pages/WatchDetail';
 
@@ -39,6 +41,8 @@ function AppRoutes() {
       <Route path="/personal" element={<AnkrShieldLanding />} />
       <Route path="/live" element={<LiveThreats />} />
       <Route path="/evidence" element={<EvidenceReport />} />
+      <Route path="/fleet" element={<FleetPosture />} />
+      <Route path="/vendor-vetting" element={<VendorVetting />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/auth/verify" element={<VerifyMagicLink />} />

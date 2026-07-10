@@ -573,6 +573,7 @@ const CAPABILITIES = [
     title: 'DPDP / GDPR Evidence',
     desc: 'The enterprise face of AnkrShield: turn beyond-scope app tracking into a cited, filable DPDP/GDPR purpose-limitation complaint — vendors, counts, legal basis, pre-filled draft.',
     badge: 'PRO',
+    href: '/evidence',
   },
   {
     icon: '🔏',
@@ -585,6 +586,14 @@ const CAPABILITIES = [
     title: 'Fleet Privacy Posture',
     desc: 'AnkrShield witnessing across managed devices: which apps leak beyond scope, tamed by policy without breaking them. BYOD/MDM DPO dashboard.',
     badge: 'PRO',
+    href: '/fleet',
+  },
+  {
+    icon: '🧪',
+    title: 'Vendor App Vetting',
+    desc: 'Grade any app before it touches your fleet — cited behavior (trackers, scope, IOCs), compute/quote/null, policy gate on what fails. The enterprise face of the App Safety Index.',
+    badge: 'PRO',
+    href: '/vendor-vetting',
   },
 ];
 
@@ -593,7 +602,7 @@ function Capabilities() {
     <section id="capabilities" style={{ background: BG_ALT, padding: '72px 24px' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <SectionHead
-          title="16 Capabilities. One API."
+          title="17 Capabilities. One API."
           sub="Everything from domain risk scoring to active DMCA filing — REST + GraphQL, works in 5 minutes"
         />
         <div
@@ -603,29 +612,53 @@ function Capabilities() {
             gap: 16,
           }}
         >
-          {CAPABILITIES.map((c) => (
-            <div
-              key={c.title}
-              style={{
-                background: BG_CARD,
-                border: `1px solid ${BORDER}`,
-                borderRadius: 10,
-                padding: '20px 22px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <span style={{ fontSize: 22 }}>{c.icon}</span>
-                <span style={{ fontWeight: 700, color: TEXT, fontSize: 14 }}>{c.title}</span>
-                <span style={{ marginLeft: 'auto' }}>
-                  <Badge
-                    label={c.badge}
-                    color={c.badge === 'FREE' ? GREEN : c.badge === 'STARTER' ? VIOLET : AMBER}
-                  />
-                </span>
+          {CAPABILITIES.map((c) => {
+            const inner = (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 22 }}>{c.icon}</span>
+                  <span style={{ fontWeight: 700, color: TEXT, fontSize: 14 }}>{c.title}</span>
+                  <span style={{ marginLeft: 'auto' }}>
+                    <Badge
+                      label={c.badge}
+                      color={c.badge === 'FREE' ? GREEN : c.badge === 'STARTER' ? VIOLET : AMBER}
+                    />
+                  </span>
+                </div>
+                <p style={{ color: MUTED, fontSize: 13, margin: 0, lineHeight: 1.6 }}>{c.desc}</p>
+                {c.href && (
+                  <span
+                    style={{
+                      color: VIOLET_L,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      display: 'inline-block',
+                      marginTop: 10,
+                    }}
+                  >
+                    Explore →
+                  </span>
+                )}
+              </>
+            );
+            const cardStyle = {
+              background: BG_CARD,
+              border: `1px solid ${c.href ? VIOLET + '55' : BORDER}`,
+              borderRadius: 10,
+              padding: '20px 22px',
+              display: 'block',
+              textDecoration: 'none',
+            } as const;
+            return c.href ? (
+              <Link key={c.title} to={c.href} style={cardStyle}>
+                {inner}
+              </Link>
+            ) : (
+              <div key={c.title} style={cardStyle}>
+                {inner}
               </div>
-              <p style={{ color: MUTED, fontSize: 13, margin: 0, lineHeight: 1.6 }}>{c.desc}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>
