@@ -568,6 +568,24 @@ const CAPABILITIES = [
     desc: 'xshield-active: file DMCA, abuse reports, SIEM push, executive notify. Mode 1/2/3 consent-gated.',
     badge: 'PRO',
   },
+  {
+    icon: '📄',
+    title: 'DPDP / GDPR Evidence',
+    desc: 'The enterprise face of AnkrShield: turn beyond-scope app tracking into a cited, filable DPDP/GDPR purpose-limitation complaint — vendors, counts, legal basis, pre-filled draft.',
+    badge: 'PRO',
+  },
+  {
+    icon: '🔏',
+    title: 'Evidence Notary',
+    desc: 'Ed25519-signed, tamper-evident notarization of any evidence pack, in an append-only ledger. Verify independently against the public key. Regulator-grade — integrity + issuer + time.',
+    badge: 'PRO',
+  },
+  {
+    icon: '📱',
+    title: 'Fleet Privacy Posture',
+    desc: 'AnkrShield witnessing across managed devices: which apps leak beyond scope, tamed by policy without breaking them. BYOD/MDM DPO dashboard.',
+    badge: 'PRO',
+  },
 ];
 
 function Capabilities() {
@@ -575,7 +593,7 @@ function Capabilities() {
     <section id="capabilities" style={{ background: BG_ALT, padding: '72px 24px' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <SectionHead
-          title="13 Capabilities. One API."
+          title="16 Capabilities. One API."
           sub="Everything from domain risk scoring to active DMCA filing — REST + GraphQL, works in 5 minutes"
         />
         <div
