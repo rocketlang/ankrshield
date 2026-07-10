@@ -2,8 +2,10 @@
  * ConferenceScreen
  *
  * Lets a phone join a live conference room by entering the 6-char code
- * displayed on the big screen.  Once joined the device appears on the
- * /live?room=CODE dashboard and sends simulated tracker events every 5 s.
+ * displayed on the big screen. Once joined, the device forwards its REAL
+ * blocked-tracker events from the on-device DNS shield to the room — no
+ * simulation (reality beats the synthetic; every event on the big screen is
+ * an actual tracker this phone tried to reach).
  *
  * State machine:
  *   idle → joining → joined (→ left)
@@ -20,34 +22,9 @@ import {
   View,
 } from 'react-native';
 
-const API_BASE = 'https://xshieldai.com/api'; // change to localhost:4250 for dev
+import { vpnService, DnsQueryEvent } from '../services/VpnService';
 
-// Simulated tracker domains the phone reports (mirrors the TRACKERS list in LiveThreats.tsx)
-const TRACKERS = [
-  { tracker: 'google-analytics.com', company: 'Google', category: 'Analytics' },
-  { tracker: 'doubleclick.net', company: 'Google', category: 'Advertising' },
-  { tracker: 'connect.facebook.net', company: 'Meta', category: 'Social' },
-  { tracker: 'amazon-adsystem.com', company: 'Amazon', category: 'Advertising' },
-  { tracker: 'analytics.tiktok.com', company: 'TikTok', category: 'Analytics' },
-  { tracker: 'hotjar.com', company: 'Hotjar', category: 'Session Recording' },
-  { tracker: 'segment.io', company: 'Twilio', category: 'Data Broker' },
-  { tracker: 'criteo.com', company: 'Criteo', category: 'Retargeting' },
-  { tracker: 'adnxs.com', company: 'AppNexus', category: 'Advertising' },
-  { tracker: 'data.microsoft.com', company: 'Microsoft', category: 'Telemetry' },
-];
-
-const DATA_TYPES = [
-  'Device ID',
-  'Location (GPS)',
-  'Browsing history',
-  'App usage',
-  'Purchase history',
-  'Search queries',
-];
-
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+const API_BASE = 'https://xshieldai.com/api';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -66,50 +43,62 @@ export function ConferenceScreen(_props: { navigation: unknown }) {
   const [session, setSession] = useState<JoinResult | null>(null);
   const [eventCount, setEventCount] = useState(0);
   const [blockedCount, setBlockedCount] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [shieldOn, setShieldOn] = useState(true);
+  const lastSentRef = useRef(0);
 
-  // Send a simulated tracker event to the room
-  const sendEvent = useCallback(async (deviceId: string, roomCode: string) => {
-    const t = pick(TRACKERS);
-    const dataType = pick(DATA_TYPES);
-    const blocked = Math.random() < 0.89;
-    const bytes = Math.floor(Math.random() * 50000) + 2000;
-
+  // Forward ONE real DNS-shield event to the room (throttled by the caller).
+  const sendEvent = useCallback(async (deviceId: string, roomCode: string, ev: DnsQueryEvent) => {
     try {
       await fetch(`${API_BASE}/session/${roomCode}/event`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           deviceId,
-          tracker: t.tracker,
-          company: t.company,
-          category: t.category,
-          dataType,
-          blocked,
-          bytes,
+          tracker: ev.domain, // real domain the phone tried to reach
+          company: ev.vendor || 'Unknown',
+          category: ev.category,
+          dataType: ev.app || 'app', // the real app that made the request
+          blocked: ev.blocked,
+          bytes: 0, // DNS layer — no byte count; never fabricate one
         }),
       });
       setEventCount((n) => n + 1);
-      if (blocked) setBlockedCount((n) => n + 1);
+      if (ev.blocked) {
+        setBlockedCount((n) => n + 1);
+      }
     } catch {
       // ignore — network may be slow at a conference
     }
   }, []);
 
-  // Start sending events once joined
+  // Once joined, subscribe to the REAL on-device DNS stream and forward tracker
+  // hits to the room. No timer, no simulation — the big screen only ever shows
+  // trackers this phone actually contacted. Throttled to ≤1/sec so a busy phone
+  // doesn't flood the room.
   useEffect(() => {
-    if (status !== 'joined' || !session) return;
+    if (status !== 'joined' || !session) {
+      return;
+    }
 
-    // Send first event immediately
-    void sendEvent(session.deviceId, session.code);
+    vpnService
+      .isRunning()
+      .then(setShieldOn)
+      .catch(() => setShieldOn(false));
 
-    intervalRef.current = setInterval(() => {
-      void sendEvent(session.deviceId, session.code);
-    }, 5000);
+    const unsub = vpnService.onDnsQuery((ev) => {
+      // Only forward real trackers (skip clean/first-party lookups).
+      if (!ev.category || ev.category === 'clean') {
+        return;
+      }
+      const now = Date.now();
+      if (now - lastSentRef.current < 1000) {
+        return;
+      } // throttle
+      lastSentRef.current = now;
+      void sendEvent(session.deviceId, session.code, ev);
+    });
 
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    return unsub;
   }, [status, session, sendEvent]);
 
   async function join() {
@@ -144,7 +133,8 @@ export function ConferenceScreen(_props: { navigation: unknown }) {
   }
 
   function leave() {
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    // The onDnsQuery subscription is torn down by the effect cleanup when
+    // status leaves 'joined'.
     setStatus('idle');
     setSession(null);
     setCode('');
@@ -167,6 +157,11 @@ export function ConferenceScreen(_props: { navigation: unknown }) {
             Your device appears on the conference screen as{' '}
             <Text style={styles.deviceName}>{session.name}</Text>
           </Text>
+          {!shieldOn && (
+            <Text style={styles.shieldHint}>
+              ⚠ Turn on the DNS Shield to contribute your real tracker blocks to the room.
+            </Text>
+          )}
         </View>
 
         {/* Room code pill */}
@@ -440,6 +435,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9ca3af',
     textAlign: 'center',
+  },
+  shieldHint: {
+    color: '#fbbf24',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 10,
+    fontWeight: '600',
   },
   deviceName: {
     color: '#60a5fa',
