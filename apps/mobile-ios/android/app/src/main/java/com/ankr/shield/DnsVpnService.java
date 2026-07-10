@@ -3,7 +3,9 @@ package com.ankr.shield;
 import android.content.Intent;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.net.ConnectivityManager;
 import android.net.VpnService;
+import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
@@ -16,12 +18,15 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -58,8 +63,10 @@ public class DnsVpnService extends VpnService {
     private static final int    DNS_PORT     = 53; // used to detect DNS packets from TUN fd
 
     // Direct listener for React Native event bridge (replaces broadcast)
+    // app = requesting package name(s), "" when unattributable (Android <10,
+    // kernel-owned flow, or uid lookup miss) — never guessed.
     public interface DnsEventListener {
-        void onDnsEvent(String domain, boolean blocked, String category, String vendor);
+        void onDnsEvent(String domain, String app, boolean blocked, String category, String vendor);
     }
     public static volatile DnsEventListener dnsEventListener;
 
@@ -83,6 +90,10 @@ public class DnsVpnService extends VpnService {
     private ParcelFileDescriptor vpnInterface;
     private Thread               packetThread;
     private SQLiteDatabase       trackerDb;
+    private ConnectivityManager  connectivityManager;
+    // uid → package name(s); lives for the service lifetime (uid reuse across
+    // uninstall/reinstall is rare enough to accept until VPN restart)
+    private final ConcurrentHashMap<Integer, String> uidAppCache = new ConcurrentHashMap<>();
     private final AtomicBoolean  shouldStop = new AtomicBoolean(false);
 
     private TelephonyManager  telephonyManager;
@@ -282,6 +293,56 @@ public class DnsVpnService extends VpnService {
         }
     }
 
+    // ─── Per-app attribution (scope-transparency R1) ─────────────────────────
+
+    /**
+     * Resolve which app owns the UDP flow this DNS query arrived on.
+     * Asks the kernel via ConnectivityManager.getConnectionOwnerUid (API 29+,
+     * permitted to the active VPN app), then maps uid → package name(s).
+     * The query's socket is still open awaiting our response, so the flow is
+     * live in the kernel at the moment we ask.
+     *
+     * Returns "" when attribution is impossible — Android <10, kernel/root
+     * flow, or uid with no packages. Shared UIDs list every member package
+     * joined with "," (we name the honest set rather than pick one).
+     */
+    private String resolveAppForFlow(byte[] buf, int ipHeaderLen) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || connectivityManager == null) {
+            return "";
+        }
+        try {
+            InetAddress src = InetAddress.getByAddress(
+                new byte[]{ buf[12], buf[13], buf[14], buf[15] });
+            InetAddress dst = InetAddress.getByAddress(
+                new byte[]{ buf[16], buf[17], buf[18], buf[19] });
+            int srcPort = ((buf[ipHeaderLen]     & 0xFF) << 8) | (buf[ipHeaderLen + 1] & 0xFF);
+            int dstPort = ((buf[ipHeaderLen + 2] & 0xFF) << 8) | (buf[ipHeaderLen + 3] & 0xFF);
+
+            int uid = connectivityManager.getConnectionOwnerUid(
+                17 /* IPPROTO_UDP */,
+                new InetSocketAddress(src, srcPort),
+                new InetSocketAddress(dst, dstPort));
+            if (uid <= 0) return ""; // INVALID_UID (-1) or root — unattributable
+
+            String cached = uidAppCache.get(uid);
+            if (cached != null) return cached;
+
+            String[] pkgs = getPackageManager().getPackagesForUid(uid);
+            String app;
+            if (pkgs == null || pkgs.length == 0) {
+                app = "";
+            } else {
+                StringBuilder sb = new StringBuilder(pkgs[0]);
+                for (int i = 1; i < pkgs.length; i++) sb.append(',').append(pkgs[i]);
+                app = sb.toString();
+            }
+            uidAppCache.put(uid, app);
+            return app;
+        } catch (Exception e) {
+            return ""; // SecurityException on exotic ROMs etc. — null, not a crash
+        }
+    }
+
     // ─── Packet loop ─────────────────────────────────────────────────────────
 
     private void runPacketLoop() {
@@ -347,6 +408,9 @@ public class DnsVpnService extends VpnService {
 
                 totalQueries.incrementAndGet();
 
+                // Attribute the query to its owning app while the flow is live
+                String app = resolveAppForFlow(buf, ipHeaderLen);
+
                 // Auto-expire timed pauses (manual bypass window)
                 if (paused && pauseUntilMs > 0 && System.currentTimeMillis() >= pauseUntilMs) {
                     paused = false;
@@ -358,7 +422,7 @@ public class DnsVpnService extends VpnService {
                 TrackerMatch match = paused ? null : lookupTracker(domain);
                 if (passiveMode && match != null) {
                     // report as advisory, then pass through
-                    broadcastDnsEvent(domain, false, match.category + ":advisory", match.vendor);
+                    broadcastDnsEvent(domain, app, false, match.category + ":advisory", match.vendor);
                     match = null;
                 }
 
@@ -370,8 +434,9 @@ public class DnsVpnService extends VpnService {
                                                             ipHeaderLen, len);
                     if (response != null) out.write(response);
 
-                    broadcastDnsEvent(domain, true, match.category, match.vendor);
-                    Log.d(TAG, "BLOCKED " + domain + " [" + match.category + "]");
+                    broadcastDnsEvent(domain, app, true, match.category, match.vendor);
+                    Log.d(TAG, "BLOCKED " + domain + " [" + match.category + "]"
+                            + (app.isEmpty() ? "" : " app=" + app));
 
                 } else {
                     // ALLOWED — forward to upstream resolver
@@ -385,7 +450,7 @@ public class DnsVpnService extends VpnService {
                         if (response != null) out.write(response);
                     }
 
-                    broadcastDnsEvent(domain, false, "clean", "");
+                    broadcastDnsEvent(domain, app, false, "clean", "");
                 }
             }
 
@@ -520,6 +585,7 @@ public class DnsVpnService extends VpnService {
     public void onCreate() {
         super.onCreate();
         instance = this;
+        connectivityManager = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         registerCallListener();
     }
 
@@ -614,10 +680,11 @@ public class DnsVpnService extends VpnService {
 
     // ─── React Native event bridge ───────────────────────────────────────────
 
-    private void broadcastDnsEvent(String domain, boolean blocked, String category, String vendor) {
+    private void broadcastDnsEvent(String domain, String app, boolean blocked,
+                                    String category, String vendor) {
         DnsEventListener listener = dnsEventListener;
         if (listener != null) {
-            listener.onDnsEvent(domain, blocked, category, vendor);
+            listener.onDnsEvent(domain, app, blocked, category, vendor);
         }
     }
 }

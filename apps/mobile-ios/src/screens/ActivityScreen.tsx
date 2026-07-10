@@ -69,8 +69,12 @@ const VENDOR_META: Record<string, { label: string; emoji: string }> = {
 /** Classify a domain into a sub-vendor label when vendor is Meta. */
 function metaSubLabel(domain: string): string {
   const d = domain.toLowerCase();
-  if (d.includes('whatsapp') || d.includes('wa.me')) return 'WhatsApp';
-  if (d.includes('instagram')) return 'Instagram';
+  if (d.includes('whatsapp') || d.includes('wa.me')) {
+    return 'WhatsApp';
+  }
+  if (d.includes('instagram')) {
+    return 'Instagram';
+  }
   return 'Facebook';
 }
 
@@ -92,13 +96,17 @@ function buildBuckets(events: FeedEvent[]): TrackerBucket[] {
     }
     const bucket = map.get(vendor)!;
     bucket.total++;
-    if (e.blocked) bucket.blocked++;
+    if (e.blocked) {
+      bucket.blocked++;
+    }
 
     // Track per-domain for sub-classification
     const key = e.domain;
     const dm = bucket.domains.get(key) ?? { t: 0, b: 0 };
     dm.t++;
-    if (e.blocked) dm.b++;
+    if (e.blocked) {
+      dm.b++;
+    }
     bucket.domains.set(key, dm);
   }
 
@@ -202,6 +210,7 @@ export function ActivityScreen() {
           {item.domain}
         </Text>
         <View style={styles.meta}>
+          {item.app ? <Text style={styles.appChip}>📱 {item.app}</Text> : null}
           {item.category ? <Text style={styles.chip}>{item.category}</Text> : null}
           {item.vendor ? <Text style={styles.vendor}>{item.vendor}</Text> : null}
         </View>
@@ -547,6 +556,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+  },
+  appChip: {
+    backgroundColor: '#172554',
+    color: '#93c5fd',
+    fontSize: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    fontFamily: Platform.OS === 'android' ? 'monospace' : 'Courier',
   },
   vendor: { color: '#6b7280', fontSize: 10, marginTop: 2 },
 

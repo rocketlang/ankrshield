@@ -33,7 +33,8 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
  *   NativeModules.DnsVpn.isRunning()     → Promise<boolean>
  *
  * JS events (DeviceEventEmitter):
- *   'DnsQueryEvent'  { domain, blocked, category, vendor }
+ *   'DnsQueryEvent'  { domain, app, blocked, category, vendor }
+ *                    app = owning package name(s), "" when unattributable (Android <10)
  *
  * Event delivery: direct static listener on DnsVpnService (same process).
  * Avoids Android broadcast implicit-delivery restrictions (API 26+/33+).
@@ -164,9 +165,10 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
 
     private void registerDnsListener() {
         if (listenerRegistered) return;
-        DnsVpnService.dnsEventListener = (domain, blocked, category, vendor) -> {
+        DnsVpnService.dnsEventListener = (domain, app, blocked, category, vendor) -> {
             WritableMap params = Arguments.createMap();
             params.putString("domain",   domain);
+            params.putString("app",      app != null ? app : "");
             params.putBoolean("blocked", blocked);
             params.putString("category", category != null ? category : "");
             params.putString("vendor",   vendor != null ? vendor : "");

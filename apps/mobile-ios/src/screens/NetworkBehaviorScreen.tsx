@@ -25,6 +25,8 @@ const { DnsVpn } = NativeModules;
 interface DnsEvent {
   id: string;
   domain: string;
+  /** Real requesting package (kernel-attributed, Android 10+); '' when unknown. */
+  app: string;
   blocked: boolean;
   category: string;
   vendor: string;
@@ -78,7 +80,9 @@ const DOMAIN_APP: Record<string, string> = {
 
 function domainToApp(domain: string): string | null {
   for (const [suffix, app] of Object.entries(DOMAIN_APP)) {
-    if (domain === suffix || domain.endsWith('.' + suffix)) return app;
+    if (domain === suffix || domain.endsWith('.' + suffix)) {
+      return app;
+    }
   }
   return null;
 }
@@ -104,13 +108,21 @@ function catColor(cat: string): string {
 type FilterMode = 'all' | 'blocked' | 'allowed';
 
 function formatSyncAge(d: Date | null): string {
-  if (!d) return 'never';
+  if (!d) {
+    return 'never';
+  }
   const secs = Math.floor((Date.now() - d.getTime()) / 1000);
-  if (secs < 60) return 'just now';
+  if (secs < 60) {
+    return 'just now';
+  }
   const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 60) {
+    return `${mins}m ago`;
+  }
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
   return `${Math.floor(hours / 24)}d ago`;
 }
 
@@ -122,7 +134,9 @@ export function NetworkBehaviorScreen() {
   const idRef = useRef(0);
 
   const refreshStats = useCallback(() => {
-    if (Platform.OS !== 'android' || !DnsVpn) return;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
     DnsVpn.getStats()
       .then((s: any) => {
         setStats({ total: s.totalQueries, blocked: s.blockedCount, running: s.running });
@@ -134,13 +148,16 @@ export function NetworkBehaviorScreen() {
     refreshStats();
     const interval = setInterval(refreshStats, 3000);
 
-    if (Platform.OS !== 'android' || !DnsVpn) return () => clearInterval(interval);
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return () => clearInterval(interval);
+    }
 
     const emitter = new NativeEventEmitter(DnsVpn);
     const sub = emitter.addListener('DnsQueryEvent', (ev: any) => {
       const e: DnsEvent = {
         id: String(++idRef.current),
         domain: ev.domain ?? '',
+        app: ev.app ?? '',
         blocked: !!ev.blocked,
         category: ev.category ?? 'clean',
         vendor: ev.vendor ?? '',
@@ -172,7 +189,8 @@ export function NetworkBehaviorScreen() {
         : events.filter((e) => !e.blocked);
 
   const renderItem = useCallback(({ item }: { item: DnsEvent }) => {
-    const app = domainToApp(item.domain);
+    // Prefer kernel-attributed requester (truth) over the domain-owner guess
+    const app = item.app || domainToApp(item.domain);
     const cc = catColor(item.category);
     return (
       <View style={[s.row, item.blocked && s.rowBlocked]}>

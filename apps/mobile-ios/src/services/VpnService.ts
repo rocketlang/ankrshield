@@ -31,6 +31,8 @@ export interface VpnStats {
 
 export interface DnsQueryEvent {
   domain: string;
+  /** Owning package name(s), comma-joined for shared UIDs; '' = unattributable (Android <10). */
+  app: string;
   blocked: boolean;
   category: string;
   vendor: string;
@@ -63,7 +65,7 @@ export interface InstalledApp {
 class AnkrShieldVpn {
   private emitter: NativeEventEmitter | null = null;
   private _eventHistory: FeedEvent[] = [];
-  private _historyListeners: Array<(events: FeedEvent[]) => void> = [];
+  private _historyListeners: Array<(_events: FeedEvent[]) => void> = [];
   private _eventCounter = 0;
 
   constructor() {
@@ -104,8 +106,12 @@ class AnkrShieldVpn {
    * Safe to call multiple times — no-ops if already running.
    */
   async start(): Promise<void> {
-    if (Platform.OS !== 'android') return;
-    if (!DnsVpn) throw new Error('DnsVpn native module not available');
+    if (Platform.OS !== 'android') {
+      return;
+    }
+    if (!DnsVpn) {
+      throw new Error('DnsVpn native module not available');
+    }
     await DnsVpn.start();
   }
 
@@ -113,7 +119,9 @@ class AnkrShieldVpn {
    * Stop DNS interception and tear down the VPN interface.
    */
   async stop(): Promise<void> {
-    if (Platform.OS !== 'android' || !DnsVpn) return;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
     await DnsVpn.stop();
   }
 
@@ -121,7 +129,9 @@ class AnkrShieldVpn {
    * Returns live DNS interception stats from the native layer.
    */
   async getStats(): Promise<VpnStats> {
-    if (Platform.OS !== 'android' || !DnsVpn) return stubStats;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return stubStats;
+    }
     return DnsVpn.getStats() as Promise<VpnStats>;
   }
 
@@ -129,7 +139,9 @@ class AnkrShieldVpn {
    * Returns true if the DNS VPN is currently active.
    */
   async isRunning(): Promise<boolean> {
-    if (Platform.OS !== 'android' || !DnsVpn) return false;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return false;
+    }
     return DnsVpn.isRunning() as Promise<boolean>;
   }
 
@@ -139,7 +151,9 @@ class AnkrShieldVpn {
    * Auto-resumes when the timer expires. Also triggered automatically during phone calls.
    */
   async pause(minutes: number): Promise<void> {
-    if (Platform.OS !== 'android' || !DnsVpn) return;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
     await DnsVpn.pause(minutes);
   }
 
@@ -147,7 +161,9 @@ class AnkrShieldVpn {
    * Cancel any active pause and resume DNS filtering immediately.
    */
   async resume(): Promise<void> {
-    if (Platform.OS !== 'android' || !DnsVpn) return;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
     await DnsVpn.resume();
   }
 
@@ -157,38 +173,50 @@ class AnkrShieldVpn {
    * @returns unsubscribe function — call it to remove the listener
    */
   onDnsQuery(callback: (event: DnsQueryEvent) => void): () => void {
-    if (!this.emitter) return () => {};
+    if (!this.emitter) {
+      return () => {};
+    }
     const subscription = this.emitter.addListener('DnsQueryEvent', callback);
     return () => subscription.remove();
   }
 
   /** Returns all installed user apps with current bypass state (Android only). */
   async getInstalledApps(): Promise<InstalledApp[]> {
-    if (Platform.OS !== 'android' || !DnsVpn) return [];
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return [];
+    }
     return DnsVpn.getInstalledApps() as Promise<InstalledApp[]>;
   }
 
   /** Toggle bypass for a single package; rebuilds VPN interface if running. */
   async toggleBypassApp(packageName: string, bypass: boolean): Promise<void> {
-    if (Platform.OS !== 'android' || !DnsVpn) return;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
     await DnsVpn.toggleBypassApp(packageName, bypass);
   }
 
   /** Overwrite the entire bypass list atomically. */
   async setBypassApps(packages: string[]): Promise<void> {
-    if (Platform.OS !== 'android' || !DnsVpn) return;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
     await DnsVpn.setBypassApps(packages);
   }
 
   /** Enable/disable passive (observe-only) mode. */
   async setPassiveMode(enabled: boolean): Promise<void> {
-    if (Platform.OS !== 'android' || !DnsVpn) return;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
     await DnsVpn.setPassiveMode(enabled);
   }
 
   /** Returns true if passive mode is currently enabled. */
   async isPassiveMode(): Promise<boolean> {
-    if (Platform.OS !== 'android' || !DnsVpn) return false;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return false;
+    }
     return DnsVpn.isPassiveMode() as Promise<boolean>;
   }
 }
