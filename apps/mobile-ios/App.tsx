@@ -50,6 +50,7 @@ import { PermissionChangeScreen } from './src/screens/PermissionChangeScreen';
 import { RansomwareScreen } from './src/screens/RansomwareScreen';
 import { RiskLookupScreen } from './src/screens/RiskLookupScreen';
 import { SafeBrowsingScreen } from './src/screens/SafeBrowsingScreen';
+import { ScopeReportScreen } from './src/screens/ScopeReportScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { SmsShieldScreen } from './src/screens/SmsShieldScreen';
 import SplitTunnelScreen from './src/screens/SplitTunnelScreen';
@@ -74,7 +75,9 @@ const navigationRef = createNavigationContainerRef();
 
 /** Route incoming deep links and share intents to the correct screen. */
 function handleDeepLink(url: string | null) {
-  if (!url || !navigationRef.isReady()) return;
+  if (!url || !navigationRef.isReady()) {
+    return;
+  }
   try {
     // upi://pay?pa=... → UpiGuard with URI pre-filled
     if (url.startsWith('upi://')) {
@@ -123,7 +126,9 @@ function ThreatFileModal({
   onDelete: () => void;
   onDismiss: () => void;
 }) {
-  if (!threat) return null;
+  if (!threat) {
+    return null;
+  }
   const isDangerous = threat.verdict === 'dangerous';
 
   return (
@@ -210,23 +215,31 @@ function PhishingWMDModal({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (!alert) return;
+    if (!alert) {
+      return;
+    }
     setCountdown(25);
     timerRef.current = setInterval(() => {
       setCountdown((c) => {
         if (c <= 1) {
-          if (timerRef.current) clearInterval(timerRef.current);
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+          }
           return 0;
         }
         return c - 1;
       });
     }, 1000);
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
     };
   }, [alert]);
 
-  if (!alert) return null;
+  if (!alert) {
+    return null;
+  }
 
   return (
     <Modal visible transparent animationType="fade" statusBarTranslucent>
@@ -311,7 +324,9 @@ function App(): React.JSX.Element {
 
   // Global listeners — phishing + WhatsApp file threats
   useEffect(() => {
-    if (Platform.OS !== 'android' || !WhatsAppGuard) return;
+    if (Platform.OS !== 'android' || !WhatsAppGuard) {
+      return;
+    }
     const emitter = new NativeEventEmitter(WhatsAppGuard);
 
     const subPhish = emitter.addListener('PhishingAlert', (data: PhishingAlertData) => {
@@ -320,7 +335,9 @@ function App(): React.JSX.Element {
 
     // Surface threat file modal when AnkrShield is in foreground
     const subFile = emitter.addListener('WhatsAppFileEvent', (data: ThreatFileData) => {
-      if (data.verdict !== 'clean') setThreatFile(data);
+      if (data.verdict !== 'clean') {
+        setThreatFile(data);
+      }
     });
 
     // Dismiss modal if file was deleted via notification action (user was in another app)
@@ -341,7 +358,9 @@ function App(): React.JSX.Element {
   }, []);
 
   const handleThreatDelete = useCallback(async () => {
-    if (!threatFile || !WhatsAppGuard) return;
+    if (!threatFile || !WhatsAppGuard) {
+      return;
+    }
     await WhatsAppGuard.deleteFile(threatFile.filePath).catch((_e: unknown) => {});
     setThreatFile(null);
   }, [threatFile]);
@@ -513,6 +532,15 @@ function App(): React.JSX.Element {
               title: 'DPDP Scan',
               headerStyle: { backgroundColor: '#080c14' },
               headerTintColor: '#FF9800',
+            }}
+          />
+          <Stack.Screen
+            name="ScopeReport"
+            component={eb(ScopeReportScreen, 'ScopeReport')}
+            options={{
+              title: 'Privacy Report',
+              headerStyle: { backgroundColor: '#080c14' },
+              headerTintColor: '#60a5fa',
             }}
           />
           <Stack.Screen

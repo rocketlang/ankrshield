@@ -89,6 +89,7 @@ public class DnsVpnService extends VpnService {
 
     private ParcelFileDescriptor vpnInterface;
     private Thread               packetThread;
+    private Thread               digestThread;
     private SQLiteDatabase       trackerDb;
     private final ScopeLedger    scopeLedger = new ScopeLedger();
     private ConnectivityManager  connectivityManager;
@@ -167,6 +168,15 @@ public class DnsVpnService extends VpnService {
             packetThread.setDaemon(true);
             packetThread.start();
 
+            digestThread = new Thread(() -> {
+                while (running) {
+                    ScopeDigest.maybeWeeklyDigest(this, scopeLedger);
+                    try { Thread.sleep(6L * 3600 * 1000); } catch (InterruptedException e) { break; }
+                }
+            }, "ankr-scope-digest");
+            digestThread.setDaemon(true);
+            digestThread.start();
+
             Log.i(TAG, "AnkrShield DNS VPN started");
         } catch (Exception e) {
             Log.e(TAG, "Failed to start VPN: " + e.getMessage(), e);
@@ -181,6 +191,11 @@ public class DnsVpnService extends VpnService {
         if (packetThread != null) {
             packetThread.interrupt();
             packetThread = null;
+        }
+
+        if (digestThread != null) {
+            digestThread.interrupt();
+            digestThread = null;
         }
 
         try {
@@ -450,6 +465,8 @@ public class DnsVpnService extends VpnService {
                     // report as advisory, then pass through
                     scopeLedger.record(app, domain, match.category, match.vendor,
                                        match.riskLevel, false);
+                    ScopeDigest.maybeCriticalAlert(this, app, domain,
+                                                   match.category, match.riskLevel);
                     broadcastDnsEvent(domain, app, false, match.category + ":advisory", match.vendor);
                     match = null;
                 }
@@ -464,6 +481,8 @@ public class DnsVpnService extends VpnService {
 
                     scopeLedger.record(app, domain, match.category, match.vendor,
                                        match.riskLevel, true);
+                    ScopeDigest.maybeCriticalAlert(this, app, domain,
+                                                   match.category, match.riskLevel);
                     broadcastDnsEvent(domain, app, true, match.category, match.vendor);
                     Log.d(TAG, "BLOCKED " + domain + " [" + match.category + "]"
                             + (app.isEmpty() ? "" : " app=" + app));

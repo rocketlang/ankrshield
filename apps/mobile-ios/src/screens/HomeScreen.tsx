@@ -54,6 +54,7 @@ const PROTECTION_TOOLS = [
   { icon: '🔔', name: 'Perm Watch', desc: 'Gained since update', route: 'PermissionChange' },
   { icon: '🏥', name: 'Dev Health', desc: 'Security hygiene', route: 'DeviceHealth' },
   // Network & corporate
+  { icon: '📊', name: 'Privacy Report', desc: 'Who tracked you, cited', route: 'ScopeReport' },
   { icon: '🔗', name: 'Network', desc: 'DNS tracker feed', route: 'NetworkBehavior' },
   { icon: '🏢', name: 'Corporate', desc: 'MDM enrollment', route: 'Mdm' },
   // iOS-only tiles (filtered at runtime)
@@ -124,9 +125,15 @@ export function HomeScreen({ navigation }: any) {
   }
 
   function streakMilestoneMessage(days: number): string | null {
-    if (days >= 100) return 'Elite defender 💎';
-    if (days >= 30) return 'One month shield 🛡️';
-    if (days >= 7) return 'One week clean 🎉';
+    if (days >= 100) {
+      return 'Elite defender 💎';
+    }
+    if (days >= 30) {
+      return 'One month shield 🛡️';
+    }
+    if (days >= 7) {
+      return 'One week clean 🎉';
+    }
     return null;
   }
 
@@ -163,7 +170,9 @@ export function HomeScreen({ navigation }: any) {
   }
 
   function pauseLabel(): string {
-    if (!dnsPaused || pauseUntilMs === 0) return '';
+    if (!dnsPaused || pauseUntilMs === 0) {
+      return '';
+    }
     const remaining = Math.max(0, pauseUntilMs - Date.now());
     const mins = Math.ceil(remaining / 60000);
     return `Resumes in ${mins}m`;
@@ -233,11 +242,19 @@ export function HomeScreen({ navigation }: any) {
   }
 
   function trustStalenessLabel(): string | null {
-    if (!trustFromCache || !trustLoadedAt) return null;
+    if (!trustFromCache || !trustLoadedAt) {
+      return null;
+    }
     const ageMs = Date.now() - trustLoadedAt;
-    if (ageMs < 60_000) return null; // under 1 min — don't show
-    if (ageMs < 3_600_000) return `Data from ${Math.round(ageMs / 60_000)}m ago`;
-    if (ageMs < 86_400_000) return `Data from ${Math.round(ageMs / 3_600_000)}h ago`;
+    if (ageMs < 60_000) {
+      return null;
+    } // under 1 min — don't show
+    if (ageMs < 3_600_000) {
+      return `Data from ${Math.round(ageMs / 60_000)}m ago`;
+    }
+    if (ageMs < 86_400_000) {
+      return `Data from ${Math.round(ageMs / 3_600_000)}h ago`;
+    }
     return `Data from ${Math.round(ageMs / 86_400_000)}d ago`;
   }
 
