@@ -78,6 +78,7 @@ export interface ScopeSummaryRow {
   maxRisk: number;
   firstTs: number;
   lastTs: number;
+  receiptCount: number; // distinct domains = number of receipt rows on drill-down
 }
 
 /** Domain-level receipt — the citation behind a verdict line. */

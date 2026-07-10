@@ -214,7 +214,8 @@ final class ScopeLedger {
                 "SUM(CASE WHEN category IN (" + beyond + ") THEN blocked+allowed ELSE 0 END) AS beyond, " +
                 "SUM(CASE WHEN category IN (" + beyond + ") THEN blocked ELSE 0 END) AS beyond_blocked, " +
                 "COUNT(DISTINCT CASE WHEN vendor!='' THEN vendor END) AS vendors, " +
-                "MAX(risk) AS max_risk, MIN(first_ts) AS first_ts, MAX(last_ts) AS last_ts " +
+                "MAX(risk) AS max_risk, MIN(first_ts) AS first_ts, MAX(last_ts) AS last_ts, " +
+                "COUNT(DISTINCT domain) AS domains " +  // = number of receipt rows for this app
                 "FROM scope_rollup GROUP BY app ORDER BY beyond DESC", null)) {
             while (c.moveToNext()) {
                 Map<String, Object> row = new HashMap<>();
@@ -226,6 +227,7 @@ final class ScopeLedger {
                 row.put("maxRisk",       c.getLong(5));
                 row.put("firstTs",       c.getLong(6));
                 row.put("lastTs",        c.getLong(7));
+                row.put("receiptCount",  c.getLong(8));
                 out.add(row);
             }
         } catch (Exception e) {

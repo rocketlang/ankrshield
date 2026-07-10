@@ -34,6 +34,7 @@ export interface AppScopeVerdict {
   maxRisk: number;
   critical: boolean;
   autoBypassed: boolean;
+  receiptCount: number; // distinct domains behind this app = rows shown on tap
   firstTs: number;
   lastTs: number;
 }
@@ -87,6 +88,7 @@ export async function buildScopeReport(): Promise<ScopeReport> {
       maxRisk: row.maxRisk,
       critical: row.maxRisk >= CRITICAL_RISK,
       autoBypassed: false,
+      receiptCount: row.receiptCount ?? 0,
       firstTs: row.firstTs,
       lastTs: row.lastTs,
     });
@@ -107,6 +109,7 @@ export async function buildScopeReport(): Promise<ScopeReport> {
         maxRisk: 0,
         critical: false,
         autoBypassed: !!app.autoBypassed,
+        receiptCount: 0,
         firstTs: 0,
         lastTs: 0,
       });

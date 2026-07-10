@@ -157,7 +157,13 @@ export function HealthWitnessScreen() {
                 ) : (
                   <Text style={s.cleanTag}>no tracker contact</Text>
                 )}
-                <Text style={s.chev}>{expanded === v.packageName ? '▾' : '▸'}</Text>
+                <Text style={s.chev}>
+                  {expanded === v.packageName
+                    ? '▾ hide'
+                    : v.receiptCount > 0
+                      ? `🧾 ${v.receiptCount} receipt${v.receiptCount === 1 ? '' : 's'} ▸`
+                      : '▸'}
+                </Text>
               </View>
             </View>
             {expanded === v.packageName && (

@@ -297,7 +297,13 @@ export function ScopeReportScreen() {
             </View>
             <View style={s.cardRight}>
               <Text style={s.lastSeen}>{timeAgo(v.lastTs)}</Text>
-              <Text style={s.chevron}>{expanded === v.packageName ? '▾' : '▸'}</Text>
+              <Text style={s.chevron}>
+                {expanded === v.packageName
+                  ? '▾ hide'
+                  : v.receiptCount > 0
+                    ? `🧾 ${v.receiptCount} ▸`
+                    : '▸'}
+              </Text>
             </View>
           </View>
 
