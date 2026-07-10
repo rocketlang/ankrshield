@@ -2,7 +2,7 @@
  * Spyware Scan Screen — trigger and view Pegasus/Candiru/Predator detection results
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  NativeModules,
+  Platform,
 } from 'react-native';
 
 import { API_BASE } from '../config';
@@ -79,10 +81,37 @@ function IndicatorCard({ indicator }: { indicator: SpywareIndicator }) {
   );
 }
 
+// Developer/power-user tools whose presence makes process-name IOC matching
+// far noisier (Termux runs a Linux userland — logind, sshd, python… — that
+// collides with iOS spyware artifact names). Detecting them lets us tell the
+// user honestly that accuracy is reduced, instead of crying wolf.
+const DEV_TOOL_PACKAGES: Record<string, string> = {
+  'com.termux': 'Termux',
+  'org.fdroid.fdroid': 'F-Droid',
+  'com.termux.api': 'Termux:API',
+  'com.server.auditor.ssh.client': 'Termius',
+  'org.connectbot': 'ConnectBot',
+};
+
 export function SpywareScanScreen() {
   const [scanning, setScanning] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [offline, setOffline] = useState(false);
+  const [devTools, setDevTools] = useState<string[]>([]);
+
+  // Detect developer tools once — powers the "accuracy reduced" context tag.
+  useEffect(() => {
+    const { DnsVpn } = NativeModules;
+    if (Platform.OS !== 'android' || !DnsVpn) {
+      return;
+    }
+    DnsVpn.getInstalledApps()
+      .then((apps: Array<{ packageName: string }>) => {
+        const found = apps.map((a) => DEV_TOOL_PACKAGES[a.packageName]).filter(Boolean) as string[];
+        setDevTools([...new Set(found)]);
+      })
+      .catch(() => {});
+  }, []);
 
   const runScan = async () => {
     setScanning(true);
@@ -98,7 +127,9 @@ export function SpywareScanScreen() {
           enableFileScan: true,
         }),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       setResult(await res.json());
     } catch (_e) {
       // Show honest unavailable state — never silently pretend "all clear"
@@ -160,6 +191,17 @@ export function SpywareScanScreen() {
       )}
 
       {/* Result */}
+      {/* Developer-device context tag — honest accuracy caveat */}
+      {devTools.length > 0 && (
+        <View style={styles.devTag}>
+          <Text style={styles.devTagText}>
+            🧑‍💻 Developer device detected ({devTools.join(', ')}) — IOC accuracy reduced. Process
+            matches like &quot;logind&quot; are almost always your developer tools, not spyware.
+            Trust the CVE and network findings; treat process-name hits as low-signal here.
+          </Text>
+        </View>
+      )}
+
       {result && (
         <View style={styles.resultSection}>
           {/* Status Banner */}
@@ -267,6 +309,16 @@ export function SpywareScanScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0d0d0d' },
+  devTag: {
+    backgroundColor: '#1a1206',
+    borderWidth: 1,
+    borderColor: '#a16207',
+    borderRadius: 10,
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 12,
+  },
+  devTagText: { color: '#fbbf24', fontSize: 12, lineHeight: 18 },
   hero: { padding: 24, alignItems: 'center' },
   heroIcon: { fontSize: 48, marginBottom: 12 },
   heroTitle: { color: '#fff', fontSize: 22, fontWeight: '700', marginBottom: 8 },
