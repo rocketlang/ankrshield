@@ -36,19 +36,22 @@ export function SimpleHomeScreen({ navigation }: { navigation: any }) {
   const [busy, setBusy] = useState(false);
   const [blocked, setBlocked] = useState(0);
   const [criticalApp, setCriticalApp] = useState<string | null>(null);
+  const [caughtCount, setCaughtCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
     try {
-      const [running, stats, report] = await Promise.all([
+      const [running, stats, report, caught] = await Promise.all([
         vpnService.isRunning(),
         vpnService.getStats(),
         buildScopeReport().catch(() => null),
+        vpnService.getCaughtInAct().catch(() => []),
       ]);
       setOn(running);
       setBlocked(stats.blockedCount || 0);
       const crit = report?.verdicts.find((v) => v.critical);
       setCriticalApp(crit ? crit.appName : null);
+      setCaughtCount(caught.length);
     } finally {
       setLoading(false);
     }
@@ -146,6 +149,16 @@ export function SimpleHomeScreen({ navigation }: { navigation: any }) {
         </TouchableOpacity>
       )}
 
+      {/* Caught in the act — one calm line, only when there's something real to show */}
+      {on && caughtCount > 0 && (
+        <TouchableOpacity style={s.night} onPress={() => navigation.navigate('CaughtInAct')}>
+          <Text style={s.nightText}>
+            🌙 {caughtCount} app{caughtCount > 1 ? 's' : ''} contacted trackers while your screen
+            was off. Tap to see.
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* Quiet escape hatch to the full interface */}
       <TouchableOpacity style={s.advanced} onPress={goAdvanced}>
         <Text style={s.advancedText}>Advanced tools →</Text>
@@ -187,6 +200,16 @@ const s = StyleSheet.create({
     marginBottom: 12,
   },
   dangerText: { color: '#fca5a5', fontSize: 14, fontWeight: '600', textAlign: 'center' },
+
+  night: {
+    backgroundColor: '#0c1424',
+    borderWidth: 1,
+    borderColor: '#1e3a5f',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+  },
+  nightText: { color: '#93c5fd', fontSize: 14, fontWeight: '600', textAlign: 'center' },
 
   advanced: { alignItems: 'center', paddingVertical: 14 },
   advancedText: { color: '#475569', fontSize: 14, fontWeight: '600' },
