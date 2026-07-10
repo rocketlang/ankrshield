@@ -25,6 +25,7 @@ import {
   View,
 } from 'react-native';
 
+import { buildAppEvidence } from '../services/EvidencePack';
 import {
   AppScopeVerdict,
   ScopeReport,
@@ -115,6 +116,15 @@ export function ScopeReportScreen() {
 
   // A verdict's packageName may be a comma-joined shared-UID set; tame binds to the first.
   const isTamed = (pkg: string) => tamed.has(pkg) || tamed.has(pkg.split(',')[0]);
+
+  const shareEvidence = async (v: AppScopeVerdict) => {
+    let rows = receipts[v.packageName];
+    if (!rows) {
+      rows = await getReceipts(v.packageName).catch(() => []);
+      setReceipts((prev) => ({ ...prev, [v.packageName]: rows }));
+    }
+    await Share.share({ message: buildAppEvidence(v, rows ?? []) }).catch(() => {});
+  };
 
   const toggleTame = async (pkg: string) => {
     const first = pkg.split(',')[0];
@@ -433,6 +443,15 @@ export function ScopeReportScreen() {
                   </Text>
                 </TouchableOpacity>
               )}
+
+              {/* Evidence pack — turn this witness into a filable DPDP/GDPR complaint */}
+              {v.beyondScope > 0 && (
+                <TouchableOpacity style={s.evidenceBtn} onPress={() => shareEvidence(v)}>
+                  <Text style={s.evidenceBtnText}>
+                    📄 Generate evidence pack (DPDP / GDPR complaint)
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </TouchableOpacity>
@@ -649,6 +668,17 @@ const s = StyleSheet.create({
   tameBtnOn: { backgroundColor: '#134e2e', borderColor: '#22c55e' },
   tameBtnText: { color: '#86efac', fontSize: 13, fontWeight: '700', textAlign: 'center' },
   tameBtnTextOn: { color: '#4ade80' },
+  evidenceBtn: {
+    marginTop: 8,
+    backgroundColor: '#0c1428',
+    borderWidth: 1,
+    borderColor: '#1e3a5f',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  evidenceBtnText: { color: '#93c5fd', fontSize: 13, fontWeight: '700', textAlign: 'center' },
   trackedTag: { color: '#f59e0b', fontSize: 12, marginTop: 3 },
   cleanTag: { color: '#4ade80', fontSize: 12, marginTop: 3 },
   cardRight: { alignItems: 'flex-end' },
