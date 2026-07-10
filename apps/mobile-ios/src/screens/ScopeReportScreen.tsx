@@ -66,17 +66,38 @@ export function ScopeReportScreen() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [receipts, setReceipts] = useState<Record<string, ScopeDetailRow[]>>({});
   const [loading, setLoading] = useState(true);
+  const [shieldOn, setShieldOn] = useState(true);
+  const [starting, setStarting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, m] = await Promise.all([buildScopeReport(), vpnService.getMode()]);
+      const [r, m, running] = await Promise.all([
+        buildScopeReport(),
+        vpnService.getMode(),
+        vpnService.isRunning(),
+      ]);
       setReport(r);
       setMode(m);
+      setShieldOn(running);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // The master switch: witnessing only runs while the DNS shield is on.
+  const startShield = async () => {
+    setStarting(true);
+    try {
+      await vpnService.start(); // prompts the OS VPN permission if needed
+      setShieldOn(true);
+      load();
+    } catch {
+      setShieldOn(false);
+    } finally {
+      setStarting(false);
+    }
+  };
 
   useEffect(() => {
     load();
@@ -117,8 +138,41 @@ export function ScopeReportScreen() {
   const vendorMax = witnessed.reduce((n, v) => Math.max(n, v.vendorCount), 0);
   const nullPct = Math.round((report?.nullShare ?? 0) * 100);
 
+  // Shield off with nothing yet witnessed → lead with the one action that lights
+  // up the whole report. (If there's past data we still show it, plus a resume CTA.)
+  if (!shieldOn && witnessed.length === 0) {
+    return (
+      <View style={[s.container, s.center, { padding: 28 }]}>
+        <Text style={s.ctaIcon}>🛡️</Text>
+        <Text style={s.ctaTitle}>Turn on the shield to start witnessing</Text>
+        <Text style={s.ctaBody}>
+          The Privacy Report shows which app contacted which tracker — but only while the DNS shield
+          is on. Turn it on, use your phone normally, and the report builds itself. Your apps keep
+          working; banking is auto-excluded.
+        </Text>
+        <TouchableOpacity style={s.ctaBtn} onPress={startShield} disabled={starting}>
+          {starting ? (
+            <ActivityIndicator color="#04121f" />
+          ) : (
+            <Text style={s.ctaBtnText}>Turn on DNS Shield</Text>
+          )}
+        </TouchableOpacity>
+        <Text style={s.ctaFoot}>Everything stays on your phone. Nothing is uploaded.</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
+      {/* ── Shield-off banner when past data exists ──────────────── */}
+      {!shieldOn && (
+        <TouchableOpacity style={s.resumeBanner} onPress={startShield} disabled={starting}>
+          <Text style={s.resumeText}>
+            {starting ? 'Turning on…' : '⏸ Shield is off — witnessing paused. Tap to resume.'}
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {/* ── Hero — the telling, calm ─────────────────────────────── */}
       <View style={s.hero}>
         <Text style={s.heroLabel}>In the last 30 days</Text>
@@ -270,6 +324,44 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#080c14' },
   content: { padding: 16, paddingBottom: 48 },
   center: { alignItems: 'center', justifyContent: 'center' },
+
+  // Turn-on-shield CTA (empty + shield off)
+  ctaIcon: { fontSize: 52, marginBottom: 18 },
+  ctaTitle: {
+    color: '#f1f5f9',
+    fontSize: 21,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  ctaBody: {
+    color: '#94a3b8',
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  ctaBtn: {
+    backgroundColor: '#60a5fa',
+    borderRadius: 14,
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    minWidth: 220,
+    alignItems: 'center',
+  },
+  ctaBtnText: { color: '#04121f', fontSize: 16, fontWeight: '800' },
+  ctaFoot: { color: '#475569', fontSize: 12, marginTop: 16, textAlign: 'center' },
+
+  // Resume banner (shield off but past data present)
+  resumeBanner: {
+    backgroundColor: '#3b1d0a',
+    borderWidth: 1,
+    borderColor: '#b45309',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  resumeText: { color: '#fbbf24', fontSize: 13, fontWeight: '600', textAlign: 'center' },
 
   hero: { alignItems: 'center', paddingVertical: 28 },
   heroLabel: {
