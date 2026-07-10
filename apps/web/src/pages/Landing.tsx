@@ -1,11 +1,13 @@
 /**
- * xShield AI — Enterprise Landing Page
- * Audience: CTOs, CISOs, DevSecOps, SOC teams, SMBs
- * Tone: authoritative, precise, credibility-first
+ * xShieldAI — Marketing Landing Page
+ * Audience: CISOs, CTOs, DevSecOps, SOC teams, maritime security teams
+ * Tone: urgent, authoritative, comparison-first, conversion-focused
  */
 
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 
+// ─── Color constants (DO NOT change — matches existing dark theme) ─────────────
 const BG = '#060a10';
 const BG_ALT = '#080c14';
 const BG_CARD = '#0d1117';
@@ -17,6 +19,9 @@ const AMBER = '#f59e0b';
 const RED = '#ef4444';
 const TEXT = '#f1f5f9';
 const MUTED = '#64748b';
+const CYAN = '#06b6d4';
+
+// ─── Shared components ────────────────────────────────────────────────────────
 
 const Badge = ({ label, color = VIOLET }: { label: string; color?: string }) => (
   <span
@@ -35,21 +40,6 @@ const Badge = ({ label, color = VIOLET }: { label: string; color?: string }) => 
   </span>
 );
 
-const Code = ({ children }: { children: string }) => (
-  <code
-    style={{
-      background: '#1a1f2e',
-      color: '#7ee787',
-      padding: '2px 8px',
-      borderRadius: 4,
-      fontFamily: 'monospace',
-      fontSize: 13,
-    }}
-  >
-    {children}
-  </code>
-);
-
 const SectionHead = ({ title, sub }: { title: string; sub: string }) => (
   <div style={{ textAlign: 'center', marginBottom: 52 }}>
     <h2 style={{ fontSize: 34, fontWeight: 800, color: TEXT, margin: 0 }}>{title}</h2>
@@ -59,7 +49,7 @@ const SectionHead = ({ title, sub }: { title: string; sub: string }) => (
   </div>
 );
 
-// ─── Nav ─────────────────────────────────────────────────────────────────────
+// ─── A. Nav ───────────────────────────────────────────────────────────────────
 
 function Nav() {
   return (
@@ -102,6 +92,7 @@ function Nav() {
         <div style={{ display: 'flex', gap: 4, marginLeft: 8 }}>
           {[
             ['Capabilities', '#capabilities'],
+            ['Compare', '#compare'],
             ['Pricing', '#pricing'],
             ['Docs', '/docs'],
           ].map(([label, href]) =>
@@ -123,11 +114,22 @@ function Nav() {
               </a>
             )
           )}
+          <Link
+            to="/live"
+            style={{
+              color: RED,
+              fontSize: 13,
+              textDecoration: 'none',
+              padding: '4px 12px',
+              fontWeight: 600,
+            }}
+          >
+            🔴 Live Threats
+          </Link>
         </div>
 
         <div style={{ flex: 1 }} />
 
-        {/* Personal app crosslink */}
         <Link
           to="/personal"
           style={{
@@ -158,134 +160,181 @@ function Nav() {
             textDecoration: 'none',
           }}
         >
-          Start Free →
+          Scan Free →
         </Link>
       </div>
     </nav>
   );
 }
 
-// ─── Hero ─────────────────────────────────────────────────────────────────────
+// ─── B. Hero ──────────────────────────────────────────────────────────────────
 
 function Hero() {
-  return (
-    <section style={{ background: BG, padding: '90px 24px 72px', textAlign: 'center' }}>
-      <div style={{ maxWidth: 820, margin: '0 auto' }}>
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            marginBottom: 24,
-          }}
-        >
-          <Badge label="Apache 2.0 Open Source" color={GREEN} />
-          <Badge label="Self-hosted in 30s" color={VIOLET} />
-          <Badge label="India-first Threat Intel" color={AMBER} />
-          <Badge label="STIX/TAXII 2.1" color={MUTED} />
-        </div>
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
 
+  const handleScan = (e: React.FormEvent) => {
+    e.preventDefault();
+    const domain = email.includes('@') ? email.split('@')[1].toLowerCase().trim() : '';
+    if (domain) {
+      navigate(
+        `/onboarding?domain=${encodeURIComponent(domain)}&email=${encodeURIComponent(email)}`
+      );
+    } else {
+      navigate('/onboarding');
+    }
+  };
+
+  return (
+    <section style={{ background: BG, padding: '0 24px 72px', textAlign: 'center' }}>
+      {/* Live threat ticker ribbon */}
+      <div
+        style={{
+          background: RED + '18',
+          borderBottom: `1px solid ${RED}33`,
+          padding: '10px 24px',
+          fontSize: 13,
+          color: RED,
+          fontWeight: 600,
+          letterSpacing: 0.3,
+        }}
+      >
+        <span
+          style={{
+            display: 'inline-block',
+            width: 8,
+            height: 8,
+            background: RED,
+            borderRadius: '50%',
+            marginRight: 8,
+            animation: 'pulse 2s infinite',
+          }}
+        />
+        LIVE: 3 new phishing domains targeting shipping companies registered in the last hour —
+        <Link to="/live" style={{ color: RED, marginLeft: 6, textDecoration: 'underline' }}>
+          View threat feed →
+        </Link>
+      </div>
+
+      <div style={{ maxWidth: 860, margin: '0 auto', paddingTop: 80 }}>
+        {/* H1 — urgency-first */}
         <h1
           style={{
             fontSize: 58,
             fontWeight: 900,
             color: TEXT,
             lineHeight: 1.08,
-            margin: '0 0 24px',
+            margin: '0 0 20px',
           }}
         >
-          Threat Intelligence
+          Your domain is being
           <br />
-          <span style={{ color: VIOLET_L }}>at SMB Prices.</span>
+          <span style={{ color: RED }}>impersonated right now.</span>
         </h1>
 
+        {/* H2 subhead */}
         <p
           style={{
             color: MUTED,
-            fontSize: 19,
-            lineHeight: 1.75,
-            marginBottom: 16,
-            maxWidth: 620,
-            margin: '0 auto 16px',
+            fontSize: 20,
+            lineHeight: 1.7,
+            marginBottom: 20,
+            maxWidth: 640,
+            margin: '0 auto 20px',
           }}
         >
-          Domain risk API · Brand protection · Supply chain scanning · AI threat narratives ·
-          STIX/TAXII 2.1 export
-        </p>
-        <p style={{ color: MUTED, fontSize: 15, marginBottom: 36 }}>
-          Recorded Future charges <span style={{ color: RED, fontWeight: 700 }}>$30,000+/yr</span>.{' '}
-          xShield starts at <strong style={{ color: TEXT }}>$99/month</strong>.
+          xShieldAI monitors 25+ threat sources and tells you —{' '}
+          <strong style={{ color: TEXT }}>before the phishing emails land.</strong>
         </p>
 
+        {/* Competitive price hook */}
         <div
           style={{
+            background: BG_CARD,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 10,
+            padding: '14px 24px',
+            display: 'inline-block',
+            marginBottom: 36,
+            fontSize: 14,
+            color: MUTED,
+          }}
+        >
+          <span style={{ color: RED, fontWeight: 700 }}>Recorded Future: $50,000/yr.</span>
+          {'  ·  '}
+          <span style={{ color: AMBER, fontWeight: 700 }}>DomainTools: $22,000/yr.</span>
+          {'  ·  '}
+          <span style={{ color: CYAN, fontWeight: 700 }}>xShieldAI: from $99/mo.</span>
+          <br />
+          <span style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+            Same threat data. Built for teams that actually act on it.
+          </span>
+        </div>
+
+        {/* Inline email capture */}
+        <form
+          onSubmit={handleScan}
+          style={{
             display: 'flex',
-            gap: 12,
+            gap: 10,
             justifyContent: 'center',
             flexWrap: 'wrap',
             marginBottom: 28,
           }}
         >
-          <Link
-            to="/onboarding"
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="your@company.com"
+            style={{
+              background: BG_CARD,
+              border: `1px solid ${BORDER}`,
+              color: TEXT,
+              borderRadius: 8,
+              padding: '13px 18px',
+              fontSize: 15,
+              width: 280,
+              outline: 'none',
+            }}
+          />
+          <button
+            type="submit"
             style={{
               background: VIOLET,
               color: '#fff',
-              padding: '13px 30px',
+              padding: '13px 28px',
               borderRadius: 8,
               fontWeight: 700,
               fontSize: 15,
-              textDecoration: 'none',
+              border: 'none',
+              cursor: 'pointer',
             }}
           >
-            Scan Your Domain Free →
-          </Link>
-          <a
-            href="https://github.com/rocketlang/ankrshield"
-            target="_blank"
-            rel="noreferrer"
-            style={{
-              border: `1px solid ${BORDER}`,
-              color: TEXT,
-              padding: '13px 30px',
-              borderRadius: 8,
-              fontWeight: 600,
-              fontSize: 15,
-              textDecoration: 'none',
-            }}
-          >
-            ⭐ View on GitHub
-          </a>
-        </div>
+            Scan My Domain Free →
+          </button>
+        </form>
 
-        <div style={{ marginTop: 8 }}>
-          <Code>npx xshield-warrior start</Code>
-          <span style={{ color: MUTED, fontSize: 13, marginLeft: 12 }}>
-            — self-host in 30 seconds
-          </span>
-        </div>
-
-        {/* Trust bar */}
+        {/* Trust stats */}
         <div
           style={{
             display: 'flex',
             gap: 32,
             justifyContent: 'center',
             flexWrap: 'wrap',
-            marginTop: 52,
+            marginTop: 40,
             paddingTop: 40,
             borderTop: `1px solid ${BORDER}`,
           }}
         >
           {[
-            ['17', 'Intelligence Sources'],
-            ['12', 'API Capabilities'],
-            ['5min', 'Alert Latency'],
-            ['$0', 'Starter Tier'],
+            ['25+', 'Intelligence Sources'],
+            ['STIX 2.1', 'Native Output'],
+            ['5-min', 'Alert Latency'],
+            ['Apache 2.0', 'Open Source'],
           ].map(([val, label]) => (
             <div key={label} style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 28, fontWeight: 900, color: VIOLET_L }}>{val}</div>
+              <div style={{ fontSize: 24, fontWeight: 900, color: VIOLET_L }}>{val}</div>
               <div style={{ color: MUTED, fontSize: 12, marginTop: 4 }}>{label}</div>
             </div>
           ))}
@@ -295,13 +344,156 @@ function Hero() {
   );
 }
 
-// ─── Capabilities ─────────────────────────────────────────────────────────────
+// ─── C. Threat Live Feed Teaser ───────────────────────────────────────────────
+
+function LiveFeedTeaser() {
+  const detections = [
+    {
+      severity: 'HIGH',
+      domain: 'maersk-logistics[.]com',
+      type: 'Typosquat detected',
+      age: '2 min ago',
+      color: RED,
+    },
+    {
+      severity: 'MED',
+      domain: 'cma-cgm-invoice[.]net',
+      type: 'Phishing kit: Evilginx2',
+      age: '7 min ago',
+      color: AMBER,
+    },
+    {
+      severity: 'HIGH',
+      domain: 'hapag-lloyd-portal[.]com',
+      type: 'Certificate issued, 0-day-old domain',
+      age: '11 min ago',
+      color: RED,
+    },
+  ];
+
+  return (
+    <section style={{ background: BG_ALT, padding: '64px 24px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+          <span
+            style={{
+              display: 'inline-block',
+              width: 10,
+              height: 10,
+              background: RED,
+              borderRadius: '50%',
+            }}
+          />
+          <h2 style={{ fontSize: 22, fontWeight: 800, color: TEXT, margin: 0 }}>
+            Live Threat Detections
+          </h2>
+          <span
+            style={{
+              background: RED + '22',
+              color: RED,
+              border: `1px solid ${RED}44`,
+              borderRadius: 4,
+              padding: '2px 8px',
+              fontSize: 11,
+              fontWeight: 700,
+            }}
+          >
+            LIVE
+          </span>
+        </div>
+
+        <div
+          style={{
+            background: BG_CARD,
+            border: `1px solid ${BORDER}`,
+            borderRadius: 12,
+            overflow: 'hidden',
+          }}
+        >
+          {/* Table header */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '80px 1fr 1fr 100px',
+              padding: '10px 20px',
+              borderBottom: `1px solid ${BORDER}`,
+              fontSize: 11,
+              fontWeight: 700,
+              color: MUTED,
+              letterSpacing: 1,
+            }}
+          >
+            <span>SEVERITY</span>
+            <span>DOMAIN</span>
+            <span>DETECTION</span>
+            <span>TIME</span>
+          </div>
+
+          {detections.map((d, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '80px 1fr 1fr 100px',
+                padding: '14px 20px',
+                borderBottom: i < detections.length - 1 ? `1px solid ${BORDER}33` : 'none',
+                alignItems: 'center',
+              }}
+            >
+              <span
+                style={{
+                  background: d.color + '22',
+                  color: d.color,
+                  border: `1px solid ${d.color}44`,
+                  borderRadius: 4,
+                  padding: '2px 6px',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  display: 'inline-block',
+                }}
+              >
+                {d.severity}
+              </span>
+              <code
+                style={{
+                  color: d.severity === 'HIGH' ? RED : AMBER,
+                  fontFamily: 'monospace',
+                  fontSize: 13,
+                }}
+              >
+                {d.domain}
+              </code>
+              <span style={{ color: MUTED, fontSize: 13 }}>{d.type}</span>
+              <span style={{ color: MUTED, fontSize: 12 }}>{d.age}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: 20 }}>
+          <Link
+            to="/live"
+            style={{
+              color: VIOLET_L,
+              fontSize: 14,
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            View Live Threat Feed →
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── D. Capabilities Grid ─────────────────────────────────────────────────────
 
 const CAPABILITIES = [
   {
     icon: '🔍',
     title: 'Domain Risk Scoring',
-    desc: '12 parallel sources: DNS/SPF/DMARC, GreyNoise, HIBP, Shodan, OTX, URLScan, crt.sh',
+    desc: '25+ parallel sources: DNS/SPF/DMARC, GreyNoise, HIBP, Shodan, OTX, URLScan, crt.sh and more',
     badge: 'FREE',
   },
   {
@@ -325,19 +517,19 @@ const CAPABILITIES = [
   {
     icon: '🇮🇳',
     title: 'India Threat Intel',
-    desc: 'UPI/NPCI fraud patterns, CERT-In advisories, telecom OTP abuse — no competitor covers this',
+    desc: 'UPI/NPCI fraud patterns, CERT-In advisories, TAFCOP/Sanchar phone fraud — no competitor covers this',
     badge: 'FREE',
   },
   {
     icon: '🎣',
     title: 'Phishing Kit Fingerprinter',
-    desc: 'Identifies GoPhish, Evilginx2, Modlishka, Zphisher by HTML/JS fingerprint — links campaigns to actors',
+    desc: 'Identifies GoPhish, Evilginx2, Modlishka, Zphisher, CredSniper, W3LL Panel by HTML/JS fingerprint',
     badge: 'STARTER',
   },
   {
     icon: '📡',
     title: 'STIX/TAXII 2.1 Export',
-    desc: 'Machine-readable threat feeds for Splunk, Sentinel, QRadar. Recorded Future charges $30K+/yr for this.',
+    desc: 'Machine-readable threat feeds for Splunk, Sentinel, QRadar. TAXII 2.1 read+write server included.',
     badge: 'PRO',
   },
   {
@@ -370,6 +562,12 @@ const CAPABILITIES = [
     desc: 'Every finding mapped to ATT&CK techniques. Navigator layer export + executive heatmap included',
     badge: 'FREE',
   },
+  {
+    icon: '🛡️',
+    title: 'Active Defense',
+    desc: 'xshield-active: file DMCA, abuse reports, SIEM push, executive notify. Mode 1/2/3 consent-gated.',
+    badge: 'PRO',
+  },
 ];
 
 function Capabilities() {
@@ -377,8 +575,8 @@ function Capabilities() {
     <section id="capabilities" style={{ background: BG_ALT, padding: '72px 24px' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <SectionHead
-          title="12 Capabilities. One API."
-          sub="Everything from domain risk scoring to STIX/TAXII threat feeds — REST + GraphQL, works in 5 minutes"
+          title="13 Capabilities. One API."
+          sub="Everything from domain risk scoring to active DMCA filing — REST + GraphQL, works in 5 minutes"
         />
         <div
           style={{
@@ -416,7 +614,192 @@ function Capabilities() {
   );
 }
 
-// ─── Self-host / Deploy ───────────────────────────────────────────────────────
+// ─── E. Competitive Comparison Table ─────────────────────────────────────────
+
+const COMPARE_ROWS = [
+  ['Entry price', 'From $99/mo', '$50,000/yr', '$22,000/yr', '$30,000/yr', 'Custom (high)'],
+  ['STIX 2.1 native', '✅ Every scan', '⚠️ Export only', '❌', '❌', '❌'],
+  ['TAXII 2.1 server', '✅ Read + Write', '❌', '❌', '❌', '❌'],
+  ['Active defense', '✅ Mode 1/2/3', '❌', '❌', '⚠️ Internal only', '❌'],
+  ['Maritime aware', '✅ Native', '❌', '❌', '❌', '✅ OT only'],
+  ['Phishing kit fingerprint', '✅ 6 kits', '✅', '❌', '❌', '❌'],
+  ['Supply chain scanning', '✅ npm/PyPI', '⚠️ Limited', '❌', '❌', '❌'],
+  ['Phone fraud detection', '✅ TAFCOP/Sanchar', '❌', '❌', '❌', '❌'],
+  ['AI threat narrative', '✅ Claude-powered', '❌', '❌', '✅', '❌'],
+  ['Beacon / deception', '✅ Built-in', '❌', '❌', '❌', '❌'],
+  ['Collective defense feed', '✅ TAXII write', '❌', '❌', '❌', '❌'],
+  ['Remediation playbooks', '✅ Copy-paste ready', '❌', '❌', '❌', '❌'],
+  ['Self-hostable', '✅ Apache 2.0', '❌', '❌', '❌', '❌'],
+  ['No SOAR needed', '✅', '❌ Requires SOAR', '❌', '❌', '❌'],
+];
+
+function ComparisonTable() {
+  const headers = ['Feature', 'xShieldAI', 'Recorded Future', 'DomainTools', 'Darktrace', 'Cydome'];
+
+  const cellColor = (val: string) => {
+    if (val.startsWith('✅')) return GREEN;
+    if (val.startsWith('❌')) return MUTED + 'aa';
+    if (val.startsWith('⚠️')) return AMBER;
+    return MUTED;
+  };
+
+  return (
+    <section id="compare" style={{ background: BG, padding: '80px 24px' }}>
+      <div style={{ maxWidth: 1160, margin: '0 auto' }}>
+        <SectionHead
+          title="How xShieldAI compares"
+          sub="Enterprise-grade intelligence. Not enterprise prices."
+        />
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr>
+                {headers.map((h, i) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: '14px 18px',
+                      borderBottom: `2px solid ${i === 1 ? VIOLET : BORDER}`,
+                      color: i === 1 ? VIOLET_L : MUTED,
+                      textAlign: i === 0 ? 'left' : 'center',
+                      fontWeight: i === 1 ? 900 : 600,
+                      background: i === 1 ? VIOLET + '11' : 'transparent',
+                      position: 'relative',
+                    }}
+                  >
+                    {i === 1 && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: -14,
+                          left: '50%',
+                          transform: 'translateX(-50%)',
+                          background: VIOLET,
+                          color: '#fff',
+                          fontSize: 10,
+                          fontWeight: 700,
+                          padding: '2px 12px',
+                          borderRadius: 10,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        MOST POPULAR
+                      </div>
+                    )}
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {COMPARE_ROWS.map(([feat, ...vals], ri) => (
+                <tr
+                  key={feat}
+                  style={{
+                    borderBottom: `1px solid ${BORDER}22`,
+                    background: ri % 2 === 0 ? 'transparent' : BG_CARD + '44',
+                  }}
+                >
+                  <td style={{ padding: '12px 18px', color: TEXT, fontWeight: 500 }}>{feat}</td>
+                  {vals.map((v, ci) => (
+                    <td
+                      key={ci}
+                      style={{
+                        padding: '12px 18px',
+                        textAlign: 'center',
+                        color: cellColor(v),
+                        background: ci === 0 ? VIOLET + '08' : 'transparent',
+                        fontWeight: ci === 0 ? 600 : 400,
+                      }}
+                    >
+                      {v}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Stack cost callout */}
+        <div
+          style={{
+            marginTop: 32,
+            background: VIOLET + '11',
+            border: `1px solid ${VIOLET}33`,
+            borderRadius: 12,
+            padding: '20px 28px',
+            textAlign: 'center',
+          }}
+        >
+          <p style={{ color: MUTED, fontSize: 14, margin: 0, lineHeight: 1.8 }}>
+            The enterprise stack equivalent (RF + DomainTools + SOAR + TAXII integration) costs{' '}
+            <span style={{ color: RED, fontWeight: 700 }}>$127,000–207,000/year.</span>
+            {'  '}
+            <span style={{ color: VIOLET_L, fontWeight: 700 }}>xShieldAI Pro: $499/month.</span>
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── F. Three CISO Questions ──────────────────────────────────────────────────
+
+function CISOQuestions() {
+  const questions = [
+    {
+      q: 'We got phished last month. How do we know before it hits our inbox next time?',
+      a: 'Domain Watch polls 25+ sources every 5 minutes. Phishing kit fingerprinting detects campaign infrastructure (Evilginx2, GoPhish, Modlishka) as soon as the kit is deployed — often 24–48 hours before the first phishing email sends. Certificate Transparency gives you pre-launch warning from certstream. By the time the email lands, xShieldAI has already alerted you, mapped it to MITRE ATT&CK T1566, and generated a remediation playbook.',
+    },
+    {
+      q: 'We need to share threat intel with our port authority in standard format. How?',
+      a: 'Every xShieldAI scan produces a conformant STIX 2.1 bundle — machine-readable, zero manual work. Your TAXII 2.1 server (included in Pro) lets partners pull directly. Every beacon credential hit automatically pushes to the collective defense feed, warning all other xShieldAI clients in your sector. Your port authority gets a live TAXII pull endpoint. No email attachments. No PDFs. Pure machine-to-machine intel sharing.',
+    },
+    {
+      q: 'We found a phishing domain impersonating us. What do we DO about it?',
+      a: 'xshield-active. Mode 1: one-click DMCA filing, Google Safe Browsing abuse report, Cloudflare abuse submission, SIEM push, executive notification — all generated automatically from the STIX record. Mode 2: standing orders execute without per-incident approval. Mode 3: always-on automated response for high-confidence detections. Full audit trail in STIX format. No SOAR license required.',
+    },
+  ];
+
+  return (
+    <section style={{ background: BG_ALT, padding: '72px 24px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+        <SectionHead title="Three Questions CISOs Ask Us" sub="Real scenarios. Concrete answers." />
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {questions.map((item, i) => (
+            <article
+              key={i}
+              style={{
+                background: BG_CARD,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 12,
+                padding: '24px 28px',
+              }}
+            >
+              <h3
+                style={{
+                  fontSize: 16,
+                  fontWeight: 700,
+                  color: VIOLET_L,
+                  margin: '0 0 12px',
+                  lineHeight: 1.5,
+                }}
+              >
+                Q{i + 1}: {item.q}
+              </h3>
+              <p style={{ color: MUTED, fontSize: 14, margin: 0, lineHeight: 1.8 }}>{item.a}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── G. Self-host / Deploy ────────────────────────────────────────────────────
 
 function SelfHost() {
   return (
@@ -442,12 +825,11 @@ function SelfHost() {
               lineHeight: 1.2,
             }}
           >
-            Deploy it yourself.
-            <br />
-            <span style={{ color: GREEN }}>Own your data.</span>
+            Open source threat intelligence platform —{' '}
+            <span style={{ color: GREEN }}>deploy in 30 seconds.</span>
           </h2>
           <p style={{ color: MUTED, fontSize: 16, lineHeight: 1.8, marginBottom: 24 }}>
-            Clone the repo, run the engine, point it at your domain. 17 intelligence sources + AI
+            Clone the repo, run the engine, point it at your domain. 25+ intelligence sources + AI
             threat narrative — no account, no telemetry, no vendor trust required.
           </p>
           <ul
@@ -529,7 +911,7 @@ function SelfHost() {
           >
             <span style={{ color: MUTED }}>$</span> npx xshield-warrior start{'\n'}
             <span style={{ color: '#3b82f6' }}>▶</span> xShield API listening on :7171{'\n'}
-            <span style={{ color: '#3b82f6' }}>▶</span> 17 intel sources loaded{'\n'}
+            <span style={{ color: '#3b82f6' }}>▶</span> 25 intel sources loaded{'\n'}
             {'\n'}
             <span style={{ color: MUTED }}>$</span> npx xshield-warrior scan ankrlabs.org{'\n'}
             <span style={{ color: '#7ee787' }}>✓</span> Risk score:{' '}
@@ -559,7 +941,7 @@ function SelfHost() {
   );
 }
 
-// ─── India angle ──────────────────────────────────────────────────────────────
+// ─── H. India angle ───────────────────────────────────────────────────────────
 
 function IndiaAngle() {
   return (
@@ -567,14 +949,14 @@ function IndiaAngle() {
       <div style={{ maxWidth: 1000, margin: '0 auto' }}>
         <SectionHead
           title="Built for India's Threat Landscape"
-          sub="The only security API that understands UPI fraud, DPDP Act 2023, CERT-In advisories, and vernacular users"
+          sub="The only security platform that understands UPI fraud, DPDP Act 2023, TAFCOP/Sanchar phone fraud, CERT-In advisories, and vernacular users"
         />
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
           {[
             {
               icon: '💸',
-              title: 'UPI / NPCI Fraud Patterns',
-              desc: 'Flags domains mimicking NPCI, BHIM, PhonePe, GPay with India-specific regex + WHOIS correlation. No competitor does this.',
+              title: 'UPI / NPCI + TAFCOP Fraud',
+              desc: 'Flags domains mimicking NPCI, BHIM, PhonePe, GPay. TAFCOP/Sanchar phone fraud detection. No competitor does this.',
             },
             {
               icon: '⚖️',
@@ -609,7 +991,7 @@ function IndiaAngle() {
   );
 }
 
-// ─── Pricing ──────────────────────────────────────────────────────────────────
+// ─── I. Pricing preview ───────────────────────────────────────────────────────
 
 const PLANS = [
   {
@@ -655,6 +1037,7 @@ const PLANS = [
     features: [
       'Everything in STARTER',
       'STIX/TAXII 2.1 full export',
+      'xshield-active defense',
       'SBOM ingestion',
       'Phishing kit fingerprinter',
       'Enterprise SSO (SAML)',
@@ -666,7 +1049,7 @@ const PLANS = [
   },
 ];
 
-function Pricing() {
+function PricingPreview() {
   return (
     <section id="pricing" style={{ background: BG, padding: '72px 24px' }}>
       <div style={{ maxWidth: 1020, margin: '0 auto' }}>
@@ -781,77 +1164,78 @@ function Pricing() {
           >
             GitHub →
           </a>
+          {'  ·  '}
+          <Link to="/pricing" style={{ color: VIOLET_L }}>
+            Full pricing details →
+          </Link>
         </p>
       </div>
     </section>
   );
 }
 
-// ─── Competitor comparison ─────────────────────────────────────────────────────
+// ─── J. FAQ Section ───────────────────────────────────────────────────────────
 
-function Comparison() {
+const FAQS = [
+  {
+    q: 'What is STIX 2.1 and why does it matter?',
+    a: 'STIX (Structured Threat Information eXpression) is the global standard format for sharing threat intelligence. Every xShieldAI scan produces a conformant STIX 2.1 bundle — machine-readable, shareable with any TAXII-compatible platform or ISAC. This means your threat data can be consumed directly by Splunk, Microsoft Sentinel, QRadar, or any port authority running a TAXII client — no translation, no manual export.',
+  },
+  {
+    q: 'How does xShieldAI compare to Recorded Future?',
+    a: 'Recorded Future is an enterprise intelligence platform starting at $50,000/year, focused on named threat actor attribution and proprietary dark web crawlers. xShieldAI covers the same domain risk, phishing detection, and STIX/TAXII layer — plus active defense — from $99/month. RF is the right choice if you need human analyst escalation 24/7. xShieldAI is the right choice if you need to detect, respond, and share intelligence without a $50K budget.',
+  },
+  {
+    q: 'Is xShieldAI suitable for maritime companies?',
+    a: 'Yes. xShieldAI is the only threat intelligence platform with native maritime context: India TAFCOP phone fraud, supply chain typosquats for shipping companies, and collective TAXII defense between port operators. It monitors the IT attack surface (phishing domains, leaked credentials, brand impersonation) that OT tools like Cydome cannot see. Maritime sector clients get sector-specific STIX bundles and peer threat sharing via TAXII.',
+  },
+  {
+    q: 'What is the TAXII write endpoint?',
+    a: "Most TAXII servers are read-only — you pull threat data out. xShieldAI's TAXII 2.1 server also accepts writes: OT sensors, external SIEMs, or partner tools can push STIX bundles in. Every beacon credential hit automatically pushes to the collective feed, warning all other xShieldAI clients. This makes xShieldAI a genuine collective defense platform, not just a one-way intel feed.",
+  },
+  {
+    q: 'Can xShieldAI replace our SOAR platform?',
+    a: 'For the 80% of security incidents that follow known patterns (phishing domain, abuse report, DMCA takedown), yes. xshield-active Mode 1/2/3 automates the response without a separate SOAR license. For complex multi-stage IR, xShieldAI integrates with your existing SOAR via SIEM push connectors. Most teams find they can retire their SOAR for domain/brand/phishing incident classes entirely.',
+  },
+  {
+    q: "What does 'active defense' mean?",
+    a: "Active defense (xshield-active) means xShieldAI doesn't just detect — it acts. Mode 1: automated DMCA filing, Google Safe Browsing report, Cloudflare abuse submission, SIEM push, and executive notification from a single confirmed detection. Mode 2: standing orders execute without per-incident approval. Mode 3: always-on automated response for high-confidence detections. All modes require explicit consent configuration and carry full audit trails in STIX format.",
+  },
+];
+
+function FAQ() {
   return (
-    <section style={{ background: BG_ALT, padding: '72px 24px' }}>
-      <div style={{ maxWidth: 960, margin: '0 auto' }}>
+    <section id="faq" style={{ background: BG_ALT, padding: '72px 24px' }}>
+      <div style={{ maxWidth: 860, margin: '0 auto' }}>
         <SectionHead
-          title="vs. The Incumbents"
-          sub="Enterprise threat intelligence without the enterprise price tag"
+          title="Frequently Asked Questions"
+          sub="STIX/TAXII, pricing comparisons, maritime security, active defense — answered."
         />
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr>
-                {[
-                  'Capability',
-                  'xShield',
-                  'Recorded Future',
-                  'Crowdstrike',
-                  'OSINT-only tools',
-                ].map((h, i) => (
-                  <th
-                    key={h}
-                    style={{
-                      padding: '12px 16px',
-                      borderBottom: `1px solid ${BORDER}`,
-                      color: i === 1 ? VIOLET_L : MUTED,
-                      textAlign: i === 0 ? 'left' : 'center',
-                      fontWeight: i === 1 ? 800 : 600,
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                ['Domain risk API', '✅ REST+GQL', '✅ REST', '✅ REST', '⚠️ manual'],
-                ['STIX/TAXII 2.1', '✅ FREE tier', '✅ $30K+/yr', '✅ $50K+/yr', '❌'],
-                ['AI threat narrative', '✅ STARTER', '⚠️ add-on', '⚠️ add-on', '❌'],
-                ['India threat intel', '✅ native', '⚠️ limited', '⚠️ limited', '❌'],
-                ['Supply chain SBOM', '✅ STARTER', '✅ enterprise', '✅ enterprise', '❌'],
-                ['Self-hosted', '✅ 30 seconds', '❌', '❌', '✅'],
-                ['Open source', '✅ Apache 2.0', '❌', '❌', '⚠️ some'],
-                ['Price', '✅ $0–$499/mo', '❌ $30K+/yr', '❌ $50K+/yr', '✅ free but limited'],
-              ].map(([feat, ...vals]) => (
-                <tr key={feat} style={{ borderBottom: `1px solid ${BORDER}22` }}>
-                  <td style={{ padding: '11px 16px', color: TEXT }}>{feat}</td>
-                  {vals.map((v, i) => (
-                    <td
-                      key={i}
-                      style={{
-                        padding: '11px 16px',
-                        textAlign: 'center',
-                        color: v.startsWith('✅') ? GREEN : v.startsWith('❌') ? RED + '88' : AMBER,
-                      }}
-                    >
-                      {v}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {FAQS.map((item, i) => (
+            <article
+              key={i}
+              style={{
+                background: BG_CARD,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 10,
+                padding: '20px 24px',
+              }}
+            >
+              <h3
+                style={{
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: TEXT,
+                  margin: '0 0 10px',
+                  lineHeight: 1.5,
+                }}
+              >
+                {item.q}
+              </h3>
+              <p style={{ color: MUTED, fontSize: 13, margin: 0, lineHeight: 1.85 }}>{item.a}</p>
+            </article>
+          ))}
         </div>
       </div>
     </section>
@@ -930,7 +1314,7 @@ function PersonalCrosslink() {
   );
 }
 
-// ─── Footer ───────────────────────────────────────────────────────────────────
+// ─── K. Footer ────────────────────────────────────────────────────────────────
 
 function Footer() {
   return (
@@ -942,7 +1326,7 @@ function Footer() {
         textAlign: 'center',
       }}
     >
-      <div style={{ maxWidth: 800, margin: '0 auto' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto' }}>
         <div style={{ fontWeight: 800, fontSize: 16, color: TEXT, marginBottom: 4 }}>
           🛡️ xShield AI{' '}
           <span style={{ color: MUTED, fontWeight: 400, fontSize: 13 }}>by ANKR Labs</span>
@@ -950,6 +1334,7 @@ function Footer() {
         <div style={{ color: MUTED, fontSize: 12, marginBottom: 20 }}>
           Powerp Box IT Solutions Pvt Ltd · Gurgaon, India
         </div>
+
         <div
           style={{
             display: 'flex',
@@ -960,14 +1345,14 @@ function Footer() {
           }}
         >
           {[
-            ['GitHub', 'https://github.com/rocketlang/ankrshield', true],
-            ['Docs', '/docs', false],
-            ['Pricing', '#pricing', false],
-            ['Dashboard', '/dashboard', false],
-            ['Live Threats', '/live', false],
-            ['MDM Portal', '/mdm', false],
-            ['AnkrShield App', '/personal', false],
-          ].map(([label, href, external]) =>
+            ['Capabilities', '#capabilities', false, false],
+            ['Pricing', '#pricing', false, false],
+            ['Compare', '#compare', false, false],
+            ['Live Threats', '/live', false, false],
+            ['Docs', '/docs', false, false],
+            ['GitHub', 'https://github.com/rocketlang/ankrshield', false, true],
+            ['Personal App', '/personal', false, false],
+          ].map(([label, href, _unused, external]) =>
             external ? (
               <a
                 key={label as string}
@@ -978,7 +1363,7 @@ function Footer() {
               >
                 {label}
               </a>
-            ) : (
+            ) : (href as string).startsWith('/') ? (
               <Link
                 key={label as string}
                 to={href as string}
@@ -986,11 +1371,32 @@ function Footer() {
               >
                 {label}
               </Link>
+            ) : (
+              <a
+                key={label as string}
+                href={href as string}
+                style={{ color: MUTED, fontSize: 12, textDecoration: 'none' }}
+              >
+                {label}
+              </a>
             )
           )}
         </div>
+
+        <div
+          style={{
+            color: VIOLET_L,
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: 0.5,
+            marginBottom: 12,
+          }}
+        >
+          STIX 2.1 Compliant · TAXII 2.1 Native · Apache 2.0 Open Source
+        </div>
+
         <div style={{ color: MUTED + '88', fontSize: 11 }}>
-          © 2026 Powerp Box IT Solutions Pvt Ltd · Apache 2.0 Open Source · xshieldai.com
+          © 2026 Powerp Box IT Solutions Pvt Ltd · xshieldai.com
         </div>
       </div>
     </footer>
@@ -1005,17 +1411,20 @@ export default function Landing() {
       style={{
         background: BG,
         minHeight: '100vh',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         color: TEXT,
       }}
     >
       <Nav />
       <Hero />
+      <LiveFeedTeaser />
       <Capabilities />
+      <ComparisonTable />
+      <CISOQuestions />
       <SelfHost />
       <IndiaAngle />
-      <Pricing />
-      <Comparison />
+      <PricingPreview />
+      <FAQ />
       <PersonalCrosslink />
       <Footer />
     </div>
