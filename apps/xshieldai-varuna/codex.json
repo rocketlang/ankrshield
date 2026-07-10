@@ -791,5 +791,21 @@
       }
     },
     "generated_at": "2026-06-13T04:12:15.170Z"
+  },
+  "compiled": {
+    "schema": "one-tree-compiled-v1",
+    "writer": "one-tree-converge",
+    "membership": "real",
+    "depth_level": "L4",
+    "rung": "PROVEN",
+    "depth_class": "REAL",
+    "green": true,
+    "faces": {
+      "declared": 24,
+      "served": true,
+      "proof_via": "htr-cert@rest"
+    },
+    "composed_from": "fleet-maturity",
+    "run": "2026-07-07"
   }
 }
