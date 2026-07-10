@@ -404,6 +404,18 @@ export function HomeScreen({ navigation }: any) {
               <Text style={styles.toolDesc}>{tool.desc}</Text>
             </TouchableOpacity>
           ))}
+          {/* Escape back to the calm Simple face (persists the choice). */}
+          <TouchableOpacity
+            style={styles.toolCard}
+            onPress={async () => {
+              await MdmStorage.setItem('@ankrshield/mode', 'simple').catch(() => {});
+              navigation.navigate('Simple');
+            }}
+          >
+            <Text style={styles.toolIcon}>🏠</Text>
+            <Text style={styles.toolName}>Simple View</Text>
+            <Text style={styles.toolDesc}>Back to one-tap mode</Text>
+          </TouchableOpacity>
         </View>
       </View>
 

@@ -52,6 +52,7 @@ import { RiskLookupScreen } from './src/screens/RiskLookupScreen';
 import { SafeBrowsingScreen } from './src/screens/SafeBrowsingScreen';
 import { ScopeReportScreen } from './src/screens/ScopeReportScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { SimpleHomeScreen, MODE_KEY } from './src/screens/SimpleHomeScreen';
 import { SmsShieldScreen } from './src/screens/SmsShieldScreen';
 import SplitTunnelScreen from './src/screens/SplitTunnelScreen';
 import { SpywareScanScreen } from './src/screens/SpywareScanScreen';
@@ -306,14 +307,21 @@ function App(): React.JSX.Element {
 
   // First-run onboarding check + language preference — run in parallel before first render
   useEffect(() => {
-    Promise.all([MdmStorage.getItem(ONBOARDING_KEY), MdmStorage.getItem('@ankrshield/language')])
-      .then(([onboarded, lang]) => {
+    Promise.all([
+      MdmStorage.getItem(ONBOARDING_KEY),
+      MdmStorage.getItem('@ankrshield/language'),
+      MdmStorage.getItem(MODE_KEY),
+    ])
+      .then(([onboarded, lang, mode]) => {
         if (lang === 'en' || lang === 'hi' || lang === 'ta' || lang === 'te') {
           setLanguage(lang as Lang);
         }
-        setInitialRoute(onboarded ? 'Home' : 'Onboarding');
+        // Default face is Simple; Tech is remembered once chosen (founder: simple
+        // on top, complexity underneath, opt-in tech toggle).
+        const landing = mode === 'tech' ? 'Home' : 'Simple';
+        setInitialRoute(onboarded ? landing : 'Onboarding');
       })
-      .catch(() => setInitialRoute('Home'));
+      .catch(() => setInitialRoute('Simple'));
   }, []);
 
   // Warm-start deep link / share intent listener
@@ -403,6 +411,11 @@ function App(): React.JSX.Element {
             },
           }}
         >
+          <Stack.Screen
+            name="Simple"
+            component={eb(SimpleHomeScreen, 'Simple')}
+            options={{ headerShown: false }}
+          />
           <Stack.Screen
             name="Home"
             component={eb(HomeScreen, 'Home')}
