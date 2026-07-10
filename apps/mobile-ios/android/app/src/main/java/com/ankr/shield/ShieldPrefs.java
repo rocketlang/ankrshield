@@ -39,6 +39,7 @@ final class ShieldPrefs {
     private static final String KEY_SEEDED     = "bypass_seeded_v1";
     private static final String KEY_MODE       = "shield_mode";
     private static final String KEY_QUARANTINE = "quarantine_set";
+    private static final String KEY_TAMED      = "tamed_set";
     private static final String KEY_CLIP_HYG   = "clipboard_hygiene";
 
     private ShieldPrefs() {}
@@ -125,6 +126,22 @@ final class ShieldPrefs {
         Set<String> q = getQuarantine(ctx);
         if (quarantined) q.add(pkg); else q.remove(pkg);
         prefs(ctx).edit().putStringSet(KEY_QUARANTINE, q).apply();
+    }
+
+    // ── Tame (surgical per-app tracker block) ────────────────────────────────
+    // A tamed package has its beyond-scope (tracker) domains force-blocked even
+    // in passive/Intelligent mode, while its functional domains still resolve —
+    // "tame the tracking without breaking the app". Weaker than quarantine
+    // (which blocks EVERY domain); tame blocks only tracker-category domains.
+
+    static Set<String> getTamed(Context ctx) {
+        return new HashSet<>(prefs(ctx).getStringSet(KEY_TAMED, Collections.emptySet()));
+    }
+
+    static void setTamed(Context ctx, String pkg, boolean tamed) {
+        Set<String> t = getTamed(ctx);
+        if (tamed) t.add(pkg); else t.remove(pkg);
+        prefs(ctx).edit().putStringSet(KEY_TAMED, t).apply();
     }
 
     /** Effective set the VPN should exclude, given the current mode. */

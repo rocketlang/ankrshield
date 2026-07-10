@@ -340,6 +340,28 @@ class AnkrShieldVpn {
     return DnsVpn.getQuarantinedApps() as Promise<string[]>;
   }
 
+  /** Tame an app: force-block its tracker domains, keep functional domains working. */
+  async tameApp(packageName: string): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn || !DnsVpn.tameApp) {
+      return;
+    }
+    await DnsVpn.tameApp(packageName);
+  }
+
+  async untameApp(packageName: string): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn || !DnsVpn.untameApp) {
+      return;
+    }
+    await DnsVpn.untameApp(packageName);
+  }
+
+  async getTamedApps(): Promise<string[]> {
+    if (Platform.OS !== 'android' || !DnsVpn || !DnsVpn.getTamedApps) {
+      return [];
+    }
+    return DnsVpn.getTamedApps() as Promise<string[]>;
+  }
+
   /** Wipe the on-device scope ledger (user right; nothing ever left the phone). */
   async clearScopeLedger(): Promise<void> {
     if (Platform.OS !== 'android' || !DnsVpn) {

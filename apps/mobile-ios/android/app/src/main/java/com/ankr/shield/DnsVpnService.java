@@ -92,6 +92,9 @@ public class DnsVpnService extends VpnService {
     static final Set<String> bypassPackages = Collections.synchronizedSet(new HashSet<>());
     // Network quarantine: every DNS query from these packages → NXDOMAIN (trojan containment)
     static final Set<String> quarantinePackages = Collections.synchronizedSet(new HashSet<>());
+    // Tame: these packages get their TRACKER domains force-blocked even in passive mode
+    // (functional domains still resolve) — tame the tracking without breaking the app.
+    static final Set<String> tamedPackages = Collections.synchronizedSet(new HashSet<>());
     // Passive mode: intercept + log but never block
     static volatile boolean passiveMode = false;
 
@@ -313,11 +316,22 @@ public class DnsVpnService extends VpnService {
         }
         quarantinePackages.clear();
         quarantinePackages.addAll(ShieldPrefs.getQuarantine(this));
+        tamedPackages.clear();
+        tamedPackages.addAll(ShieldPrefs.getTamed(this));
         bypassPackages.clear();
         bypassPackages.addAll(ShieldPrefs.effectiveBypass(this));
         // Quarantine beats bypass: a quarantined app must route THROUGH the VPN
         // so we can contain it — never exclude it from the interface.
         bypassPackages.removeAll(quarantinePackages);
+    }
+
+    /** True when the attributed app has been TAMED (force-block its trackers). */
+    private static boolean isTamed(String app) {
+        if (app == null || app.isEmpty() || tamedPackages.isEmpty()) return false;
+        for (String pkg : app.split(",")) {
+            if (tamedPackages.contains(pkg)) return true;
+        }
+        return false;
     }
 
     /** True when the attributed app (possibly comma-joined shared-UID set) is quarantined. */
@@ -562,9 +576,11 @@ public class DnsVpnService extends VpnService {
                     Log.i(TAG, "AnkrShield DNS bypass expired — protection resumed");
                 }
 
-                // In passive mode, detect but never block (advisory only)
+                // In passive mode, detect but never block (advisory only) — UNLESS the
+                // app is tamed, in which case its tracker domains are force-blocked while
+                // its functional (clean) domains still resolve.
                 TrackerMatch match = paused ? null : lookupTracker(domain);
-                if (passiveMode && match != null) {
+                if (passiveMode && match != null && !isTamed(app)) {
                     // report as advisory, then pass through
                     scopeLedger.record(app, domain, match.category, match.vendor,
                                        match.riskLevel, false, screenOff);

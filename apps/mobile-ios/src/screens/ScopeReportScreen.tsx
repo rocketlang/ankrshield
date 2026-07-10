@@ -89,15 +89,17 @@ export function ScopeReportScreen() {
   const [shieldOn, setShieldOn] = useState(true);
   const [starting, setStarting] = useState(false);
   const [quarantined, setQuarantined] = useState<{ pkg: string; name: string }[]>([]);
+  const [tamed, setTamed] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, m, running, qPkgs, installed] = await Promise.all([
+      const [r, m, running, qPkgs, tPkgs, installed] = await Promise.all([
         buildScopeReport(),
         vpnService.getMode(),
         vpnService.isRunning(),
         vpnService.getQuarantinedApps(),
+        vpnService.getTamedApps(),
         vpnService.getInstalledApps(),
       ]);
       setReport(r);
@@ -105,10 +107,30 @@ export function ScopeReportScreen() {
       setShieldOn(running);
       const nameOf = (pkg: string) => installed.find((a) => a.packageName === pkg)?.appName ?? pkg;
       setQuarantined(qPkgs.map((pkg) => ({ pkg, name: nameOf(pkg) })));
+      setTamed(new Set(tPkgs));
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // A verdict's packageName may be a comma-joined shared-UID set; tame binds to the first.
+  const isTamed = (pkg: string) => tamed.has(pkg) || tamed.has(pkg.split(',')[0]);
+
+  const toggleTame = async (pkg: string) => {
+    const first = pkg.split(',')[0];
+    if (isTamed(pkg)) {
+      await vpnService.untameApp(first);
+      setTamed((prev) => {
+        const n = new Set(prev);
+        n.delete(pkg);
+        n.delete(first);
+        return n;
+      });
+    } else {
+      await vpnService.tameApp(first);
+      setTamed((prev) => new Set(prev).add(first));
+    }
+  };
 
   const releaseQuarantine = async (pkg: string) => {
     await vpnService.unquarantineApp(pkg);
@@ -259,6 +281,20 @@ export function ScopeReportScreen() {
         )}
       </View>
 
+      {/* ── Protector line — we are ALREADY helping, not just reporting ─── */}
+      {totalBlocked > 0 && (
+        <View style={s.protector}>
+          <Text style={s.protectorTitle}>🛡️ AnkrShield already tamed these apps for you.</Text>
+          <Text style={s.protectorBody}>
+            {totalBlocked.toLocaleString()} tracker contacts were{' '}
+            <Text style={s.protectorStrong}>blocked by default</Text> across {trackedApps} app
+            {trackedApps === 1 ? '' : 's'} — and every app kept working. This isn't a warning list;
+            it's what the shield quietly stopped. Tap any app to see its receipts, or Tame it to
+            lock its trackers out for good.
+          </Text>
+        </View>
+      )}
+
       {/* ── Mode ─────────────────────────────────────────────────── */}
       <View style={s.modeCard}>
         <View style={s.modeText}>
@@ -350,6 +386,11 @@ export function ScopeReportScreen() {
                   🌐 Browser traffic — reflects every website you visited, not the browser itself.
                 </Text>
               )}
+              {isTamed(v.packageName) && (
+                <Text style={s.tamedBadge}>
+                  🐾 Tamed — its trackers are force-blocked, the app still works.
+                </Text>
+              )}
             </View>
             <View style={s.cardRight}>
               <Text style={s.lastSeen}>{timeAgo(v.lastTs)}</Text>
@@ -378,6 +419,20 @@ export function ScopeReportScreen() {
                 </View>
               ))}
               {!receipts[v.packageName] && <ActivityIndicator size="small" color="#60a5fa" />}
+
+              {/* Tame — force-block this app's trackers, keep it working */}
+              {v.beyondScope > 0 && (
+                <TouchableOpacity
+                  style={[s.tameBtn, isTamed(v.packageName) && s.tameBtnOn]}
+                  onPress={() => toggleTame(v.packageName)}
+                >
+                  <Text style={[s.tameBtnText, isTamed(v.packageName) && s.tameBtnTextOn]}>
+                    {isTamed(v.packageName)
+                      ? '🐾 Tamed — tap to un-tame'
+                      : '🐾 Tame this app (block its trackers, keep it working)'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </TouchableOpacity>
@@ -567,6 +622,33 @@ const s = StyleSheet.create({
     borderRadius: 20,
   },
   shareBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  protector: {
+    backgroundColor: '#0a1f14',
+    borderWidth: 1,
+    borderColor: '#166534',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14,
+  },
+  protectorTitle: { color: '#4ade80', fontSize: 15, fontWeight: '800', marginBottom: 6 },
+  protectorBody: { color: '#a7f3d0', fontSize: 13, lineHeight: 19 },
+  protectorStrong: { color: '#4ade80', fontWeight: '800' },
+
+  tamedBadge: { color: '#5eead4', fontSize: 11, marginTop: 4, fontWeight: '700', lineHeight: 15 },
+  tameBtn: {
+    marginTop: 12,
+    backgroundColor: '#0c2a1a',
+    borderWidth: 1,
+    borderColor: '#166534',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  tameBtnOn: { backgroundColor: '#134e2e', borderColor: '#22c55e' },
+  tameBtnText: { color: '#86efac', fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  tameBtnTextOn: { color: '#4ade80' },
   trackedTag: { color: '#f59e0b', fontSize: 12, marginTop: 3 },
   cleanTag: { color: '#4ade80', fontSize: 12, marginTop: 3 },
   cardRight: { alignItems: 'flex-end' },

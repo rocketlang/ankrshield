@@ -301,6 +301,33 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
         promise.resolve(result);
     }
 
+    // ─── Tame — surgical per-app tracker block (functional domains keep working) ─
+
+    /** Tame an app: force-block its tracker domains even in passive mode. No rebuild
+     *  needed — only the block decision changes, not which apps route through the VPN. */
+    @ReactMethod
+    public void tameApp(String packageName, Promise promise) {
+        ShieldPrefs.setTamed(getReactApplicationContext(), packageName, true);
+        DnsVpnService.tamedPackages.add(packageName);
+        promise.resolve(null);
+    }
+
+    @ReactMethod
+    public void untameApp(String packageName, Promise promise) {
+        ShieldPrefs.setTamed(getReactApplicationContext(), packageName, false);
+        DnsVpnService.tamedPackages.remove(packageName);
+        promise.resolve(null);
+    }
+
+    @ReactMethod
+    public void getTamedApps(Promise promise) {
+        WritableArray result = new WritableNativeArray();
+        for (String pkg : ShieldPrefs.getTamed(getReactApplicationContext())) {
+            result.pushString(pkg);
+        }
+        promise.resolve(result);
+    }
+
     // ─── Scope ledger (ASCT-T2.1/T2.3) ───────────────────────────────────────
 
     /** Per-app rollups. Live ledger when VPN runs, read-only file otherwise. */
