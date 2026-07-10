@@ -40,6 +40,7 @@ import { DeviceHealthScreen } from './src/screens/DeviceHealthScreen';
 import { DpdpScanScreen } from './src/screens/DpdpScanScreen';
 import { FeatureRequestScreen } from './src/screens/FeatureRequestScreen';
 import { HelpScreen } from './src/screens/HelpScreen';
+import { HealthWitnessScreen } from './src/screens/HealthWitnessScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { iOSPermissionAuditScreen } from './src/screens/iOSPermissionAuditScreen';
 import { LinkScannerScreen } from './src/screens/LinkScannerScreen';
@@ -420,6 +421,15 @@ function App(): React.JSX.Element {
             name="Home"
             component={eb(HomeScreen, 'Home')}
             options={{ title: 'ankrshield' }}
+          />
+          <Stack.Screen
+            name="HealthWitness"
+            component={eb(HealthWitnessScreen, 'HealthWitness')}
+            options={{
+              title: 'Health Privacy',
+              headerStyle: { backgroundColor: '#0a0710' },
+              headerTintColor: '#f472b6',
+            }}
           />
           <Stack.Screen
             name="Dashboard"

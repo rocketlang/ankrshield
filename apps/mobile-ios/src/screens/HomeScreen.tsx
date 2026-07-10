@@ -55,6 +55,12 @@ const PROTECTION_TOOLS = [
   { icon: '🏥', name: 'Dev Health', desc: 'Security hygiene', route: 'DeviceHealth' },
   // Network & corporate
   { icon: '📊', name: 'Privacy Report', desc: 'Who tracked you, cited', route: 'ScopeReport' },
+  {
+    icon: '⌚',
+    name: 'Health Privacy',
+    desc: 'Is your watch leaking you?',
+    route: 'HealthWitness',
+  },
   { icon: '🔗', name: 'Network', desc: 'DNS tracker feed', route: 'NetworkBehavior' },
   { icon: '🏢', name: 'Corporate', desc: 'MDM enrollment', route: 'Mdm' },
   // iOS-only tiles (filtered at runtime)

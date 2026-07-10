@@ -1,6 +1,6 @@
 {
   "name": "@ankrshield/mobile-ios",
-  "version": "1.6.8",
+  "version": "1.6.9",
   "private": true,
   "description": "ankrshield mobile app for iOS (React Native)",
   "main": "index.js",
