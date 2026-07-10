@@ -6,7 +6,11 @@
  */
 
 /** Severity level assigned to a scanned app or an entire scan result. */
-export type SpyRiskLevel = 'clean' | 'suspicious' | 'high' | 'critical';
+// 'data_harvester' = known commercial data collection (legitimate apps the user
+// chose to install, e.g. PhonePe/WhatsApp). NOT a malware verdict — informational,
+// amber. 'suspicious' is reserved for unknown/unverified behaviour. This keeps the
+// scanner honest and avoids berating apps the user knowingly installed (FP-019).
+export type SpyRiskLevel = 'clean' | 'data_harvester' | 'suspicious' | 'high' | 'critical';
 
 /**
  * Behavioural/capability category describing *why* an app is dangerous.

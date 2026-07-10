@@ -95,8 +95,8 @@ android {
         applicationId 'com.ankr.shield'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 165
-        versionName "1.6.5"
+        versionCode 166
+        versionName "1.6.6"
 
         buildConfigField("boolean", "REACT_NATIVE_UNSTABLE_USE_RUNTIME_SCHEDULER_ALWAYS", (findProperty("reactNative.unstable_useRuntimeSchedulerAlways") ?: true).toString())
 

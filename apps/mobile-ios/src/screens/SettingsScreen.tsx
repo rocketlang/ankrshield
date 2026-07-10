@@ -58,6 +58,13 @@ export function SettingsScreen({ navigation }: any) {
   const [notifications, setNotifications] = useState(true);
   const [notifsLoading, setNotifsLoading] = useState(false);
   const [protectionMode, setProtectionModeState] = useState<ProtectionMode>('smart');
+  const [simpleMode, setSimpleMode] = useState(false);
+
+  useEffect(() => {
+    MdmStorage.getItem('@ankrshield/mode')
+      .then((m) => setSimpleMode(m !== 'tech')) // default is Simple
+      .catch(() => {});
+  }, []);
 
   function handleLangChange(lang: Lang) {
     setLanguage(lang);
@@ -215,6 +222,29 @@ export function SettingsScreen({ navigation }: any) {
 
   return (
     <ScrollView style={styles.container}>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Interface</Text>
+
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>Simple Mode</Text>
+            <Text style={styles.settingDescription}>
+              One-tap protection screen. Turn off for the full advanced toolset.
+            </Text>
+          </View>
+          <Switch
+            value={simpleMode}
+            onValueChange={async (v) => {
+              setSimpleMode(v);
+              await MdmStorage.setItem('@ankrshield/mode', v ? 'simple' : 'tech').catch(() => {});
+              if (v) {
+                navigation.navigate('Simple');
+              }
+            }}
+          />
+        </View>
+      </View>
+
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Protection</Text>
 

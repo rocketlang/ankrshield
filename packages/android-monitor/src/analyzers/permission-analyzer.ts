@@ -281,13 +281,61 @@ function deriveRiskLevel(
  * @param app - App permissions as reported by the device's PackageManager
  * @param knownMalicious - Whether the package name is in the IOC database
  */
+/**
+ * Well-known, user-installed commercial apps. Their broad data collection is a
+ * disclosed business model, not malware. They must NEVER be labelled 'suspicious'
+ * (that implies a threat) — at most 'data_harvester' (informational, amber).
+ * Berating an app the user knowingly installed breaks trust (FP-019).
+ */
+const KNOWN_COMMERCIAL_APPS = new Set<string>([
+  'com.truecaller',
+  'com.phonepe.app',
+  'net.one97.paytm',
+  'com.myairtelapp',
+  'com.whatsapp',
+  'com.whatsapp.w4b',
+  'com.instagram.android',
+  'com.facebook.katana',
+  'com.facebook.orca',
+  'com.axis.mobile',
+  'com.google.android.apps.nbu.paisa.user',
+  'in.amazon.mShop.android.shopping',
+  'com.amazon.mShop.android.shopping',
+  'com.flipkart.android',
+  'in.swiggy.android',
+  'com.application.zomato',
+  'com.google.android.youtube',
+  'com.google.android.gm',
+  'com.snapchat.android',
+  'com.linkedin.android',
+  'com.twitter.android',
+  'com.ubercab',
+  'com.olacabs.customer',
+  'com.dreamplug.androidapp',
+  'com.mobikwik_new',
+  'com.freecharge.android',
+  'in.org.npci.upiapp',
+  'com.sbi.lotusintouch',
+  'com.snapwork.hdfc',
+  'com.csam.icici.bank.imobile',
+  'com.msf.kbank.mobile',
+  'com.spotify.music',
+  'com.netflix.mediaclient',
+  'com.microsoft.office.outlook',
+  'com.zoho.mail',
+]);
+
+const HARVESTER_EDU =
+  'This app collects data by design — a disclosed part of its business model, not malware. Your choice to keep or remove it.';
+
 export function analyzePermissions(
   app: AppPermissions,
   knownMalicious = false
 ): PermissionAnalysisResult {
   const dangerousPerms = findDangerousPermissions(app.permissions);
 
-  // IOC match — always critical, regardless of source
+  // IOC match — always critical, regardless of source (a known-commercial name
+  // does NOT override a real IOC hit).
   if (knownMalicious) {
     return {
       riskLevel: 'critical',
@@ -308,13 +356,39 @@ export function analyzePermissions(
   // For 'play_store', 'other', and 'unknown' (API gap on Android 12+) we give
   // the benefit of the doubt and only flag extreme outliers (12+ perms).
   const isSideloaded = app.installSource === 'file_manager' || app.installSource === 'adb';
+  const isKnownCommercial = KNOWN_COMMERCIAL_APPS.has(app.packageName);
+
+  // Known-commercial apps: broad data access is disclosed, not malware. Surface
+  // as 'data_harvester' (amber, informational) if they hold notable data perms,
+  // else clean. Never 'suspicious'.
+  if (isKnownCommercial && !isSideloaded) {
+    if (dangerousPerms.length >= 5) {
+      return {
+        riskLevel: 'data_harvester',
+        categories: ['data_harvester'],
+        reasons: [
+          HARVESTER_EDU,
+          `Holds ${dangerousPerms.length} data permissions (${dangerousPerms.slice(0, 4).join(', ')}…).`,
+        ],
+        dangerousPerms,
+        confidence: Math.min(60, dangerousPerms.length * 5),
+      };
+    }
+    return { riskLevel: 'clean', categories: [], reasons: [], dangerousPerms, confidence: 0 };
+  }
 
   if (!isSideloaded) {
+    // A Play-Store / unknown-source app with unusually broad permissions is a
+    // data harvester (informational amber), NOT 'suspicious' (which implies a
+    // threat). Genuine malware is virtually never on the Play Store.
     if (dangerousPerms.length >= 12) {
       return {
-        riskLevel: 'suspicious',
+        riskLevel: 'data_harvester',
         categories: ['data_harvester'],
-        reasons: [`Holds ${dangerousPerms.length} sensitive permissions — unusually broad`],
+        reasons: [
+          HARVESTER_EDU,
+          `Holds ${dangerousPerms.length} sensitive permissions — unusually broad for its function.`,
+        ],
         dangerousPerms,
         confidence: Math.min(55, dangerousPerms.length * 4),
       };

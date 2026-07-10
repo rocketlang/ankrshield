@@ -68,22 +68,32 @@ export function ScopeReportScreen() {
   const [loading, setLoading] = useState(true);
   const [shieldOn, setShieldOn] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [quarantined, setQuarantined] = useState<{ pkg: string; name: string }[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [r, m, running] = await Promise.all([
+      const [r, m, running, qPkgs, installed] = await Promise.all([
         buildScopeReport(),
         vpnService.getMode(),
         vpnService.isRunning(),
+        vpnService.getQuarantinedApps(),
+        vpnService.getInstalledApps(),
       ]);
       setReport(r);
       setMode(m);
       setShieldOn(running);
+      const nameOf = (pkg: string) => installed.find((a) => a.packageName === pkg)?.appName ?? pkg;
+      setQuarantined(qPkgs.map((pkg) => ({ pkg, name: nameOf(pkg) })));
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const releaseQuarantine = async (pkg: string) => {
+    await vpnService.unquarantineApp(pkg);
+    setQuarantined((prev) => prev.filter((q) => q.pkg !== pkg));
+  };
 
   // The master switch: witnessing only runs while the DNS shield is on.
   const startShield = async () => {
@@ -171,6 +181,26 @@ export function ScopeReportScreen() {
             {starting ? 'Turning on…' : '⏸ Shield is off — witnessing paused. Tap to resume.'}
           </Text>
         </TouchableOpacity>
+      )}
+
+      {/* ── Quarantined apps — contained, releasable ─────────────── */}
+      {quarantined.length > 0 && (
+        <View style={s.quarantineCard}>
+          <Text style={s.quarantineTitle}>🔒 Quarantined — contained</Text>
+          <Text style={s.quarantineSub}>
+            Every network request from these apps is blocked, pending your decision.
+          </Text>
+          {quarantined.map((q) => (
+            <View key={q.pkg} style={s.quarantineRow}>
+              <Text style={s.quarantineApp} numberOfLines={1}>
+                {q.name}
+              </Text>
+              <TouchableOpacity style={s.releaseBtn} onPress={() => releaseQuarantine(q.pkg)}>
+                <Text style={s.releaseBtnText}>Release</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
       )}
 
       {/* ── Hero — the telling, calm ─────────────────────────────── */}
@@ -362,6 +392,33 @@ const s = StyleSheet.create({
     marginBottom: 12,
   },
   resumeText: { color: '#fbbf24', fontSize: 13, fontWeight: '600', textAlign: 'center' },
+
+  quarantineCard: {
+    backgroundColor: '#160808',
+    borderWidth: 1,
+    borderColor: '#7f1d1d',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+  },
+  quarantineTitle: { color: '#fca5a5', fontSize: 15, fontWeight: '800' },
+  quarantineSub: { color: '#94a3b8', fontSize: 12, marginTop: 3, marginBottom: 10, lineHeight: 17 },
+  quarantineRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 7,
+    borderTopWidth: 1,
+    borderTopColor: '#3f1414',
+  },
+  quarantineApp: { color: '#f1f5f9', fontSize: 14, fontWeight: '600', flex: 1, marginRight: 10 },
+  releaseBtn: {
+    backgroundColor: '#1e293b',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+  },
+  releaseBtnText: { color: '#93c5fd', fontSize: 13, fontWeight: '700' },
 
   hero: { alignItems: 'center', paddingVertical: 28 },
   heroLabel: {

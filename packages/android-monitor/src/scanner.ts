@@ -32,9 +32,10 @@ const randomUUID = (): string =>
 
 const RISK_ORDER: Record<SpyRiskLevel, number> = {
   clean: 0,
-  suspicious: 1,
-  high: 2,
-  critical: 3,
+  data_harvester: 1, // informational, ranks above clean but below any threat
+  suspicious: 2,
+  high: 3,
+  critical: 4,
 };
 
 function maxRisk(a: SpyRiskLevel, b: SpyRiskLevel): SpyRiskLevel {
@@ -53,22 +54,32 @@ function overallRisk(apps: SuspiciousApp[]): SpyRiskLevel {
 function buildSummary(result: Omit<AndroidScanResult, 'summary' | 'recommendations'>): string {
   const { suspiciousApps, totalAppsChecked, overallRiskLevel } = result;
 
-  if (suspiciousApps.length === 0) {
-    return `Scanned ${totalAppsChecked} apps — no spyware or stalkerware detected.`;
-  }
-
   const critical = suspiciousApps.filter((a) => a.riskLevel === 'critical').length;
   const high = suspiciousApps.filter((a) => a.riskLevel === 'high').length;
+  const suspicious = suspiciousApps.filter((a) => a.riskLevel === 'suspicious').length;
+  const harvesters = suspiciousApps.filter((a) => a.riskLevel === 'data_harvester').length;
+  const threats = critical + high + suspicious;
+
+  // No genuine threats — only known data collectors, framed calmly (not "flagged").
+  if (threats === 0) {
+    if (harvesters === 0) {
+      return `Scanned ${totalAppsChecked} apps — no spyware or stalkerware detected.`;
+    }
+    return (
+      `Scanned ${totalAppsChecked} apps — no threats. ${harvesters} app${harvesters === 1 ? '' : 's'} ` +
+      `collect data by design (a disclosed business model, not malware).`
+    );
+  }
 
   const parts: string[] = [];
   if (critical > 0) parts.push(`${critical} critical`);
   if (high > 0) parts.push(`${high} high-risk`);
-  const remaining = suspiciousApps.length - critical - high;
-  if (remaining > 0) parts.push(`${remaining} suspicious`);
+  if (suspicious > 0) parts.push(`${suspicious} suspicious`);
+  if (harvesters > 0) parts.push(`${harvesters} data collector${harvesters === 1 ? '' : 's'}`);
 
   return (
-    `Scanned ${totalAppsChecked} apps — found ${suspiciousApps.length} flagged ` +
-    `(${parts.join(', ')}). Overall risk: ${overallRiskLevel.toUpperCase()}.`
+    `Scanned ${totalAppsChecked} apps — found ${threats} to review ` +
+    `(${parts.join(', ')}). Overall: ${overallRiskLevel.toUpperCase()}.`
   );
 }
 

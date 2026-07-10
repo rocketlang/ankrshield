@@ -41,6 +41,7 @@ const RISK_COLORS: Record<SpyRiskLevel, string> = {
   critical: '#ef4444',
   high: '#f97316',
   suspicious: '#eab308',
+  data_harvester: '#f59e0b', // amber — informational, not a threat
   clean: '#22c55e',
 };
 
@@ -48,6 +49,7 @@ const RISK_BG: Record<SpyRiskLevel, string> = {
   critical: '#450a0a',
   high: '#431407',
   suspicious: '#422006',
+  data_harvester: '#3b2708',
   clean: '#052e16',
 };
 
@@ -55,10 +57,15 @@ const RISK_ORDER: Record<SpyRiskLevel, number> = {
   critical: 0,
   high: 1,
   suspicious: 2,
-  clean: 3,
+  data_harvester: 3,
+  clean: 4,
 };
 
 function riskLabel(level: SpyRiskLevel): string {
+  // 'data_harvester' reads as a calm label, not an alarm.
+  if (level === 'data_harvester') {
+    return 'DATA COLLECTOR';
+  }
   return level.toUpperCase();
 }
 
@@ -81,7 +88,9 @@ function AppCard({ app, isTop3 }: { app: SuspiciousApp; isTop3: boolean }) {
   const color = RISK_COLORS[app.riskLevel];
 
   const handleOpenSettings = useCallback(async () => {
-    if (Platform.OS !== 'android' || !AppScanner) return;
+    if (Platform.OS !== 'android' || !AppScanner) {
+      return;
+    }
     try {
       await AppScanner.openAppSettings(app.packageName);
     } catch {
@@ -90,7 +99,9 @@ function AppCard({ app, isTop3 }: { app: SuspiciousApp; isTop3: boolean }) {
   }, [app.packageName]);
 
   const handleUninstall = useCallback(() => {
-    if (Platform.OS !== 'android' || !AppScanner) return;
+    if (Platform.OS !== 'android' || !AppScanner) {
+      return;
+    }
     Alert.alert(
       'Uninstall App',
       `Remove "${app.appName}" from your device?\n\nAndroid will ask you to confirm.`,
@@ -306,7 +317,9 @@ export function AndroidMonitorScreen() {
   }, []);
 
   const shareReport = useCallback(async () => {
-    if (!result) return;
+    if (!result) {
+      return;
+    }
     const lines: string[] = [
       'ANKR Shield — Android App Scan Report',
       `Scanned: ${result.scannedAt.toLocaleString()}`,
