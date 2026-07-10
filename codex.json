@@ -1,7 +1,7 @@
 {
   "service": "xshieldai",
   "domain": "xshieldai.com",
-  "_products": "Two brand surfaces, one codebase, one API server. Feature-gated by subscription tier. xShieldAI = corporate DRP (xshieldai.com, LIVE port 4250) — this is the only HELD/REGISTERED domain. AnkrShield = pre-launch consumer brand surface; ankrshield.com is NOT registered/held (founder confirmed 2026-05-18). Top-level service/domain reflect the live brand; nested `ankrshield_consumer` block remains for the pre-launch consumer product roadmap.",
+  "_products": "Two brand surfaces, one codebase, one API server. Feature-gated by subscription tier. xShieldAI = corporate DRP (xshieldai.com, LIVE port 4250) \u2014 this is the only HELD/REGISTERED domain. AnkrShield = pre-launch consumer brand surface; ankrshield.com is NOT registered/held (founder confirmed 2026-05-18). Top-level service/domain reflect the live brand; nested `ankrshield_consumer` block remains for the pre-launch consumer product roadmap.",
   "can_answer": [
     "What is the threat risk score for this domain?",
     "Is this IP associated with known C2 infrastructure?",
@@ -14,7 +14,7 @@
     "What trackers are blocking my browser?",
     "What exposed secrets exist in this GitHub repository?"
   ],
-  "_can_answer_note": "Top-level can_answer is the UNION across both brands. Per-brand specifics live in the nested sub-block can_answer arrays. Dual-product structure is intentional — same engine serves personal-grade AnkrShield and corporate xShieldAI via feature-gated subscription tiers.",
+  "_can_answer_note": "Top-level can_answer is the UNION across both brands. Per-brand specifics live in the nested sub-block can_answer arrays. Dual-product structure is intentional \u2014 same engine serves personal-grade AnkrShield and corporate xShieldAI via feature-gated subscription tiers.",
   "req_mask": 16777408,
   "req_mask_schema": "ankr-req-32bit-v1",
   "req_mask_source": "derived",
@@ -27,8 +27,8 @@
     "domain": "xshieldai.com",
     "domains": ["xshieldai.com", "www.xshieldai.com", "shield.ankr.in"],
     "description": "Enterprise Digital Risk Protection (DRP). Domain risk scanning, 13-source threat intel, AI Warrior (Claude Sonnet 4.6), spyware detection, GitHub Action CI/CD gate.",
-    "target_audience": "Security teams, SMEs, DevOps engineers — priced out of Resecurity ($15K-$50K/yr)",
-    "status": "LIVE — production, Cloudflare + nginx",
+    "target_audience": "Security teams, SMEs, DevOps engineers \u2014 priced out of Resecurity ($15K-$50K/yr)",
+    "status": "LIVE \u2014 production, Cloudflare + nginx",
     "competitors": ["Resecurity", "Recorded Future", "ZeroFox"],
     "pricing": "$0 (10 scans/month) | $99/month (500 scans) | $499/month (unlimited) | Enterprise custom",
     "infra_layer": "ankrshield-api (port 4480)",
@@ -72,7 +72,7 @@
       "xshield.brand.impersonation_found"
     ],
     "auth": "X-API-Key header (tier-gated) or Bearer JWT. Free tier: IP-based, 5 domains/day.",
-    "github_action": "ankrlabs/xshield-scan — fail CI pipelines on high risk score",
+    "github_action": "ankrlabs/xshield-scan \u2014 fail CI pipelines on high risk score",
     "capability_audit": {
       "domain_risk_scan": {
         "status": "built",
@@ -98,7 +98,7 @@
             "path": "/risk/score?domain=X",
             "body": [],
             "returns": "{ domain, score: 0-100, level: MINIMAL|LOW|MEDIUM|HIGH|CRITICAL, categories, lastSeen, serverIp }",
-            "auth": "optional — free tier IP-limited"
+            "auth": "optional \u2014 free tier IP-limited"
           },
           "report": {
             "method": "GET",
@@ -318,7 +318,7 @@
       },
       "dns_audit": {
         "status": "built",
-        "what": "Full DNS security posture — SPF, DMARC, DNSSEC, CAA, MX.",
+        "what": "Full DNS security posture \u2014 SPF, DMARC, DNSSEC, CAA, MX.",
         "routes": {
           "lookup": {
             "method": "GET",
@@ -416,13 +416,13 @@
             "method": "POST",
             "path": "/billing/webhook",
             "body": [],
-            "returns": "Stripe webhook handler — checkout, subscription, invoice"
+            "returns": "Stripe webhook handler \u2014 checkout, subscription, invoice"
           }
         }
       },
       "apk_download": {
         "status": "built",
-        "what": "AnkrShield Android APK — production and debug builds.",
+        "what": "AnkrShield Android APK \u2014 production and debug builds.",
         "routes": {
           "prod": {
             "method": "GET",
@@ -445,13 +445,13 @@
     "service_key": "ankrshield-consumer",
     "product_name": "AnkrShield",
     "domain": "ankrshield.com",
-    "status": "PRE-LAUNCH — MVP 95%. APK built. Domain not live.",
-    "target_audience": "Individual privacy advocates — personal devices, families",
+    "status": "PRE-LAUNCH \u2014 MVP 95%. APK built. Domain not live.",
+    "target_audience": "Individual privacy advocates \u2014 personal devices, families",
     "pricing": "$0 (free) | $9.99/month Pro (VPN, 10 devices) | $49/user/month Enterprise",
     "competitors": ["Little Snitch ($45)", "Ghostery (free)", "Pi-hole (free)", "Mullvad VPN"],
     "what_exists": {
-      "android_apk": "v1.3.3 — built, signed, downloadable at /download/ankrshield.apk",
-      "desktop_app": "Electron — app builds + ships installers (DEB/RPM/ZIP linux verified 2026-05-18). aegis-proxy subsystem P1 + P2 COMPLETE (ASD-T-001..022 + T-002b): TLS-terminating LLM proxy on 127.0.0.1:4857, Anthropic+OpenAI observers, per-app identifier, privacy-engine chain, AgentFeed UI, CA install consent ceremony, AEGIS lite gate, PII boundary (request + streaming SSE response, Anthropic + OpenAI rewriters), per-app hourly budget governor + BudgetPanel, TOFU consent dialog with mandatory budget entry, DAN gate with OS notification + WhatsApp + Telegram carriers (OS keychain credentials, configurable timeout [15s, 120s]), ConsentDialog first-class component (FR-21, PRAMANA records on impression + decision), AEGIS latency monitor (NFR-1 p99 < 50ms tile). 395 unit tests + 4 e2e smokes green. P2 exit verification: 5 PASS / 0 FAIL / 2 MANUAL (runtime 1000-sample NFR-1 verification + cross-platform installer build remain on workstation/CI). See ankrshield-desktop-aegis--deep-knowledge--formal--2026-05-18.md (P2 session note) and ankrshield-desktop-aegis--p2-exit-report--formal--2026-05-18.md.",
+      "android_apk": "v1.7.3 \u2014 built, signed (E2:E6:D1), live at xshieldai.com/download. Adds Caught-in-the-Act (background-exfil witness, screen-off) + Clipboard Hygiene (auto-clear copied OTP/UPI). Scope-transparency Privacy Report shipped.",
+      "desktop_app": "Electron \u2014 app builds + ships installers (DEB/RPM/ZIP linux verified 2026-05-18). aegis-proxy subsystem P1 + P2 COMPLETE (ASD-T-001..022 + T-002b): TLS-terminating LLM proxy on 127.0.0.1:4857, Anthropic+OpenAI observers, per-app identifier, privacy-engine chain, AgentFeed UI, CA install consent ceremony, AEGIS lite gate, PII boundary (request + streaming SSE response, Anthropic + OpenAI rewriters), per-app hourly budget governor + BudgetPanel, TOFU consent dialog with mandatory budget entry, DAN gate with OS notification + WhatsApp + Telegram carriers (OS keychain credentials, configurable timeout [15s, 120s]), ConsentDialog first-class component (FR-21, PRAMANA records on impression + decision), AEGIS latency monitor (NFR-1 p99 < 50ms tile). 395 unit tests + 4 e2e smokes green. P2 exit verification: 5 PASS / 0 FAIL / 2 MANUAL (runtime 1000-sample NFR-1 verification + cross-platform installer build remain on workstation/CI). See ankrshield-desktop-aegis--deep-knowledge--formal--2026-05-18.md (P2 session note) and ankrshield-desktop-aegis--p2-exit-report--formal--2026-05-18.md.",
       "api_server": "Shares main API server with xShieldAI (feature-gated by tier)",
       "landing_page": "partial"
     },
@@ -473,7 +473,13 @@
       "LLM_API_INTERCEPTION_LOCAL",
       "AGENTIC_OBSERVATION",
       "PROVIDER_TOKEN_USAGE_EXTRACTION",
-      "PER_APP_IDENTIFIER"
+      "PER_APP_IDENTIFIER",
+      "SCOPE_TRANSPARENCY",
+      "CAUGHT_IN_ACT_WITNESS",
+      "CLIPBOARD_HYGIENE",
+      "UPI_GUARD",
+      "HEALTH_PRIVACY_WITNESS",
+      "NETWORK_QUARANTINE"
     ],
     "capability_audit": {
       "device_management": {
@@ -590,7 +596,7 @@
             "method": "DELETE",
             "path": "/account",
             "body": [],
-            "returns": "{ ok } — full erasure"
+            "returns": "{ ok } \u2014 full erasure"
           }
         }
       },
@@ -598,11 +604,11 @@
       "agentic_safeguard": {
         "status": "built",
         "what": "Local TLS-terminating LLM proxy + observation pipeline + named-consent CA ceremony. P1 = observe only; no enforcement (P2). All processing in single Electron main process. No telemetry leaves the device.",
-        "scope_phase": "P1 (Proxy + Observe) — 11 of 12 P1 tasks shipped 2026-05-18",
+        "scope_phase": "P1 (Proxy + Observe) \u2014 11 of 12 P1 tasks shipped 2026-05-18",
         "local_endpoint": {
           "bind": "127.0.0.1:4857",
           "loopback_only": true,
-          "rule": "ASD-001 (non-loopback bind → fatal exit 78)",
+          "rule": "ASD-001 (non-loopback bind \u2192 fatal exit 78)",
           "ports_json": "security.ankrshield_desktop_aegis_proxy = 4857"
         },
         "trust_anchor": {
@@ -667,7 +673,7 @@
           "linux": "ss -Htnp src/dst loopback filter; parses users:((name,pid=N,fd=N))",
           "macos": "lsof -iTCP:<port> -P -n -F pcn",
           "windows": "netstat -ano + tasklist /FI 'PID eq <pid>' /FO CSV",
-          "normalisation": "claude→claude-desktop, cursor→cursor, code→vscode, python3→python, etc.",
+          "normalisation": "claude\u2192claude-desktop, cursor\u2192cursor, code\u2192vscode, python3\u2192python, etc.",
           "model": "guidance not security (ASD-YK-005); spoofable; surfaces as UI label",
           "module": "apps/desktop/src/main/aegis-proxy/app-identifier.ts"
         },
@@ -675,7 +681,7 @@
           "apps_json": {
             "path": "~/.ankrshield/apps.json",
             "schema": "{ [appId]: { first_seen, last_seen, request_count, executables[] } }",
-            "scope_p1": "observe-only — TOFU consent dialog reading this is P2 (ASD-T-015)",
+            "scope_p1": "observe-only \u2014 TOFU consent dialog reading this is P2 (ASD-T-015)",
             "module": "apps/desktop/src/main/aegis-proxy/apps-store.ts"
           },
           "audit_dir": {
@@ -688,7 +694,7 @@
         },
         "ipc_channels": {
           "aegis-proxy-event": {
-            "direction": "main → renderer (broadcast)",
+            "direction": "main \u2192 renderer (broadcast)",
             "event_kinds": [
               "request.observed",
               "response.observed",
@@ -699,11 +705,11 @@
             "renderer_consumer": "/agents AgentFeed route"
           },
           "aegis-proxy:get-root-ca-setup-info": {
-            "direction": "renderer → main (invoke)",
+            "direction": "renderer \u2192 main (invoke)",
             "returns": "{ ca, trustStore, consent } for the SetupRootCA ceremony"
           },
           "aegis-proxy:root-ca-consent": {
-            "direction": "renderer → main (invoke)",
+            "direction": "renderer \u2192 main (invoke)",
             "input": "{ decision: 'allow'|'deny'|'skip' }",
             "side_effect": "writes PRAMANA consent record; on allow runs @vscode/sudo-prompt install"
           }
@@ -724,30 +730,30 @@
         ],
         "privacy_engine_chain": {
           "function": "isHostBlocked() runs BEFORE leaf-cert mint in both HTTP forward + HTTPS CONNECT paths",
-          "failure_mode": "fail-open if isBlocked() throws — privacy engine outage must not break all LLM traffic",
+          "failure_mode": "fail-open if isBlocked() throws \u2014 privacy engine outage must not break all LLM traffic",
           "wiring": "main/index.ts pulls dnsService.isBlocked from serviceManager and passes into startAegisProxy",
           "rule": "ASD-010, INF-ASD-009"
         },
         "dependencies": {
-          "@xshieldai/aegis": "^2.2.0 (lite-mode SDK — vendored at apps/desktop/src/main/aegis-proxy/aegis-lite-vendored.ts because upstream ships .ts source only; npm dep installed for forward path)",
+          "@xshieldai/aegis": "^2.2.0 (lite-mode SDK \u2014 vendored at apps/desktop/src/main/aegis-proxy/aegis-lite-vendored.ts because upstream ships .ts source only; npm dep installed for forward path)",
           "@xshieldai/aegis (vendored)": "apps/desktop/src/main/aegis-proxy/aegis-lite-vendored.ts (P2 ASD-T-012)",
           "@xshieldai/aegis (gate wrapper)": "apps/desktop/src/main/aegis-proxy/aegis-gate.ts (P2 ASD-T-012)",
-          "pii-boundary": "apps/desktop/src/main/aegis-proxy/pii-boundary.ts (own module, P2 ASD-T-013) — pure-regex per-request PII scanner for Indian (Aadhaar/PAN/UPI) + Western (SSN/email/phone) patterns. Replaces the original mis-named @rocketlang/lakshmanrekha reference; see vivechana Part 2.",
+          "pii-boundary": "apps/desktop/src/main/aegis-proxy/pii-boundary.ts (own module, P2 ASD-T-013) \u2014 pure-regex per-request PII scanner for Indian (Aadhaar/PAN/UPI) + Western (SSN/email/phone) patterns. Replaces the original mis-named @rocketlang/lakshmanrekha reference; see vivechana Part 2.",
           "@rocketlang/hanumang-mandate": "P3 dep for report card",
           "node-forge": "^1.3.1 (cert gen)",
           "@types/node-forge": "^1.3.11",
           "@napi-rs/keyring": "^1.1.5 (OS keychain)",
           "@vscode/sudo-prompt": "^9.3.1 (elevated CA install)"
         },
-        "rules_seeded": "ASD-001..012 (SHASTRA), ASD-YK-001..007 (YUKTI), INF-ASD-001..010 (VIVEKA) — see ankrshield-desktop-aegis--logics--formal--2026-05-18.md; imported to SuperDomain 2026-05-18",
+        "rules_seeded": "ASD-001..012 (SHASTRA), ASD-YK-001..007 (YUKTI), INF-ASD-001..010 (VIVEKA) \u2014 see ankrshield-desktop-aegis--logics--formal--2026-05-18.md; imported to SuperDomain 2026-05-18",
         "test_coverage": {
           "unit_tests_passing": 123,
           "test_files": 12,
           "live_smokes_passed": [
-            "TLS termination end-to-end via curl→example.com (4/4)",
+            "TLS termination end-to-end via curl\u2192example.com (4/4)",
             "CA generator + keychain round-trip (7/7)",
             "Per-app identifier resolved this node process via live ss",
-            "Privacy block path (raw socket: tracker.fake → 403 + ASD-010 marker + event)"
+            "Privacy block path (raw socket: tracker.fake \u2192 403 + ASD-010 marker + event)"
           ]
         },
         "deferred_to_p2": [
@@ -760,27 +766,27 @@
         ],
         "deferred_to_p3": [
           "HanumanG report card (ASD-T-024, T-025)",
-          "Kill switch UI + IPC ≤ 1s (ASD-T-026, T-027)",
+          "Kill switch UI + IPC \u2264 1s (ASD-T-026, T-027)",
           "Audit retention worker 90d default + weekly digest (ASD-T-028)",
           "Audit export ZIP by date range (ASD-T-029)",
           "24h replay UI (ASD-T-030)",
           "Didactic mode (ASD-T-031, T-032)"
         ],
         "known_gaps": [
-          "asar packaging disabled — re-enable after esbuild-bundling main.ts (ASD-T-040)",
-          "macOS + Windows auto-install of root CA — stubs surface manual command (P2)",
-          "HTTP/2 upstream — ALPN restricted to http/1.1; needs http2 module wiring",
-          "Real Claude Desktop + Cursor smoke — ASD-T-010 (founder live-test, only possible on a workstation)"
+          "asar packaging disabled \u2014 re-enable after esbuild-bundling main.ts (ASD-T-040)",
+          "macOS + Windows auto-install of root CA \u2014 stubs surface manual command (P2)",
+          "HTTP/2 upstream \u2014 ALPN restricted to http/1.1; needs http2 module wiring",
+          "Real Claude Desktop + Cursor smoke \u2014 ASD-T-010 (founder live-test, only possible on a workstation)"
         ],
         "p1_commits": [
-          "0649a1a — G1-flipped OSS restore",
-          "fc4a413 — ASD-T-002 root CA",
-          "fed1821 — ASD-T-002b TLS termination",
-          "3ddc9a7 — ASD-T-004 + T-005 observers",
-          "246a2f1 — ASD-T-008 AgentFeed",
-          "da48bba — ASD-T-006 + T-007 identifier + apps.json",
-          "cb8c228 — ASD-T-009 privacy-engine chain",
-          "5c66465 — ASD-T-003 CA install ceremony"
+          "0649a1a \u2014 G1-flipped OSS restore",
+          "fc4a413 \u2014 ASD-T-002 root CA",
+          "fed1821 \u2014 ASD-T-002b TLS termination",
+          "3ddc9a7 \u2014 ASD-T-004 + T-005 observers",
+          "246a2f1 \u2014 ASD-T-008 AgentFeed",
+          "da48bba \u2014 ASD-T-006 + T-007 identifier + apps.json",
+          "cb8c228 \u2014 ASD-T-009 privacy-engine chain",
+          "5c66465 \u2014 ASD-T-003 CA install ceremony"
         ],
         "last_audited": "2026-05-18",
         "future_uses": {
@@ -796,18 +802,21 @@
         ]
       }
     },
-    "last_audited": "2026-05-18"
+    "last_audited": "2026-07-10",
+    "capability_nodes": ["ankrshield-caught-in-the-act", "ankrshield-scope-transparency"]
   },
   "claw_mask": 42092,
   "claw_mask_schema": "claw-design-16bit-v1",
   "claw_mask_note": "7/16: 2,3,5,6,10,13,15. +Bit2: limit capped in watch alerts (min(limit,200)) main.ts:2239. +Bit3: /health main.ts:392. +Bit5: addHook(onRequest) main.ts:519. +Bit6: no force:true. +Bit10: rateLimit plugin main.ts:2484+. +Bit13: SSE device stream main.ts:1142. +Bit15: pnpm monorepo. Bit0: no top-level can_answer (nested per-brand). Bit7: @rule=0. Bit8: no Forja. Audit 2026-04-05.",
   "claude_ankr_mask": 2,
-  "claude_ankr_mask_note": "CA-001 no overflow escape ❌ CA-002 no force:true ✅ CA-003 no Forja SENSE ❌ CA-004 no duration_ms ❌ CA-005 AI narrative no human-edit path ❌",
+  "claude_ankr_mask_note": "CA-001 no overflow escape \u274c CA-002 no force:true \u2705 CA-003 no Forja SENSE \u274c CA-004 no duration_ms \u274c CA-005 AI narrative no human-edit path \u274c",
   "gap_classification": {
     "schema": "ankr-gap-class-v1",
     "cgin_gaps": [1, 4, 8, 11],
     "structural_gaps": [0, 7, 9, 12, 14],
-    "note": "cgin_gaps: no customer impact — platform intelligence backlog. structural_gaps: prioritise before external exposure."
+    "note": "cgin_gaps: no customer impact \u2014 platform intelligence backlog. structural_gaps: prioritise before external exposure."
   },
-  "k_mask": 255
+  "k_mask": 255,
+  "trust_mask": 3,
+  "trust_mask_schema": "ankr-32bit-v1"
 }
