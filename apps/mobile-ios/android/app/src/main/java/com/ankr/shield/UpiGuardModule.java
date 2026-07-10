@@ -131,24 +131,35 @@ public class UpiGuardModule extends ReactContextBaseJavaModule {
                 return;
             }
 
-            if (!normalised.startsWith("upi://")) {
-                normalised = "upi://" + normalised.replaceFirst("^upi:", "");
+            // A raw VPA typed/pasted directly (e.g. "7506926394@okaxis") is a valid
+            // payment DESTINATION, not a URI — it must be validated as a VPA, never
+            // flagged for a missing pa= parameter (that was a false "Do Not Pay").
+            boolean rawVpa = !normalised.toLowerCase().startsWith("upi:")
+                             && !normalised.contains("?")
+                             && VPA_PATTERN.matcher(normalised).matches();
+
+            if (rawVpa) {
+                vpa = normalised; // validated below by the same VPA/handle checks
+            } else {
+                if (!normalised.startsWith("upi://")) {
+                    normalised = "upi://" + normalised.replaceFirst("^upi:", "");
+                }
+                try {
+                    Uri uri = Uri.parse(normalised);
+                    vpa       = nullToEmpty(uri.getQueryParameter("pa"));
+                    payeeName = nullToEmpty(uri.getQueryParameter("pn"));
+                    amount    = nullToEmpty(uri.getQueryParameter("am"));
+                    currency  = nullToEmpty(uri.getQueryParameter("cu"));
+                    note      = nullToEmpty(uri.getQueryParameter("tn"));
+                    mc        = nullToEmpty(uri.getQueryParameter("mc"));
+                    if (currency.isEmpty()) currency = "INR";
+                } catch (Exception e) {
+                    flags.pushString("Could not parse UPI URI — may be malformed");
+                }
             }
 
-            try {
-                Uri uri = Uri.parse(normalised);
-                vpa       = nullToEmpty(uri.getQueryParameter("pa"));
-                payeeName = nullToEmpty(uri.getQueryParameter("pn"));
-                amount    = nullToEmpty(uri.getQueryParameter("am"));
-                currency  = nullToEmpty(uri.getQueryParameter("cu"));
-                note      = nullToEmpty(uri.getQueryParameter("tn"));
-                mc        = nullToEmpty(uri.getQueryParameter("mc"));
-                if (currency.isEmpty()) currency = "INR";
-            } catch (Exception e) {
-                flags.pushString("Could not parse UPI URI — may be malformed");
-            }
-
-            result.putBoolean("isUpiUri", true);
+            result.putBoolean("isUpiUri", !rawVpa);
+            result.putBoolean("isRawVpa", rawVpa);
             result.putString("vpa", vpa);
             result.putString("payeeName", payeeName);
             result.putString("amount", amount);
