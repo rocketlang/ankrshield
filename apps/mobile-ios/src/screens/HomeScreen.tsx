@@ -17,7 +17,6 @@ import {
 
 import { PrivacyScoreCircle } from '../components/PrivacyScoreCircle';
 import { SafeZoneMeter } from '../components/SafeZoneMeter';
-import { StatsCard } from '../components/StatsCard';
 import { MdmStorage } from '../mdm/storage';
 import { startBlocklistSync, getBlocklistStats } from '../services/ioc-sync';
 import { PrivacyService } from '../services/PrivacyService';
@@ -204,7 +203,6 @@ const DEFAULT_VPN: VpnStats = {
 export function HomeScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [score, setScore] = useState<any>(null);
-  const [stats, setStats] = useState<any>(null);
   const [vpnStats, setVpnStats] = useState<VpnStats>(DEFAULT_VPN);
   const [dnsPaused, setDnsPaused] = useState(false);
   const [pauseUntilMs, setPauseUntilMs] = useState(0);
@@ -419,14 +417,12 @@ export function HomeScreen({ navigation }: any) {
   async function loadData() {
     try {
       const privacyService = new PrivacyService();
-      const [scoreData, statsData, vpnData] = await Promise.all([
+      const [scoreData, vpnData] = await Promise.all([
         privacyService.getPrivacyScore(),
-        privacyService.getStats(),
         vpnService.getStats().catch(() => DEFAULT_VPN),
       ]);
 
       setScore(scoreData);
-      setStats(statsData);
       setVpnStats(vpnData);
       setLoading(false);
     } catch (error) {
@@ -693,23 +689,6 @@ export function HomeScreen({ navigation }: any) {
               </>
             )}
           </View>
-        </View>
-      )}
-
-      {stats && (
-        <View style={styles.statsGrid}>
-          <StatsCard
-            label="Trackers Blocked"
-            value={vpnStats.running ? vpnStats.blockedCount : stats.trackersBlocked}
-            color="#4CAF50"
-          />
-          <StatsCard label="Total Connections" value={stats.totalConnections} color="#2196F3" />
-          <StatsCard
-            label="DNS Queries"
-            value={vpnStats.running ? vpnStats.totalQueries : stats.dnsQueries}
-            color="#9C27B0"
-          />
-          <StatsCard label="Active Connections" value={stats.activeConnections} color="#FF9800" />
         </View>
       )}
 
@@ -1132,12 +1111,6 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontSize: 11,
     marginTop: 4,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    padding: 16,
-    gap: 16,
   },
   actions: {
     padding: 16,
