@@ -40,6 +40,7 @@ final class ShieldPrefs {
     private static final String KEY_MODE       = "shield_mode";
     private static final String KEY_QUARANTINE = "quarantine_set";
     private static final String KEY_TAMED      = "tamed_set";
+    private static final String KEY_ALLOW      = "allow_domains";
     private static final String KEY_CLIP_HYG   = "clipboard_hygiene";
 
     private ShieldPrefs() {}
@@ -142,6 +143,23 @@ final class ShieldPrefs {
         Set<String> t = getTamed(ctx);
         if (tamed) t.add(pkg); else t.remove(pkg);
         prefs(ctx).edit().putStringSet(KEY_TAMED, t).apply();
+    }
+
+    // ── User allowlist (never-block domains) ─────────────────────────────────
+    // Domains the user tapped "always allow" on from the Live DNS feed. Stored as
+    // bare suffixes (e.g. "auth0.com"); the VPN never NXDOMAINs a match, even if
+    // the tracker DB flags it. Cures false-positives that broke AI/other apps.
+
+    static Set<String> getAllowDomains(Context ctx) {
+        return new HashSet<>(prefs(ctx).getStringSet(KEY_ALLOW, Collections.emptySet()));
+    }
+
+    static void setAllowDomain(Context ctx, String domain, boolean allow) {
+        if (domain == null || domain.trim().isEmpty()) return;
+        String d = domain.trim().toLowerCase();
+        Set<String> a = getAllowDomains(ctx);
+        if (allow) a.add(d); else a.remove(d);
+        prefs(ctx).edit().putStringSet(KEY_ALLOW, a).apply();
     }
 
     /** Effective set the VPN should exclude, given the current mode. */

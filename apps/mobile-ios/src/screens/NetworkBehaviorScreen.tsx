@@ -14,9 +14,17 @@ import {
   NativeEventEmitter,
   NativeModules,
   Platform,
+  Alert,
 } from 'react-native';
 
 import { getBlocklistStats } from '../services/ioc-sync';
+import { vpnService } from '../services/VpnService';
+
+/** Reduce a hostname to the domain worth allowing (last two labels, e.g. api.x.com → x.com). */
+function baseDomain(host: string): string {
+  const parts = host.replace(/\.$/, '').split('.');
+  return parts.length <= 2 ? host : parts.slice(-2).join('.');
+}
 
 const { DnsVpn } = NativeModules;
 
@@ -131,7 +139,35 @@ export function NetworkBehaviorScreen() {
   const [stats, setStats] = useState<VpnStats>({ total: 0, blocked: 0, running: false });
   const [filter, setFilter] = useState<FilterMode>('all');
   const [syncStats, setSyncStats] = useState(getBlocklistStats());
+  const [allowed, setAllowed] = useState<Set<string>>(new Set());
   const idRef = useRef(0);
+
+  // Load the user's existing "always allow" domains so their rows don't offer Allow again.
+  useEffect(() => {
+    vpnService
+      .getAllowedDomains()
+      .then((list) => setAllowed(new Set(list)))
+      .catch(() => {});
+  }, []);
+
+  // Tap "Allow" on a blocked row → never block that domain again (persists across upgrades).
+  const handleAllow = useCallback((rawDomain: string) => {
+    const dom = baseDomain(rawDomain);
+    Alert.alert(
+      'Always allow this domain?',
+      `${dom} will no longer be blocked, even if it's flagged as a tracker. Use this to fix an app (like an AI assistant) that stops working under the shield.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Allow ${dom}`,
+          onPress: async () => {
+            await vpnService.allowDomain(dom).catch(() => {});
+            setAllowed((prev) => new Set(prev).add(dom));
+          },
+        },
+      ]
+    );
+  }, []);
 
   const refreshStats = useCallback(() => {
     if (Platform.OS !== 'android' || !DnsVpn) {
@@ -188,38 +224,49 @@ export function NetworkBehaviorScreen() {
         ? events.filter((e) => e.blocked)
         : events.filter((e) => !e.blocked);
 
-  const renderItem = useCallback(({ item }: { item: DnsEvent }) => {
-    // Prefer kernel-attributed requester (truth) over the domain-owner guess
-    const app = item.app || domainToApp(item.domain);
-    const cc = catColor(item.category);
-    return (
-      <View style={[s.row, item.blocked && s.rowBlocked]}>
-        <View style={s.rowLeft}>
-          {app && <Text style={s.rowApp}>{app}</Text>}
-          <Text style={[s.rowDomain, item.blocked && s.rowDomainBlocked]} numberOfLines={1}>
-            {item.domain}
-          </Text>
-          {item.category !== 'clean' && (
-            <View style={[s.catBadge, { borderColor: cc }]}>
-              <Text style={[s.catText, { color: cc }]}>{item.category}</Text>
-            </View>
-          )}
-        </View>
-        <View style={s.rowRight}>
-          <View style={[s.verdictPill, item.blocked ? s.verdictBlock : s.verdictAllow]}>
-            <Text style={s.verdictText}>{item.blocked ? 'BLOCKED' : 'ALLOWED'}</Text>
+  const renderItem = useCallback(
+    ({ item }: { item: DnsEvent }) => {
+      // Prefer kernel-attributed requester (truth) over the domain-owner guess
+      const app = item.app || domainToApp(item.domain);
+      const cc = catColor(item.category);
+      return (
+        <View style={[s.row, item.blocked && s.rowBlocked]}>
+          <View style={s.rowLeft}>
+            {app && <Text style={s.rowApp}>{app}</Text>}
+            <Text style={[s.rowDomain, item.blocked && s.rowDomainBlocked]} numberOfLines={1}>
+              {item.domain}
+            </Text>
+            {item.category !== 'clean' && (
+              <View style={[s.catBadge, { borderColor: cc }]}>
+                <Text style={[s.catText, { color: cc }]}>{item.category}</Text>
+              </View>
+            )}
           </View>
-          <Text style={s.rowTime}>
-            {new Date(item.ts).toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-            })}
-          </Text>
+          <View style={s.rowRight}>
+            <View style={[s.verdictPill, item.blocked ? s.verdictBlock : s.verdictAllow]}>
+              <Text style={s.verdictText}>{item.blocked ? 'BLOCKED' : 'ALLOWED'}</Text>
+            </View>
+            {item.blocked &&
+              (allowed.has(baseDomain(item.domain)) ? (
+                <Text style={s.allowedTag}>allowed ✓</Text>
+              ) : (
+                <TouchableOpacity style={s.allowBtn} onPress={() => handleAllow(item.domain)}>
+                  <Text style={s.allowBtnText}>Allow</Text>
+                </TouchableOpacity>
+              ))}
+            <Text style={s.rowTime}>
+              {new Date(item.ts).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              })}
+            </Text>
+          </View>
         </View>
-      </View>
-    );
-  }, []);
+      );
+    },
+    [allowed, handleAllow]
+  );
 
   return (
     <View style={s.container}>
@@ -439,6 +486,15 @@ const s = StyleSheet.create({
   verdictBlock: { backgroundColor: '#450a0a' },
   verdictAllow: { backgroundColor: '#052e16' },
   verdictText: { fontSize: 9, fontWeight: '800', color: '#e2e8f0', letterSpacing: 0.5 },
+  allowBtn: {
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  allowBtnText: { color: '#60a5fa', fontSize: 10, fontWeight: '700' },
+  allowedTag: { color: '#4ade80', fontSize: 9, fontWeight: '700' },
   rowTime: { color: '#334155', fontSize: 10 },
 
   emptyBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },

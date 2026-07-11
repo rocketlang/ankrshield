@@ -95,6 +95,9 @@ public class DnsVpnService extends VpnService {
     // Tame: these packages get their TRACKER domains force-blocked even in passive mode
     // (functional domains still resolve) — tame the tracking without breaking the app.
     static final Set<String> tamedPackages = Collections.synchronizedSet(new HashSet<>());
+    // User allowlist: domain suffixes that are NEVER blocked (curated essentials live
+    // in Allowlist.CURATED; these are the user's own "always allow" additions).
+    static final Set<String> userAllowDomains = Collections.synchronizedSet(new HashSet<>());
     // Passive mode: intercept + log but never block
     static volatile boolean passiveMode = false;
 
@@ -318,11 +321,18 @@ public class DnsVpnService extends VpnService {
         quarantinePackages.addAll(ShieldPrefs.getQuarantine(this));
         tamedPackages.clear();
         tamedPackages.addAll(ShieldPrefs.getTamed(this));
+        userAllowDomains.clear();
+        userAllowDomains.addAll(ShieldPrefs.getAllowDomains(this));
         bypassPackages.clear();
         bypassPackages.addAll(ShieldPrefs.effectiveBypass(this));
         // Quarantine beats bypass: a quarantined app must route THROUGH the VPN
         // so we can contain it — never exclude it from the interface.
         bypassPackages.removeAll(quarantinePackages);
+    }
+
+    /** True when the domain must never be blocked — curated essential or user-allowed. */
+    private static boolean isAllowlisted(String domain) {
+        return Allowlist.isCurated(domain) || Allowlist.suffixMatch(domain, userAllowDomains);
     }
 
     /** True when the attributed app has been TAMED (force-block its trackers). */
@@ -580,6 +590,18 @@ public class DnsVpnService extends VpnService {
                 // app is tamed, in which case its tracker domains are force-blocked while
                 // its functional (clean) domains still resolve.
                 TrackerMatch match = paused ? null : lookupTracker(domain);
+
+                // Allowlist wins over any block: a curated essential domain (AI
+                // assistants, auth providers) or a user "always allow" domain always
+                // resolves, even if the tracker DB flagged it. This cures the
+                // false-positive that made Claude / ChatGPT / Perplexity look offline.
+                if (match != null && isAllowlisted(domain)) {
+                    scopeLedger.record(app, domain, match.category, match.vendor,
+                                       match.riskLevel, false, screenOff);
+                    broadcastDnsEvent(domain, app, false, match.category + ":allowed", match.vendor);
+                    match = null;
+                }
+
                 if (passiveMode && match != null && !isTamed(app)) {
                     // report as advisory, then pass through
                     scopeLedger.record(app, domain, match.category, match.vendor,

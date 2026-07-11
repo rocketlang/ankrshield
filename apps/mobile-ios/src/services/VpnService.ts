@@ -362,6 +362,31 @@ class AnkrShieldVpn {
     return DnsVpn.getTamedApps() as Promise<string[]>;
   }
 
+  /** Always allow a domain (and its subdomains) — never NXDOMAIN it, even if the
+   *  tracker DB flags it. Cures false-positives that broke apps (e.g. AI assistants).
+   *  Persists across app upgrades. */
+  async allowDomain(domain: string): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn || !DnsVpn.allowDomain) {
+      return;
+    }
+    await DnsVpn.allowDomain(domain);
+  }
+
+  async unallowDomain(domain: string): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn || !DnsVpn.unallowDomain) {
+      return;
+    }
+    await DnsVpn.unallowDomain(domain);
+  }
+
+  /** The user's own "always allow" domains (excludes the built-in curated list). */
+  async getAllowedDomains(): Promise<string[]> {
+    if (Platform.OS !== 'android' || !DnsVpn || !DnsVpn.getAllowedDomains) {
+      return [];
+    }
+    return DnsVpn.getAllowedDomains() as Promise<string[]>;
+  }
+
   /** Wipe the on-device scope ledger (user right; nothing ever left the phone). */
   async clearScopeLedger(): Promise<void> {
     if (Platform.OS !== 'android' || !DnsVpn) {

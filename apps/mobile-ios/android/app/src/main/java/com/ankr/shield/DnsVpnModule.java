@@ -328,6 +328,34 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
         promise.resolve(result);
     }
 
+    // ─── Allowlist — never-block a domain (cures tracker-DB false positives) ────
+
+    /** Always allow a domain (and its subdomains). No rebuild needed — only the
+     *  block decision changes. Persists, so the fix survives app upgrades. */
+    @ReactMethod
+    public void allowDomain(String domain, Promise promise) {
+        ShieldPrefs.setAllowDomain(getReactApplicationContext(), domain, true);
+        if (domain != null) DnsVpnService.userAllowDomains.add(domain.trim().toLowerCase());
+        promise.resolve(null);
+    }
+
+    @ReactMethod
+    public void unallowDomain(String domain, Promise promise) {
+        ShieldPrefs.setAllowDomain(getReactApplicationContext(), domain, false);
+        if (domain != null) DnsVpnService.userAllowDomains.remove(domain.trim().toLowerCase());
+        promise.resolve(null);
+    }
+
+    /** User's "always allow" domains (does not include the built-in curated list). */
+    @ReactMethod
+    public void getAllowedDomains(Promise promise) {
+        WritableArray result = new WritableNativeArray();
+        for (String d : ShieldPrefs.getAllowDomains(getReactApplicationContext())) {
+            result.pushString(d);
+        }
+        promise.resolve(result);
+    }
+
     // ─── Scope ledger (ASCT-T2.1/T2.3) ───────────────────────────────────────
 
     /** Per-app rollups. Live ledger when VPN runs, read-only file otherwise. */
