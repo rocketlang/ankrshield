@@ -69,3 +69,17 @@ temp/
 *.zip
 !ankrshield-complete-documentation-*.zip
 apps/web/public/ankrshield.apk
+
+# SQLite runtime artifacts — WAL/shm are transient state of an open DB,
+# never source. The seed .sqlite assets (e.g. tracker-db.sqlite) stay tracked;
+# only the -wal/-shm companions are ignored.
+*.sqlite-shm
+*.sqlite-wal
+*.db-shm
+*.db-wal
+
+# codex daemon pre-convergence backups (written beside codex.json before it
+# recompiles). Stopgap ignore — the cleaner fix is the daemon writing these
+# outside the repo tree.
+codex.json.pre-converge
+*.codex.json.pre-converge
