@@ -595,6 +595,13 @@ const CAPABILITIES = [
     badge: 'PRO',
     href: '/vendor-vetting',
   },
+  {
+    icon: '🚢',
+    title: 'Varuna — Maritime OT',
+    desc: 'Ship-protocol threat detection (Modbus/CAN/NMEA): runaway-diesel and OT attacks caught as MITRE Manipulation of Control, IACS UR E26/E27 posture scored + Ed25519-notarized, offline-first edge agent for mid-ocean blackout.',
+    badge: 'PRO',
+    href: '#varuna',
+  },
 ];
 
 function Capabilities() {
@@ -602,7 +609,7 @@ function Capabilities() {
     <section id="capabilities" style={{ background: BG_ALT, padding: '72px 24px' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <SectionHead
-          title="17 Capabilities. One API."
+          title="18 Capabilities. One API."
           sub="Everything from domain risk scoring to active DMCA filing — REST + GraphQL, works in 5 minutes"
         />
         <div
@@ -1456,6 +1463,123 @@ function Footer() {
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
+// ─── Varuna — Maritime OT Security ────────────────────────────────────────────
+const VARUNA_PROOFS = [
+  [
+    '🔥',
+    'Runaway-diesel caught',
+    'Two Modbus coils forced to a dangerous state — flagged as MITRE Manipulation of Control the instant it starts.',
+  ],
+  [
+    '🎯',
+    '5 / 5 OT attacks triggered',
+    'Modbus / CAN / NMEA attack scenarios fired at the testbed vessel — every one detected.',
+  ],
+  [
+    '🔏',
+    'IACS E26/E27, notarized',
+    'Cyber-resilience posture scored and Ed25519-sealed. Tamper one byte and verification dies — proven live.',
+  ],
+  [
+    '📡',
+    'Offline-first edge agent',
+    'The Varuna Box keeps an append-only ledger through a mid-ocean blackout, then syncs when the link returns.',
+  ],
+];
+
+function Varuna() {
+  return (
+    <section
+      id="varuna"
+      style={{ background: BG, padding: '80px 24px', borderTop: `1px solid ${BORDER}` }}
+    >
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ textAlign: 'center', marginBottom: 12 }}>
+          <span
+            style={{
+              color: CYAN,
+              fontSize: 13,
+              fontWeight: 800,
+              letterSpacing: 2,
+              textTransform: 'uppercase',
+            }}
+          >
+            And at sea
+          </span>
+        </div>
+        <SectionHead
+          title="🚢 Varuna — Maritime OT Security"
+          sub="A ship's engine and bridge run on the same industrial protocols a factory does — and mid-ocean, cut off for days, a vessel is a soft target. Varuna watches the control bus and proves what it saw."
+        />
+        <div
+          style={{
+            borderRadius: 16,
+            overflow: 'hidden',
+            border: `1px solid ${BORDER}`,
+            background: BG_CARD,
+            margin: '8px 0 28px',
+          }}
+        >
+          <video
+            src="https://xshieldai.com/varuna-otsec-sonia.mp4"
+            controls
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            style={{ width: '100%', display: 'block', background: '#000' }}
+          />
+          <div style={{ padding: '14px 18px', color: MUTED, fontSize: 13, textAlign: 'center' }}>
+            A live capture — a runaway-diesel attack caught, IACS E26/E27 scored and
+            Ed25519-notarized, the edge ledger surviving mid-ocean.{' '}
+            <span style={{ color: GREEN, fontWeight: 700 }}>Every number is real.</span>
+          </div>
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: 16,
+          }}
+        >
+          {VARUNA_PROOFS.map(([icon, title, desc]) => (
+            <div
+              key={title}
+              style={{
+                background: BG_CARD,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 12,
+                padding: '18px 18px 20px',
+              }}
+            >
+              <div style={{ fontSize: 24, marginBottom: 8 }}>{icon}</div>
+              <div style={{ color: TEXT, fontWeight: 700, fontSize: 15, marginBottom: 6 }}>
+                {title}
+              </div>
+              <div style={{ color: MUTED, fontSize: 13, lineHeight: 1.5 }}>{desc}</div>
+            </div>
+          ))}
+        </div>
+        <p
+          style={{
+            textAlign: 'center',
+            color: MUTED,
+            fontSize: 13,
+            marginTop: 24,
+            maxWidth: 720,
+            marginLeft: 'auto',
+            marginRight: 'auto',
+          }}
+        >
+          The day criminals come for thousands of ships at once, the ships that can prove they were
+          watched are the ones that don't pay. Read-only by construction — the box physically cannot
+          write to the engine bus.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export default function Landing() {
   return (
     <div
@@ -1470,6 +1594,7 @@ export default function Landing() {
       <Hero />
       <LiveFeedTeaser />
       <Capabilities />
+      <Varuna />
       <ComparisonTable />
       <CISOQuestions />
       <SelfHost />
