@@ -78,6 +78,11 @@ apps/web/public/ankrshield.apk
 *.db-shm
 *.db-wal
 
+# Live service DBs rebuilt from schema at startup (src/core/db.ts) — runtime
+# data, not source. Listed by path so the SEED tracker-db.sqlite stays tracked.
+apps/xshieldai-asm-ai-module/lakshmanrekha.sqlite
+apps/xshieldai-hanumang/hanumang.sqlite
+
 # codex daemon pre-convergence backups (written beside codex.json before it
 # recompiles). Stopgap ignore — the cleaner fix is the daemon writing these
 # outside the repo tree.
