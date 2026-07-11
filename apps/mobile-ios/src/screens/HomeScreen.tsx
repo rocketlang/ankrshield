@@ -3,11 +3,6 @@
  * Main landing screen with privacy score overview
  */
 
-import {
-  createAppTrustEngine,
-  createAppBehaviorTracker,
-  TIER_COLOR,
-} from '@ankrshield/privacy-engine';
 import React, { useEffect, useState } from 'react';
 import {
   Platform,
@@ -35,12 +30,44 @@ import {
   type TileState,
 } from '../services/PermissionState';
 import { getLastScan } from '../services/ScanStore';
+import { buildScopeReport, type AppScopeVerdict } from '../services/ScopeService';
 import { startReporting } from '../services/StatsReporter';
 import { vpnService, VpnStats } from '../services/VpnService';
 
-// ─── Smart Trust engines ──────────────────────────────────────────────────────
-const _trustEngine = createAppTrustEngine(MdmStorage);
-const _behaviorTracker = createAppBehaviorTracker(MdmStorage);
+// ─── Trust summary from the real scope ledger ─────────────────────────────────
+// The three home pills (safe / watched / high-concern) are computed from the SAME
+// witnessed-scope ledger the Privacy Report uses (buildScopeReport) — not a separate
+// tracker that was never fed. This is why they used to read 0: nothing populated the
+// old behaviour tracker. Tiers mirror the Privacy Report exactly:
+//   critical (real stalkerware IOC) → high concern (red)
+//   aggressive (high-risk collection, not stalkerware) → being watched (amber)
+//   witnessed & clean → in safe zone (green)
+//   UNWITNESSED (bypassed) → excluded — unwitnessed is never "safe".
+const RED = '#F44336';
+const AMBER = '#FF9800';
+const GREEN = '#4CAF50';
+
+function verdictColor(v: AppScopeVerdict): string {
+  if (v.critical) {
+    return RED;
+  }
+  if (v.aggressive) {
+    return AMBER;
+  }
+  return GREEN;
+}
+
+/** A 0–100 concern score for the compact meter (higher = more concern). */
+function verdictScore(v: AppScopeVerdict): number {
+  if (v.critical) {
+    return 95;
+  }
+  if (v.aggressive) {
+    return 75;
+  }
+  // Witnessed & clean: scale gently by beyond-scope volume, capped in the safe band.
+  return Math.min(55, 15 + Math.round(Math.min(v.beyondScope, 200) / 5));
+}
 
 // Each tile declares the OS dependency that must be active for it to run live.
 // The badge (see PermissionState) is computed from the real native probe of that
@@ -170,6 +197,8 @@ const DEFAULT_VPN: VpnStats = {
   allowedCount: 0,
   lastBlocked: '',
   running: false,
+  paused: false,
+  pauseUntilMs: 0,
 };
 
 export function HomeScreen({ navigation }: any) {
@@ -297,24 +326,24 @@ export function HomeScreen({ navigation }: any) {
       // Cache miss or parse error — proceed to live load
     }
 
-    // 2. Compute fresh data
+    // 2. Compute fresh data from the witnessed-scope ledger (same source as the
+    //    Privacy Report, so the counts always agree).
     try {
-      await Promise.all([_trustEngine.init(), _behaviorTracker.init()]);
-      const pkgs = _behaviorTracker.getTrackedPackages();
-      const rows = pkgs.map((pkg) => {
-        const record = _trustEngine.classifyApp(pkg);
-        const appStats = _behaviorTracker.getAppStats(pkg);
-        return {
-          packageName: pkg,
-          displayName: record.displayName,
-          score: appStats.safeZoneScore,
-          tierColor: TIER_COLOR[record.effectiveTier],
-        };
-      });
-      const safe = rows.filter((r) => r.score < 60).length;
-      const watch = rows.filter((r) => r.score >= 60 && r.score < 80).length;
-      const danger = rows.filter((r) => r.score >= 80).length;
-      const top3 = [...rows].sort((a, b) => b.score - a.score).slice(0, 3);
+      const report = await buildScopeReport();
+      const witnessed = report.verdicts.filter((v) => v.status !== 'UNWITNESSED');
+      const danger = witnessed.filter((v) => v.critical).length;
+      const watch = witnessed.filter((v) => v.aggressive && !v.critical).length;
+      const safe = witnessed.filter((v) => !v.critical && !v.aggressive).length;
+      // Worst-first: verdicts are already sorted critical → aggressive → beyond-scope.
+      const top3: AppSummaryRow[] = witnessed
+        .filter((v) => v.critical || v.aggressive || v.beyondScope > 0)
+        .slice(0, 3)
+        .map((v) => ({
+          packageName: v.packageName,
+          displayName: v.appName,
+          score: verdictScore(v),
+          tierColor: verdictColor(v),
+        }));
       const now = Date.now();
       setTrustSummary({ safe, watch, danger, top3 });
       setTrustLoadedAt(now);
@@ -421,7 +450,7 @@ export function HomeScreen({ navigation }: any) {
       <View style={styles.trustCard}>
         <View style={styles.trustCardHeader}>
           <Text style={styles.trustCardTitle}>
-            {vpnStats.running ? '🛡 AnkrShield active' : '👁 Monitoring your apps'}
+            {vpnStats.running ? '👁 What your apps are doing' : '👁 Your app privacy'}
           </Text>
           <TouchableOpacity onPress={() => navigation.navigate('AppTrust')}>
             <Text style={styles.manageAppsLink}>Manage apps ›</Text>
@@ -460,11 +489,14 @@ export function HomeScreen({ navigation }: any) {
           </View>
         )}
 
-        {/* Context line — calm, not scary */}
+        {/* Context line — calm, not scary. Shield on/off state is shown once, in the
+            DNS Shield banner below; here we only summarise what was witnessed. */}
         <Text style={styles.trustContextLine}>
           {vpnStats.running
-            ? `${vpnStats.blockedCount > 0 ? `${vpnStats.blockedCount} trackers filtered` : 'All traffic looks normal'} · DNS shield on`
-            : 'Enable DNS shield in Settings for active filtering'}
+            ? vpnStats.blockedCount > 0
+              ? `${vpnStats.blockedCount} trackers filtered today`
+              : 'All traffic looks normal'
+            : 'Turn on the DNS shield to watch your apps'}
         </Text>
 
         {/* Staleness indicator — shown only when serving cached data */}

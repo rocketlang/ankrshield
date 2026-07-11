@@ -159,6 +159,12 @@ export function SimpleHomeScreen({ navigation }: { navigation: any }) {
         </TouchableOpacity>
       )}
 
+      {/* Always available: the witnessed privacy report + one-tap DPDP / GDPR complaint.
+          Per-app Evidence Pack (cited, filable) lives inside this screen. */}
+      <TouchableOpacity style={s.report} onPress={() => navigation.navigate('ScopeReport')}>
+        <Text style={s.reportText}>📄 Privacy report — file a DPDP / GDPR complaint</Text>
+      </TouchableOpacity>
+
       {/* Quiet escape hatch to the full interface */}
       <TouchableOpacity style={s.advanced} onPress={goAdvanced}>
         <Text style={s.advancedText}>Advanced tools →</Text>
@@ -210,6 +216,16 @@ const s = StyleSheet.create({
     marginBottom: 12,
   },
   nightText: { color: '#93c5fd', fontSize: 14, fontWeight: '600', textAlign: 'center' },
+
+  report: {
+    backgroundColor: '#0a1a0f',
+    borderWidth: 1,
+    borderColor: '#166534',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+  },
+  reportText: { color: '#86efac', fontSize: 14, fontWeight: '700', textAlign: 'center' },
 
   advanced: { alignItems: 'center', paddingVertical: 14 },
   advancedText: { color: '#475569', fontSize: 14, fontWeight: '600' },
