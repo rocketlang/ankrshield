@@ -178,7 +178,12 @@ async function scanWatch(
 // ─── Poll loop ────────────────────────────────────────────────────────────────
 
 async function pollAll(db: PrismaClient) {
-  const watches = await db.domainWatch.findMany({ where: { isActive: true } });
+  let watches: any[] = [];
+  try {
+    watches = await (db as any).domainWatch.findMany({ where: { isActive: true } });
+  } catch {
+    return; // DB not ready or table missing — skip poll silently
+  }
 
   for (const w of watches) {
     // Fire and forget — don't await all in serial

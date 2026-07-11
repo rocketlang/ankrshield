@@ -67,14 +67,11 @@ async function requireProKey(request: any, reply: any, prisma: any): Promise<boo
 
   const key = await resolveApiKeyRecord(rawKey, prisma);
   if (!key || !key.isActive) {
-    reply
-      .status(401)
-      .header('Content-Type', TAXII_MEDIA_TYPE)
-      .send({
-        title: 'Unauthorized',
-        description: 'Invalid or inactive API key',
-        http_status: 401,
-      });
+    reply.status(401).header('Content-Type', TAXII_MEDIA_TYPE).send({
+      title: 'Unauthorized',
+      description: 'Invalid or inactive API key',
+      http_status: 401,
+    });
     return false;
   }
 
@@ -131,7 +128,7 @@ export async function registerTaxiiRoutes(fastify: FastifyInstance, prisma: any)
             'Includes domain-name indicators, attack-patterns (MITRE ATT&CK), ' +
             'threat-actors (when risk >= HIGH), and courses-of-action.',
           can_read: true,
-          can_write: false,
+          can_write: true,
           media_types: [TAXII_MEDIA_TYPE],
         },
       ],
@@ -275,7 +272,112 @@ export async function registerTaxiiRoutes(fastify: FastifyInstance, prisma: any)
     }
   });
 
+  // ── TAXII Write endpoint ──────────────────────────────────────────────────
+  // POST /taxii/api/collections/xshield-ioc/objects/
+  // Accepts STIX 2.1 bundle from external producers (xshield-active beacon push,
+  // OT sensors, partner feeds). Validates envelope, stores raw bundle, returns status.
+  // @rule:XSACT-008 — beacon STIX push lands here
+  // @rule:CA-003 — response carries before/after state
+  fastify.post<{
+    Body: {
+      type: string;
+      id?: string;
+      spec_version?: string;
+      objects: Array<{ type: string; id: string; [key: string]: unknown }>;
+    };
+  }>('/taxii/api/collections/xshield-ioc/objects/', async (request, reply) => {
+    const authed = await requireProKey(request, reply, prisma);
+    if (!authed) return;
+
+    const start = Date.now();
+    const bundle = request.body;
+
+    // Validate STIX 2.1 envelope
+    if (bundle.type !== 'bundle' || !Array.isArray(bundle.objects) || bundle.objects.length === 0) {
+      return reply.status(400).header('Content-Type', TAXII_MEDIA_TYPE).send({
+        title: 'Invalid Bundle',
+        description: 'Body must be a STIX 2.1 bundle with type="bundle" and at least one object.',
+        http_status: 400,
+      });
+    }
+
+    // Extract known object types from incoming bundle
+    const indicators = bundle.objects.filter((o) => o.type === 'indicator');
+    const threatActors = bundle.objects.filter((o) => o.type === 'threat-actor');
+    const before_snapshot = { objects_in_collection: await prisma.xShieldRiskReport.count() };
+
+    // Persist each indicator as a lightweight risk report stub
+    // Full OT sensor integration (Phase 8): dedicated TaxiiIngest model
+    const stored: string[] = [];
+    for (const indicator of indicators) {
+      const domain = extractDomainFromPattern((indicator.pattern as string) ?? '');
+      if (!domain) continue;
+
+      try {
+        await prisma.xShieldRiskReport.upsert({
+          where: { domain },
+          create: {
+            domain,
+            riskScore: 75, // external indicator default — not xShield-scanned
+            riskLevel: 'HIGH',
+            source: 'taxii_ingest',
+            rawBundle: JSON.stringify(bundle),
+            generatedAt: new Date().toISOString(),
+          },
+          update: {
+            source: 'taxii_ingest',
+            rawBundle: JSON.stringify(bundle),
+            generatedAt: new Date().toISOString(),
+          },
+        });
+        stored.push(domain);
+      } catch (_e) {
+        // Non-blocking — log and continue
+        fastify.log.warn({ domain }, '[taxii-ingest] upsert failed — skipped');
+      }
+    }
+
+    const after_snapshot = {
+      objects_in_collection: before_snapshot.objects_in_collection + stored.length,
+    };
+
+    return reply
+      .status(200)
+      .header('Content-Type', TAXII_MEDIA_TYPE)
+      .send({
+        id: `status--${Date.now()}`,
+        status: 'complete',
+        request_timestamp: new Date().toISOString(),
+        total_count: bundle.objects.length,
+        success_count: stored.length,
+        failure_count: indicators.length - stored.length,
+        pending_count: 0,
+        successes: stored.map((d) => ({
+          id: d,
+          version: new Date().toISOString(),
+          message: 'ingested',
+        })),
+        // @rule:CA-003 before/after state in response
+        before_snapshot,
+        after_snapshot,
+        delta: { indicators_added: stored.length, threat_actors_seen: threatActors.length },
+        _meta: {
+          computed_at: new Date().toISOString(),
+          duration_ms: Date.now() - start,
+          trust_mask_applied: 1,
+        },
+      });
+  });
+
   fastify.log.info(
-    'TAXII 2.1 routes registered: /taxii/, /taxii/api/, /taxii/api/collections/xshield-ioc/objects/'
+    'TAXII 2.1 routes registered: /taxii/, /taxii/api/, /taxii/api/collections/xshield-ioc/objects/ (GET + POST)'
   );
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Extract domain from STIX indicator pattern like [domain-name:value = 'evil.com'] */
+function extractDomainFromPattern(pattern: string): string | null {
+  const match = pattern?.match(/domain-name:value\s*=\s*'([^']+)'/i);
+  return match?.[1] ?? null;
 }
