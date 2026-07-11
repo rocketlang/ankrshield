@@ -26,6 +26,14 @@ import { StatsCard } from '../components/StatsCard';
 import { MdmStorage } from '../mdm/storage';
 import { startBlocklistSync, getBlocklistStats } from '../services/ioc-sync';
 import { PrivacyService } from '../services/PrivacyService';
+import {
+  readPermissionState,
+  tileState,
+  EMPTY_SNAPSHOT,
+  type Dep,
+  type PermissionSnapshot,
+  type TileState,
+} from '../services/PermissionState';
 import { getLastScan } from '../services/ScanStore';
 import { startReporting } from '../services/StatsReporter';
 import { vpnService, VpnStats } from '../services/VpnService';
@@ -34,37 +42,95 @@ import { vpnService, VpnStats } from '../services/VpnService';
 const _trustEngine = createAppTrustEngine(MdmStorage);
 const _behaviorTracker = createAppBehaviorTracker(MdmStorage);
 
-const PROTECTION_TOOLS = [
+// Each tile declares the OS dependency that must be active for it to run live.
+// The badge (see PermissionState) is computed from the real native probe of that
+// dependency — green only when genuinely on, never asserted.
+const PROTECTION_TOOLS: {
+  icon: string;
+  name: string;
+  desc: string;
+  route: string;
+  dep: Dep;
+}[] = [
   // India-specific threats first
-  { icon: '💳', name: 'UPI Guard', desc: 'Payment fraud check', route: 'UpiGuard' },
-  { icon: '💬', name: 'SMS Shield', desc: 'Fraud SMS scanner', route: 'SmsShield' },
-  { icon: '📞', name: 'Call Shield', desc: 'India fraud patterns', route: 'CallProtection' },
-  { icon: '💬', name: 'WA Guard', desc: 'File threat scan', route: 'WhatsAppGuard' },
-  { icon: '🛡️', name: 'Account Guard', desc: 'WhatsApp + UPI safety', route: 'AccountGuard' },
-  { icon: '📱', name: 'Contact Risk', desc: 'Check if a contact was hacked', route: 'ContactRisk' },
-  { icon: '🌐', name: 'Safe Browse', desc: 'Phishing blocker', route: 'SafeBrowsing' },
-  { icon: '📋', name: 'DPDP Scan', desc: 'Privacy compliance', route: 'DpdpScan' },
-  { icon: '🔗', name: 'Link Scan', desc: 'Phishing URL check', route: 'LinkScanner' },
+  { icon: '💳', name: 'UPI Guard', desc: 'Payment fraud check', route: 'UpiGuard', dep: 'none' },
+  { icon: '💬', name: 'SMS Shield', desc: 'Fraud SMS scanner', route: 'SmsShield', dep: 'sms' },
+  {
+    icon: '📞',
+    name: 'Call Shield',
+    desc: 'India fraud patterns',
+    route: 'CallProtection',
+    dep: 'none',
+  },
+  {
+    icon: '💬',
+    name: 'WA Guard',
+    desc: 'File threat scan',
+    route: 'WhatsAppGuard',
+    dep: 'accessibility',
+  },
+  {
+    icon: '🛡️',
+    name: 'Account Guard',
+    desc: 'WhatsApp + UPI safety',
+    route: 'AccountGuard',
+    dep: 'accessibility',
+  },
+  {
+    icon: '📱',
+    name: 'Contact Risk',
+    desc: 'Check if a contact was hacked',
+    route: 'ContactRisk',
+    dep: 'none',
+  },
+  { icon: '🌐', name: 'Safe Browse', desc: 'Phishing blocker', route: 'SafeBrowsing', dep: 'vpn' },
+  { icon: '📋', name: 'DPDP Scan', desc: 'Privacy compliance', route: 'DpdpScan', dep: 'none' },
+  { icon: '🔗', name: 'Link Scan', desc: 'Phishing URL check', route: 'LinkScanner', dep: 'none' },
   // Malware / device security
-  { icon: '🔬', name: 'AV Scan', desc: 'Malware detector', route: 'AvScanner' },
-  { icon: '🔒', name: 'Anti-Theft', desc: 'Lock & remote wipe', route: 'AntiTheft' },
-  { icon: '🦠', name: 'Ransomware', desc: 'File encryption watch', route: 'Ransomware' },
-  { icon: '🕵️', name: 'Stalkerware', desc: 'Hidden spy apps', route: 'Stalkerware' },
+  { icon: '🔬', name: 'AV Scan', desc: 'Malware detector', route: 'AvScanner', dep: 'none' },
+  { icon: '🔒', name: 'Anti-Theft', desc: 'Lock & remote wipe', route: 'AntiTheft', dep: 'admin' },
+  {
+    icon: '🦠',
+    name: 'Ransomware',
+    desc: 'File encryption watch',
+    route: 'Ransomware',
+    dep: 'ransomware',
+  },
+  { icon: '🕵️', name: 'Stalkerware', desc: 'Hidden spy apps', route: 'Stalkerware', dep: 'none' },
   // App & permission auditing
-  { icon: '🔍', name: 'App Scope', desc: 'Excess permissions', route: 'AppConsent' },
-  { icon: '🔔', name: 'Perm Watch', desc: 'Gained since update', route: 'PermissionChange' },
-  { icon: '🏥', name: 'Dev Health', desc: 'Security hygiene', route: 'DeviceHealth' },
+  { icon: '🔍', name: 'App Scope', desc: 'Excess permissions', route: 'AppConsent', dep: 'none' },
+  {
+    icon: '🔔',
+    name: 'Perm Watch',
+    desc: 'Gained since update',
+    route: 'PermissionChange',
+    dep: 'snapshot',
+  },
+  { icon: '🏥', name: 'Dev Health', desc: 'Security hygiene', route: 'DeviceHealth', dep: 'none' },
   // Network & corporate
-  { icon: '📊', name: 'Privacy Report', desc: 'Who tracked you, cited', route: 'ScopeReport' },
-  { icon: '🌙', name: 'Caught in Act', desc: 'Spied while screen off', route: 'CaughtInAct' },
+  {
+    icon: '📊',
+    name: 'Privacy Report',
+    desc: 'Who tracked you, cited',
+    route: 'ScopeReport',
+    dep: 'vpn',
+  },
+  {
+    icon: '🌙',
+    name: 'Caught in Act',
+    desc: 'Spied while screen off',
+    route: 'CaughtInAct',
+    dep: 'vpn',
+  },
   {
     icon: '⌚',
     name: 'Health Privacy',
     desc: 'Is your watch leaking you?',
     route: 'HealthWitness',
+    dep: 'none',
   },
-  { icon: '🔗', name: 'Network', desc: 'DNS tracker feed', route: 'NetworkBehavior' },
-  { icon: '🏢', name: 'Corporate', desc: 'MDM enrollment', route: 'Mdm' },
+  { icon: '🔗', name: 'Network', desc: 'DNS tracker feed', route: 'NetworkBehavior', dep: 'vpn' },
+  { icon: '🏢', name: 'Corporate', desc: 'MDM enrollment', route: 'Mdm', dep: 'none' },
   // iOS-only tiles (filtered at runtime)
   ...(Platform.OS === 'ios'
     ? [
@@ -73,10 +139,18 @@ const PROTECTION_TOOLS = [
           name: 'Permissions',
           desc: 'iOS permission audit',
           route: 'iOSPermissionAudit',
+          dep: 'none' as Dep,
         },
       ]
     : []),
 ];
+
+// Badge visuals per honest state. `ready` = no permission needed (works on tap).
+const BADGE: Record<TileState, { dot: string; label: string; color: string }> = {
+  active: { dot: '#22c55e', label: 'On', color: '#4ade80' },
+  off: { dot: '#f59e0b', label: 'Off', color: '#fbbf24' },
+  ready: { dot: '#3b82f6', label: 'Ready', color: '#60a5fa' },
+};
 
 interface AppSummaryRow {
   packageName: string;
@@ -111,6 +185,7 @@ export function HomeScreen({ navigation }: any) {
   }>({ safe: 0, watch: 0, danger: 0, top3: [] });
   const [trustLoadedAt, setTrustLoadedAt] = useState<number | null>(null); // ms timestamp
   const [trustFromCache, setTrustFromCache] = useState(false);
+  const [permSnap, setPermSnap] = useState<PermissionSnapshot>(EMPTY_SNAPSHOT);
 
   async function loadStreakState() {
     try {
@@ -279,6 +354,15 @@ export function HomeScreen({ navigation }: any) {
       setPauseUntilMs(s.pauseUntilMs ?? 0);
     }, 5000);
 
+    // Poll live per-tile permission state every 5s (badges reflect real device state)
+    const refreshPerms = () => {
+      readPermissionState()
+        .then(setPermSnap)
+        .catch(() => {});
+    };
+    refreshPerms();
+    const permInterval = setInterval(refreshPerms, 5000);
+
     // Report stats to server every 30 s (counters only, no domain names)
     const stopReporting = startReporting(() => vpnService.getStats().catch(() => DEFAULT_VPN));
 
@@ -291,6 +375,7 @@ export function HomeScreen({ navigation }: any) {
     return () => {
       clearInterval(serverInterval);
       clearInterval(vpnInterval);
+      clearInterval(permInterval);
       clearInterval(iocInterval);
       stopReporting();
       stopIocSync();
@@ -402,19 +487,43 @@ export function HomeScreen({ navigation }: any) {
 
       {/* Protection Tools grid */}
       <View style={styles.toolsSection}>
-        <Text style={styles.toolsSectionTitle}>Protection Tools</Text>
+        <View style={styles.toolsHeaderRow}>
+          <Text style={styles.toolsSectionTitle}>Protection Tools</Text>
+          <View style={styles.legendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: BADGE.active.dot }]} />
+              <Text style={styles.legendTxt}>On</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: BADGE.off.dot }]} />
+              <Text style={styles.legendTxt}>Off</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: BADGE.ready.dot }]} />
+              <Text style={styles.legendTxt}>Ready</Text>
+            </View>
+          </View>
+        </View>
         <View style={styles.toolsGrid}>
-          {PROTECTION_TOOLS.map((tool) => (
-            <TouchableOpacity
-              key={tool.route}
-              style={styles.toolCard}
-              onPress={() => navigation.navigate(tool.route)}
-            >
-              <Text style={styles.toolIcon}>{tool.icon}</Text>
-              <Text style={styles.toolName}>{tool.name}</Text>
-              <Text style={styles.toolDesc}>{tool.desc}</Text>
-            </TouchableOpacity>
-          ))}
+          {PROTECTION_TOOLS.map((tool) => {
+            const st = tileState(tool.dep, permSnap);
+            const b = BADGE[st];
+            return (
+              <TouchableOpacity
+                key={tool.route}
+                style={styles.toolCard}
+                onPress={() => navigation.navigate(tool.route)}
+              >
+                <View style={styles.toolBadge}>
+                  <View style={[styles.toolBadgeDot, { backgroundColor: b.dot }]} />
+                  <Text style={[styles.toolBadgeTxt, { color: b.color }]}>{b.label}</Text>
+                </View>
+                <Text style={styles.toolIcon}>{tool.icon}</Text>
+                <Text style={styles.toolName}>{tool.name}</Text>
+                <Text style={styles.toolDesc}>{tool.desc}</Text>
+              </TouchableOpacity>
+            );
+          })}
           {/* Escape back to the calm Simple face (persists the choice). */}
           <TouchableOpacity
             style={styles.toolCard}
@@ -728,13 +837,37 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 4,
   },
+  toolsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   toolsSectionTitle: {
     color: '#4b5563',
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 1,
     fontWeight: '600',
-    marginBottom: 10,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  legendDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  legendTxt: {
+    color: '#64748b',
+    fontSize: 9,
+    fontWeight: '600',
   },
   toolsGrid: {
     flexDirection: 'row',
@@ -747,10 +880,31 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#1a2535',
-    paddingVertical: 10,
+    paddingTop: 6,
+    paddingBottom: 10,
     paddingHorizontal: 4,
     alignItems: 'center',
     gap: 3,
+  },
+  toolBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    alignSelf: 'center',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: '#0a0f18',
+  },
+  toolBadgeDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  toolBadgeTxt: {
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   toolIcon: { fontSize: 20 },
   toolName: { color: '#e2e8f0', fontSize: 10, fontWeight: '700', textAlign: 'center' },
