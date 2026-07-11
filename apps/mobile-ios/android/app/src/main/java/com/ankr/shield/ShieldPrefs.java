@@ -43,6 +43,7 @@ final class ShieldPrefs {
     private static final String KEY_ALLOW      = "allow_domains";
     private static final String KEY_CLIP_HYG   = "clipboard_hygiene";
     private static final String KEY_BANK_STOP  = "bank_auto_stop";
+    private static final String KEY_WAS_RUNNING = "shield_was_running";
 
     private ShieldPrefs() {}
 
@@ -68,6 +69,18 @@ final class ShieldPrefs {
 
     static void setBankAutoStop(Context ctx, boolean enabled) {
         prefs(ctx).edit().putBoolean(KEY_BANK_STOP, enabled).apply();
+    }
+
+    // Shield "was running" — set true when the DNS shield starts, false ONLY when the
+    // user explicitly stops it. Survives an app update / reboot (SharedPreferences), so
+    // BootReceiver can auto-resume the shield the user had on. NOT cleared on the
+    // service being killed by an update — that's exactly the case we want to restore.
+    static boolean isShieldWasRunning(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_WAS_RUNNING, false);
+    }
+
+    static void setShieldWasRunning(Context ctx, boolean running) {
+        prefs(ctx).edit().putBoolean(KEY_WAS_RUNNING, running).apply();
     }
 
     static String getMode(Context ctx) {

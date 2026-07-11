@@ -92,12 +92,17 @@
       android:foregroundServiceType="dataSync"
       android:exported="false"/>
 
-    <!-- Boot receiver — restarts WhatsApp Guard after device reboot -->
+    <!-- Boot receiver — restores AnkrShield after a reboot OR an app update.
+         MY_PACKAGE_REPLACED is delivered only to us after our own update (no data
+         scheme needed) and is how the shield auto-resumes across upgrades. -->
     <receiver
       android:name=".BootReceiver"
       android:exported="true">
       <intent-filter android:priority="1000">
         <action android:name="android.intent.action.BOOT_COMPLETED"/>
+      </intent-filter>
+      <intent-filter android:priority="1000">
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
       </intent-filter>
     </receiver>
 

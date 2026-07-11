@@ -134,6 +134,10 @@ public class DnsVpnService extends VpnService {
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent != null ? intent.getAction() : null;
         if ("STOP".equals(action)) {
+            // Explicit user stop — clear the auto-resume flag so we DON'T restart it
+            // after the next update/reboot. (stopVpn() itself never clears it, so a
+            // stop caused by an app update leaves the flag set and we auto-resume.)
+            ShieldPrefs.setShieldWasRunning(this, false);
             stopVpn();
             return START_NOT_STICKY;
         }
@@ -223,6 +227,10 @@ public class DnsVpnService extends VpnService {
             packetThread = new Thread(this::runPacketLoop, "ankr-dns-vpn");
             packetThread.setDaemon(true);
             packetThread.start();
+
+            // Remember the shield is on so BootReceiver can auto-resume it after an
+            // app update or reboot (cleared only on an explicit user STOP).
+            ShieldPrefs.setShieldWasRunning(this, true);
 
             digestThread = new Thread(() -> {
                 while (running) {
