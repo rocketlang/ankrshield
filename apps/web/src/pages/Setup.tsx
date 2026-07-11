@@ -503,11 +503,11 @@ function Step2({
 
 function Step3({ domain, score }: { domain: string; score: number }) {
   const navigate = useNavigate();
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     timerRef.current = setTimeout(() => navigate('/dashboard'), 8000);
-    return () => clearTimeout(timerRef.current);
+    return () => clearTimeout(timerRef.current!);
   }, [navigate]);
 
   const col = scoreColor(score);

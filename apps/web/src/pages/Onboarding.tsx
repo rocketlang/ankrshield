@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'https://xshieldai.com/api';
 
@@ -580,9 +580,10 @@ function Step3({ result, email: initialEmail }: { result: RiskScore; email: stri
 
 // ─── Main Wizard ──────────────────────────────────────────────────────────────
 export default function Onboarding() {
+  const [searchParams] = useSearchParams();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [email, setEmail] = useState('');
-  const [domain, setDomain] = useState('');
+  const [email, setEmail] = useState(searchParams.get('email') ?? '');
+  const [domain, setDomain] = useState(searchParams.get('domain') ?? '');
   const [result, setResult] = useState<RiskScore | null>(null);
 
   return (

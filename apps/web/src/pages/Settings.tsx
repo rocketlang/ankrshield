@@ -6,7 +6,16 @@
  *   (More integrations can be added as cards below)
  */
 
-import { CheckCircle, XCircle, Send, Trash2, ExternalLink } from 'lucide-react';
+import {
+  CheckCircle,
+  XCircle,
+  Send,
+  Trash2,
+  ExternalLink,
+  Download,
+  ShieldCheck,
+  AlertTriangle,
+} from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 // ─── Slack section ────────────────────────────────────────────────────────────
@@ -246,36 +255,327 @@ function SlackIntegration() {
   );
 }
 
+// ─── Data & Privacy section ───────────────────────────────────────────────────
+
+interface DataSummary {
+  apiKeys: number;
+  domainWatches: number;
+  scanHistory: number;
+  onDevice: string[];
+  serverSide: string[];
+  subProcessors: { name: string; purpose: string; region: string; policy: string }[];
+}
+
+function DataPrivacy() {
+  const [summary, setSummary] = useState<DataSummary | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const jwt = () => localStorage.getItem('jwt') ?? '';
+
+  useEffect(() => {
+    fetch('/api/account/data-summary', { headers: { Authorization: `Bearer ${jwt()}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setSummary(d))
+      .catch(() => {});
+  }, []);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const res = await fetch('/api/account/export', {
+        headers: { Authorization: `Bearer ${jwt()}` },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'xshield-data-export.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setMsg({ type: 'error', text: 'Export failed — try again.' });
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (
+      !window.confirm(
+        'This will permanently delete your account, all API keys, domain watches, and scan history.\n\nThis cannot be undone. Type "DELETE" to confirm.'
+      )
+    )
+      return;
+    const confirm = window.prompt('Type DELETE to confirm:');
+    if (confirm !== 'DELETE') return;
+
+    setDeleting(true);
+    setMsg(null);
+    try {
+      const res = await fetch('/api/account', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${jwt()}` },
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? `HTTP ${res.status}`);
+      localStorage.clear();
+      window.location.href = '/';
+    } catch (err) {
+      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Deletion failed' });
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* What we hold */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-800 flex items-center gap-3">
+          <ShieldCheck className="w-5 h-5 text-green-400" />
+          <h2 className="text-lg font-semibold">Data We Hold</h2>
+        </div>
+        <div className="p-6 space-y-4">
+          {summary ? (
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              {[
+                ['API Keys', summary.apiKeys],
+                ['Watched Domains', summary.domainWatches],
+                ['Scan Records', summary.scanHistory],
+              ].map(([label, val]) => (
+                <div key={label as string} className="bg-gray-800 rounded-lg px-4 py-3 text-center">
+                  <div className="text-xl font-bold text-white">{val}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="animate-pulse h-16 bg-gray-800 rounded-lg mb-4" />
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-xs font-semibold text-green-400 uppercase tracking-widest mb-2">
+                Stays on your device
+              </p>
+              <ul className="space-y-1">
+                {(
+                  summary?.onDevice ?? [
+                    'DNS filtering',
+                    'Phone risk (free tier)',
+                    'SMS analysis',
+                    'Permission scan',
+                    'Alert classification',
+                  ]
+                ).map((item) => (
+                  <li key={item} className="text-xs text-gray-400 flex items-start gap-1.5">
+                    <span className="text-green-500 mt-0.5 shrink-0">✓</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-violet-400 uppercase tracking-widest mb-2">
+                Sent to our server (paid)
+              </p>
+              <ul className="space-y-1">
+                {(
+                  summary?.serverSide ?? [
+                    'Domain watch alerts',
+                    'Crowd phone risk confidence',
+                    'CT live stream',
+                    'AI threat narrative',
+                  ]
+                ).map((item) => (
+                  <li key={item} className="text-xs text-gray-400 flex items-start gap-1.5">
+                    <span className="text-violet-400 mt-0.5 shrink-0">›</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Sub-processors */}
+      {summary?.subProcessors && (
+        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-800">
+            <h2 className="text-lg font-semibold">Sub-Processors</h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Third-party APIs called during a domain scan. All are industry-standard security
+              intelligence services.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-800">
+                  {['Service', 'Purpose', 'Region', ''].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {summary.subProcessors.map((sp) => (
+                  <tr key={sp.name} className="border-b border-gray-800/50">
+                    <td className="px-6 py-3 font-medium text-white">{sp.name}</td>
+                    <td className="px-6 py-3 text-gray-400">{sp.purpose}</td>
+                    <td className="px-6 py-3 text-gray-500">{sp.region}</td>
+                    <td className="px-6 py-3">
+                      <a
+                        href={sp.policy}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                      >
+                        Privacy Policy <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Your rights */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-800">
+          <h2 className="text-lg font-semibold">Your Rights (DPDP Act 2023)</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            India's Digital Personal Data Protection Act gives you the following rights.
+          </p>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => void handleExport()}
+              disabled={exporting}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold px-4 py-2.5 rounded-lg text-sm transition"
+            >
+              <Download className="w-4 h-4" />
+              {exporting ? 'Preparing…' : 'Export My Data'}
+            </button>
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 font-semibold px-4 py-2.5 rounded-lg text-sm transition"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Privacy Policy
+            </a>
+            <a
+              href="mailto:privacy@xshieldai.com"
+              className="flex items-center gap-2 border border-gray-700 text-gray-300 hover:text-white hover:border-gray-500 font-semibold px-4 py-2.5 rounded-lg text-sm transition"
+            >
+              Grievance Officer
+            </a>
+          </div>
+          <p className="text-xs text-gray-600">
+            Data export delivered as JSON within seconds. Deletion requests are processed
+            immediately. Grievance Officer response within 30 days as required by DPDP Act Section
+            13.
+          </p>
+
+          {msg && (
+            <div
+              className={`rounded-lg px-4 py-3 text-sm font-medium ${msg.type === 'success' ? 'bg-green-950 border border-green-500/30 text-green-300' : 'bg-red-950 border border-red-500/30 text-red-300'}`}
+            >
+              {msg.text}
+            </div>
+          )}
+
+          {/* Danger zone */}
+          <div className="mt-4 border border-red-500/20 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="w-4 h-4 text-red-400" />
+              <span className="text-sm font-semibold text-red-400">Danger Zone</span>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              Permanently delete your account, all API keys, domain watches, and scan history. This
+              cannot be undone.
+            </p>
+            <button
+              onClick={() => void handleDelete()}
+              disabled={deleting}
+              className="flex items-center gap-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-950 disabled:opacity-40 px-3 py-2 rounded-lg border border-red-500/30 transition font-semibold"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {deleting ? 'Deleting…' : 'Delete My Account'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Settings() {
+  const [tab, setTab] = useState<'integrations' | 'privacy'>('integrations');
+
   return (
     <div className="p-8 max-w-3xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-sm text-gray-400 mt-1">Configure integrations and alert preferences.</p>
+        <p className="text-sm text-gray-400 mt-1">
+          Configure integrations, alerts, and privacy preferences.
+        </p>
       </div>
 
-      <section className="space-y-4">
-        <h2 className="text-lg font-semibold text-gray-300">Integrations</h2>
-        <SlackIntegration />
-
-        {/* Placeholder cards for upcoming integrations */}
-        {(['WhatsApp', 'Telegram', 'Jira', 'PagerDuty'] as const).map((name) => (
-          <div
-            key={name}
-            className="bg-gray-900 border border-gray-800 rounded-xl px-6 py-4 flex items-center justify-between opacity-50"
+      {/* Tab bar */}
+      <div className="flex gap-1 bg-gray-900 border border-gray-800 rounded-lg p-1 w-fit">
+        {(
+          [
+            ['integrations', 'Integrations'],
+            ['privacy', 'Data & Privacy'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-4 py-2 rounded-md text-sm font-semibold transition ${
+              tab === key ? 'bg-gray-700 text-white' : 'text-gray-500 hover:text-gray-300'
+            }`}
           >
-            <div className="flex items-center gap-3">
-              <div className="w-6 h-6 rounded bg-gray-700" />
-              <span className="font-medium">{name}</span>
-            </div>
-            <span className="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded-full">
-              Coming soon
-            </span>
-          </div>
+            {label}
+          </button>
         ))}
-      </section>
+      </div>
+
+      {tab === 'integrations' && (
+        <section className="space-y-4">
+          <SlackIntegration />
+          {(['WhatsApp', 'Telegram', 'Jira', 'PagerDuty'] as const).map((name) => (
+            <div
+              key={name}
+              className="bg-gray-900 border border-gray-800 rounded-xl px-6 py-4 flex items-center justify-between opacity-50"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 rounded bg-gray-700" />
+                <span className="font-medium">{name}</span>
+              </div>
+              <span className="text-xs text-gray-600 bg-gray-800 px-2 py-0.5 rounded-full">
+                Coming soon
+              </span>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {tab === 'privacy' && <DataPrivacy />}
     </div>
   );
 }
