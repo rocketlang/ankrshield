@@ -18,6 +18,8 @@ export async function agentRoutes(app: FastifyInstance) {
       customer_id: string;
       trust_mask_granted: number;
       scope_key: string;
+      // @rule:HNG-P2-003 — issuing principal's Ed25519 pubkey (SPKI PEM) for mudrika verification
+      mudrika_pubkey_pem?: string;
     };
   }>('/api/v1/hanumang/agents', async (req, reply) => {
     const t0 = Date.now();

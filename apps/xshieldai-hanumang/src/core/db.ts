@@ -112,6 +112,37 @@ function migrate(db: Database) {
   db.run(
     `CREATE INDEX IF NOT EXISTS idx_attestations_agent ON hanumang_attestations(agent_id, issued_at)`
   );
+
+  // Ed25519 notarization certs — side table so attestation rows stay immutable (HNG-S-007)
+  // @rule:HNG-P2-001 — pack stored verbatim for byte-identical re-verification
+  db.run(`CREATE TABLE IF NOT EXISTS hanumang_attestation_notarizations (
+    attestation_id TEXT PRIMARY KEY REFERENCES hanumang_attestations(id),
+    notary_id TEXT NOT NULL,
+    notarized_at TEXT NOT NULL,
+    pack TEXT NOT NULL,
+    pack_sha256 TEXT NOT NULL,
+    record_json TEXT NOT NULL,
+    signature_b64 TEXT NOT NULL,
+    pubkey_fingerprint TEXT NOT NULL
+  )`);
+
+  // Additive columns (never destructive) — issuing principal's Ed25519 pubkey for
+  // mudrika signature verification. @rule:HNG-P2-003
+  ensureColumn(db, 'hanumang_agents', 'mudrika_pubkey_pem', 'mudrika_pubkey_pem TEXT');
+  ensureColumn(
+    db,
+    'hanumang_agents',
+    'mudrika_pubkey_registered_at',
+    'mudrika_pubkey_registered_at TEXT'
+  );
+}
+
+// Additive migration helper — ALTER TABLE ADD only when the column is missing
+function ensureColumn(db: Database, table: string, column: string, ddl: string) {
+  const cols = db.query(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.run(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
 }
 
 // ── Agent registration ────────────────────────────────────────────────────────
@@ -130,18 +161,35 @@ export interface HanumanAgent {
   status: string;
   baseline_locked: boolean;
   human_modified: boolean;
+  mudrika_pubkey_pem: string | null;
+  mudrika_pubkey_registered_at: string | null;
 }
 
 export function registerAgent(
-  a: Omit<HanumanAgent, 'id' | 'registered_at' | 'last_seen' | 'baseline_locked' | 'human_modified'>
+  a: Omit<
+    HanumanAgent,
+    | 'id'
+    | 'registered_at'
+    | 'last_seen'
+    | 'baseline_locked'
+    | 'human_modified'
+    | 'mudrika_pubkey_pem'
+    | 'mudrika_pubkey_registered_at'
+  > & { mudrika_pubkey_pem?: string | null }
 ): HanumanAgent {
   const db = getDb();
   const id = `HNG-AG-${Date.now().toString(36).toUpperCase()}`;
   const now = new Date().toISOString();
+  // @rule:HNG-P2-003 — pubkey update only when a new one is supplied (COALESCE keeps prior)
   db.run(
-    `INSERT INTO hanumang_agents(id,agent_id,agent_type,officer_role,principal_id,customer_id,trust_mask_granted,scope_key,registered_at,status,baseline_locked,human_modified)
-     VALUES(?,?,?,?,?,?,?,?,?,'active',0,1)
-     ON CONFLICT(agent_id) DO UPDATE SET trust_mask_granted=excluded.trust_mask_granted, scope_key=excluded.scope_key, last_seen=?`,
+    `INSERT INTO hanumang_agents(id,agent_id,agent_type,officer_role,principal_id,customer_id,trust_mask_granted,scope_key,registered_at,status,baseline_locked,human_modified,mudrika_pubkey_pem,mudrika_pubkey_registered_at)
+     VALUES(?,?,?,?,?,?,?,?,?,'active',0,1,?,?)
+     ON CONFLICT(agent_id) DO UPDATE SET
+       trust_mask_granted=excluded.trust_mask_granted,
+       scope_key=excluded.scope_key,
+       last_seen=?,
+       mudrika_pubkey_pem=COALESCE(excluded.mudrika_pubkey_pem, mudrika_pubkey_pem),
+       mudrika_pubkey_registered_at=CASE WHEN excluded.mudrika_pubkey_pem IS NOT NULL THEN excluded.mudrika_pubkey_registered_at ELSE mudrika_pubkey_registered_at END`,
     [
       id,
       a.agent_id,
@@ -152,6 +200,8 @@ export function registerAgent(
       a.trust_mask_granted,
       a.scope_key,
       now,
+      a.mudrika_pubkey_pem ?? null,
+      a.mudrika_pubkey_pem ? now : null,
       now,
     ]
   );
@@ -351,6 +401,47 @@ export function listAttestations(agent_id: string): Attestation[] {
       .query('SELECT * FROM hanumang_attestations WHERE agent_id=? ORDER BY issued_at DESC')
       .all(agent_id) as Record<string, unknown>[]
   ).map((r) => ({ ...r, revoked: r.revoked === 1 }) as Attestation);
+}
+
+// ── Notarizations (Ed25519, side table — attestation rows stay immutable) ─────
+
+export interface HngNotarization {
+  attestation_id: string;
+  notary_id: string;
+  notarized_at: string;
+  pack: string;
+  pack_sha256: string;
+  record_json: string;
+  signature_b64: string;
+  pubkey_fingerprint: string;
+}
+
+// @rule:HNG-P2-001 — insert-once; a notarization is never overwritten
+export function saveNotarization(n: HngNotarization): boolean {
+  const db = getDb();
+  if (getNotarization(n.attestation_id)) return false;
+  db.run(
+    `INSERT INTO hanumang_attestation_notarizations(attestation_id,notary_id,notarized_at,pack,pack_sha256,record_json,signature_b64,pubkey_fingerprint)
+     VALUES(?,?,?,?,?,?,?,?)`,
+    [
+      n.attestation_id,
+      n.notary_id,
+      n.notarized_at,
+      n.pack,
+      n.pack_sha256,
+      n.record_json,
+      n.signature_b64,
+      n.pubkey_fingerprint,
+    ]
+  );
+  return true;
+}
+
+export function getNotarization(attestation_id: string): HngNotarization | null {
+  const db = getDb();
+  return db
+    .query('SELECT * FROM hanumang_attestation_notarizations WHERE attestation_id=?')
+    .get(attestation_id) as HngNotarization | null;
 }
 
 // ── Baseline ──────────────────────────────────────────────────────────────────

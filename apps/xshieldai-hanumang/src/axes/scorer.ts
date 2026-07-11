@@ -23,6 +23,9 @@ export interface AxisInput {
   axis: Axis;
   // Axis 1: mudrika integrity
   mudrika_verified?: boolean;
+  // @rule:HNG-P2-003/004 — Ed25519 signature state from verifyMudrika; callers that
+  // don't pass it haven't proven a signature and get the structural-only cap.
+  mudrika_signature_state?: 'verified' | 'invalid' | 'absent' | 'no_pubkey';
   mudrika_ttl_remaining_s?: number;
   pramana_chain_depth?: number;
   // Axis 2: identity broadcast
@@ -91,6 +94,12 @@ export function scoreAxis(input: AxisInput): AxisScore {
         notes.push('mudrika absent or failed verification');
         break;
       }
+      // @rule:HNG-P2-003 — invalid Ed25519 signature = FAIL, never inflated
+      if (input.mudrika_signature_state === 'invalid') {
+        score = 0;
+        notes.push('mudrika Ed25519 signature invalid (HNG-P2-003)');
+        break;
+      }
       if ((input.mudrika_ttl_remaining_s ?? 60) < 30) {
         score -= 20;
         notes.push('mudrika expires in <30s');
@@ -98,6 +107,14 @@ export function scoreAxis(input: AxisInput): AxisScore {
       if ((input.pramana_chain_depth ?? 0) === 0) {
         score -= 10;
         notes.push('empty pramana chain');
+      }
+      // @rule:HNG-P2-004 — structural-only verification caps the axis at 60 (WARN);
+      // only a cryptographically verified signature earns the uncapped score.
+      if (input.mudrika_signature_state !== 'verified') {
+        if (score > 60) score = 60;
+        notes.push(
+          'structural-only verification — Ed25519 signature absent/unverifiable (HNG-P2-004)'
+        );
       }
       break;
     }

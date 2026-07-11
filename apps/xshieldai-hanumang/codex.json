@@ -12,14 +12,19 @@
     "what-is-this-agents-7-axis-posture-score",
     "is-this-agent-overreaching-its-trust_mask",
     "has-this-agent-filed-a-truthful-report",
+    "is-this-attestation-cryptographically-verifiable",
+    "is-this-mudrika-cryptographically-signed",
     "state",
     "proof"
   ],
   "can_do": [
     "MUDRIKA_VERIFY",
+    "MUDRIKA_SIG_VERIFY",
     "AXIS_OBSERVE",
     "POSTURE_SCORE",
     "ATTESTATION_ISSUE",
+    "ATTESTATION_NOTARIZE",
+    "ATTESTATION_VERIFY",
     "BASELINE_RECORD",
     "REGRESSION_ALERT",
     "AGENT_REGISTER"
@@ -28,11 +33,19 @@
     "hanumang.agent_observed",
     "hanumang.axis_violation",
     "hanumang.attestation_issued",
+    "hanumang.attestation_notarized",
     "hanumang.regression_detected",
     "hanumang.mudrika_rejected",
     "hanumang.overreach_detected"
   ],
-  "depends_on": ["xshieldai:4250", "anchor:4570", "ai-proxy:4444", "pramana:4820", "sakshi:4810"],
+  "depends_on": [
+    "xshieldai:4250",
+    "anchor:4570",
+    "ai-proxy:4444",
+    "pramana:4820",
+    "sakshi:4810",
+    "xshieldai-evidence-notary:4905"
+  ],
   "forja_version": "2.0",
   "forja_state": "/api/v2/forja/state",
   "forja_trust": "/api/v2/forja/trust/:userId",
@@ -196,5 +209,268 @@
       "wire": "health-200",
       "declared": "live_only:0 declared_only:0"
     }
+  },
+  "slug_registry": {
+    "schema": "rest-forge-registry-v1",
+    "service": "xshieldai-hanumang",
+    "bit_next": 7,
+    "slugs": {
+      "mudrika-verify": {
+        "alias": ["MUDRIKA_VERIFY"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 0,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "axis-observe": {
+        "alias": ["AXIS_OBSERVE"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 1,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "posture-score": {
+        "alias": ["POSTURE_SCORE"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 2,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "attestation-issue": {
+        "alias": ["ATTESTATION_ISSUE"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 3,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "baseline-record": {
+        "alias": ["BASELINE_RECORD"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 4,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "regression-alert": {
+        "alias": ["REGRESSION_ALERT"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 5,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "agent-register": {
+        "alias": ["AGENT_REGISTER"],
+        "kind": "rest-mutation",
+        "verb": "can_act",
+        "bit": 6,
+        "risk": "high",
+        "risk_provenance": "default QRF-004 — unclassified REST act; reclassify only via recorded audit act",
+        "reversibility": "unknown",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "POST",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      }
+    },
+    "compiled_at": "2026-06-12",
+    "source": "rest-forge: live /api/v2/capabilities → codex.can_do"
+  },
+  "widget_registry": {
+    "schema": "widget-forge-registry-v1",
+    "service": "xshieldai-hanumang",
+    "widgets": {
+      "mudrika-verify": {
+        "slug": "mudrika-verify",
+        "bit": 0,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "MUDRIKA_VERIFY"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "axis-observe": {
+        "slug": "axis-observe",
+        "bit": 1,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "AXIS_OBSERVE"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "posture-score": {
+        "slug": "posture-score",
+        "bit": 2,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "POSTURE_SCORE"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "attestation-issue": {
+        "slug": "attestation-issue",
+        "bit": 3,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "ATTESTATION_ISSUE"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "baseline-record": {
+        "slug": "baseline-record",
+        "bit": 4,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "BASELINE_RECORD"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "regression-alert": {
+        "slug": "regression-alert",
+        "bit": 5,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "REGRESSION_ALERT"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "agent-register": {
+        "slug": "agent-register",
+        "bit": 6,
+        "kind": "act",
+        "layout": "action-card",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "POST",
+          "field": "AGENT_REGISTER"
+        },
+        "governed": true,
+        "pause": true,
+        "proof_capture": true,
+        "status": "generated-pending-pause-ux",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      }
+    },
+    "generated_at": "2026-06-13T04:51:52.497Z"
+  },
+  "compiled": {
+    "schema": "one-tree-compiled-v1",
+    "writer": "one-tree-converge",
+    "membership": "real",
+    "depth_level": "L4",
+    "rung": "PROVEN",
+    "depth_class": "THIN",
+    "green": true,
+    "faces": {
+      "declared": 15,
+      "served": true,
+      "proof_via": "htr-cert"
+    },
+    "composed_from": "fleet-maturity",
+    "run": "2026-07-07"
   }
 }

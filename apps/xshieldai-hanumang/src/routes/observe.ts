@@ -9,7 +9,13 @@ import type { FastifyInstance } from 'fastify';
 
 import { scoreAxis, computePostureScore } from '../axes/scorer.js';
 import type { AxisInput, Axis } from '../axes/scorer.js';
-import { recordObservation, recordMudrika, getAxisHistory, upsertBaseline } from '../core/db.js';
+import {
+  getAgent,
+  recordObservation,
+  recordMudrika,
+  getAxisHistory,
+  upsertBaseline,
+} from '../core/db.js';
 import { verifyMudrika } from '../core/mudrika.js';
 
 export async function observeRoutes(app: FastifyInstance) {
@@ -28,7 +34,9 @@ export async function observeRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'agent_id, customer_id, mudrika required' });
     }
 
-    const result = verifyMudrika(mudrika, agent_id);
+    // @rule:HNG-P2-003 — verify against the agent's registered Ed25519 pubkey when present
+    const agent = getAgent(agent_id);
+    const result = verifyMudrika(mudrika, agent_id, agent?.mudrika_pubkey_pem ?? null);
 
     // Record the mudrika attempt
     recordMudrika({
@@ -50,6 +58,7 @@ export async function observeRoutes(app: FastifyInstance) {
     const axisScore = scoreAxis({
       axis: 'mudrika_integrity',
       mudrika_verified: result.outcome === 'PASS',
+      mudrika_signature_state: result.signature_state,
       mudrika_ttl_remaining_s:
         result.outcome === 'PASS'
           ? Math.max(0, (new Date(result.expires_at).getTime() - Date.now()) / 1000)
@@ -66,6 +75,7 @@ export async function observeRoutes(app: FastifyInstance) {
       evidence: JSON.stringify({
         mudrika_id: result.mudrika_id,
         failure_reason: result.failure_reason,
+        signature_state: result.signature_state,
       }),
       rule_id: axisScore.rule_id,
     });
@@ -74,6 +84,7 @@ export async function observeRoutes(app: FastifyInstance) {
     return reply.status(statusCode).send({
       outcome: result.outcome,
       failure_reason: result.failure_reason,
+      signature_state: result.signature_state,
       expires_at: result.expires_at,
       axis_score: axisScore,
       _meta: {

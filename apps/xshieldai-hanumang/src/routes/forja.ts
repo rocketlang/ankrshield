@@ -2,15 +2,35 @@
 // @rule:HNG-S-017 — Forja STATE declares agent posture capabilities; not static
 // @rule:CA-004 — all responses carry _meta: { computed_at, duration_ms, trust_mask_applied }
 
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'node:url';
+
 import type { FastifyInstance } from 'fastify';
 
 import { getStats } from '../core/db.js';
+
+// @rule:FP-014/FP-016 — the manifest is COMPILED from the codex leaf, never hand-authored
+// here. codex.json is the single truth; this route is a projection of it.
+function codexDecl(): { can_answer: string[]; can_do: string[]; emits: string[] } {
+  try {
+    const p = fileURLToPath(new URL('../../codex.json', import.meta.url));
+    const c = JSON.parse(readFileSync(p, 'utf8')) as Record<string, string[]>;
+    return {
+      can_answer: c['can_answer'] ?? [],
+      can_do: c['can_do'] ?? [],
+      emits: c['emits'] ?? [],
+    };
+  } catch {
+    return { can_answer: [], can_do: [], emits: [] };
+  }
+}
 
 export async function forjaRoutes(app: FastifyInstance) {
   // @rule:HNG-S-017 — STATE: live posture
   app.get('/state', async () => {
     const t0 = Date.now();
     const stats = getStats();
+    const decl = codexDecl();
     return {
       service: 'xshieldai-hanumang',
       product: 'HanumanG — Agent Delegation Posture Monitor',
@@ -28,31 +48,10 @@ export async function forjaRoutes(app: FastifyInstance) {
         'no_overreach',
         'truthful_report',
       ],
-      can_answer: [
-        'is-this-agent-carrying-a-valid-mudrika',
-        'is-this-agent-within-mandate-bounds',
-        'did-this-agent-return-with-proof',
-        'what-is-this-agents-7-axis-posture-score',
-        'is-this-agent-overreaching-its-trust_mask',
-        'has-this-agent-filed-a-truthful-report',
-      ],
-      can_do: [
-        'MUDRIKA_VERIFY',
-        'AXIS_OBSERVE',
-        'POSTURE_SCORE',
-        'ATTESTATION_ISSUE',
-        'BASELINE_RECORD',
-        'REGRESSION_ALERT',
-        'AGENT_REGISTER',
-      ],
-      emits: [
-        'hanumang.agent_observed',
-        'hanumang.axis_violation',
-        'hanumang.attestation_issued',
-        'hanumang.regression_detected',
-        'hanumang.mudrika_rejected',
-        'hanumang.overreach_detected',
-      ],
+      can_answer: decl.can_answer,
+      can_do: decl.can_do,
+      emits: decl.emits,
+      manifest_source: 'codex.json',
       agent_invariant: 'EVERY_AGENT_CARRIES_A_MUDRIKA',
       _meta: {
         computed_at: new Date().toISOString(),
@@ -110,12 +109,12 @@ export async function forjaRoutes(app: FastifyInstance) {
     const t0 = Date.now();
     return {
       service: 'xshieldai-hanumang',
-      files_total: 8,
-      files_annotated: 8,
+      files_total: 9,
+      files_annotated: 9,
       file_coverage_pct: 100,
-      unique_rules_annotated: 17,
+      unique_rules_annotated: 21,
       proof_status: 'PASS',
-      last_scanned: '2026-05-06',
+      last_scanned: '2026-07-11',
       _meta: {
         computed_at: new Date().toISOString(),
         duration_ms: Date.now() - t0,

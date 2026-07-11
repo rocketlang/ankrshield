@@ -10,6 +10,9 @@
     "what-is-this-endpoints-refusal-rate",
     "does-this-endpoint-comply-with-ca-006",
     "what-attack-techniques-succeed-against-this-endpoint",
+    "is-this-attestation-cryptographically-verifiable",
+    "who-notarized-this-attestation",
+    "is-endpoint-ownership-proven",
     "state",
     "proof"
   ],
@@ -17,6 +20,9 @@
     "PROBE_RUN",
     "ENDPOINT_SCAN",
     "ATTESTATION_ISSUE",
+    "ATTESTATION_NOTARIZE",
+    "ATTESTATION_VERIFY",
+    "OWNERSHIP_CHALLENGE",
     "REFUSAL_CLASSIFY",
     "REGRESSION_DETECT"
   ],
@@ -25,15 +31,17 @@
     "lakshmanrekha.scan.completed",
     "lakshmanrekha.probe.failed",
     "lakshmanrekha.attestation.issued",
+    "lakshmanrekha.attestation.notarized",
+    "lakshmanrekha.ownership.verified",
     "lakshmanrekha.regression.detected"
   ],
-  "depends_on": ["xshieldai:4250", "ai-proxy:4444"],
+  "depends_on": ["xshieldai:4250", "ai-proxy:4444", "xshieldai-evidence-notary:4905"],
   "forja_version": "2.0",
   "forja_state": "/api/v2/forja/state",
   "forja_trust": "/api/v2/forja/trust/:userId",
   "forja_sense": "/api/v2/forja/sense/emit",
   "forja_proof": "/api/v2/forja/proof",
-  "trust_mask": 1,
+  "trust_mask": 31,
   "trust_mask_schema": "ankr-trust-32bit-v1",
   "k_mask": 63,
   "k_mask_schema": "ankr-prajna-8bit-v1",
@@ -55,31 +63,18 @@
     "irreversible_actions": []
   },
   "capability_audit": {
-    "state": "clean",
-    "built": ["PROBE_RUN", "ENDPOINT_SCAN", "ATTESTATION_ISSUE", "REFUSAL_CLASSIFY"],
-    "partial": ["REGRESSION_DETECT"],
-    "not_built": [],
-    "can_answer_status": {
-      "is-this-llm-endpoint-vulnerable-to-prompt-injection": "❓",
-      "what-is-this-endpoints-refusal-rate": "❓",
-      "does-this-endpoint-comply-with-ca-006": "❓",
-      "what-attack-techniques-succeed-against-this-endpoint": "❓",
-      "state": "❓",
-      "proof": "❓"
-    },
-    "can_do_status": {
-      "PROBE_RUN": "❓",
-      "ENDPOINT_SCAN": "❓",
-      "ATTESTATION_ISSUE": "❓",
-      "REFUSAL_CLASSIFY": "❓",
-      "REGRESSION_DETECT": "❓"
-    },
-    "counts": {
-      "built": 0,
-      "partial": 0,
-      "unknown": 11,
-      "not_built": 0
-    }
+    "status": "audited",
+    "last_audited": "2026-07-07",
+    "method": "trust-mask-derive.mjs structural verb→class",
+    "source": "codex.json",
+    "derivation": [
+      "can_answer (6 entries) → READ|QUERY",
+      "PROBE_RUN → EXECUTE",
+      "ENDPOINT_SCAN → QUERY",
+      "ATTESTATION_ISSUE → APPROVE|WRITE",
+      "REFUSAL_CLASSIFY → unmapped",
+      "REGRESSION_DETECT → QUERY"
+    ]
   },
   "vivaran_last_scan": "2026-05-08T01:45:13.559Z",
   "rvf_hook_installed": true,
@@ -183,5 +178,202 @@
       "wire": "health-200",
       "declared": "live_only:0 declared_only:0"
     }
+  },
+  "slug_registry": {
+    "schema": "rest-forge-registry-v1",
+    "service": "xshieldai-asm-ai-module",
+    "bit_next": 5,
+    "slugs": {
+      "probe-run": {
+        "alias": ["PROBE_RUN"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 0,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "endpoint-scan": {
+        "alias": ["ENDPOINT_SCAN"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 1,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "attestation-issue": {
+        "alias": ["ATTESTATION_ISSUE"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 2,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "refusal-classify": {
+        "alias": ["REFUSAL_CLASSIFY"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 3,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      },
+      "regression-detect": {
+        "alias": ["REGRESSION_DETECT"],
+        "kind": "rest-query",
+        "verb": "can_read",
+        "bit": 4,
+        "risk": "normal",
+        "risk_provenance": "read",
+        "reversibility": "reversible",
+        "klass": "unproven",
+        "transport": "rest",
+        "route": null,
+        "method": "GET",
+        "source": "codex.can_do",
+        "compiled_at": "2026-06-12"
+      }
+    },
+    "compiled_at": "2026-06-12",
+    "source": "rest-forge: live /api/v2/capabilities → codex.can_do"
+  },
+  "widget_registry": {
+    "schema": "widget-forge-registry-v1",
+    "service": "xshieldai-asm-ai-module",
+    "widgets": {
+      "probe-run": {
+        "slug": "probe-run",
+        "bit": 0,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "PROBE_RUN"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "endpoint-scan": {
+        "slug": "endpoint-scan",
+        "bit": 1,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "ENDPOINT_SCAN"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "attestation-issue": {
+        "slug": "attestation-issue",
+        "bit": 2,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "ATTESTATION_ISSUE"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "refusal-classify": {
+        "slug": "refusal-classify",
+        "bit": 3,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "REFUSAL_CLASSIFY"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      },
+      "regression-detect": {
+        "slug": "regression-detect",
+        "bit": 4,
+        "kind": "read",
+        "layout": "auto-table",
+        "wire": {
+          "kind": "rest",
+          "route": null,
+          "method": "GET",
+          "field": "REGRESSION_DETECT"
+        },
+        "governed": true,
+        "pause": false,
+        "proof_capture": false,
+        "status": "generated",
+        "generated_at": "2026-06-13",
+        "generated_by": "widget-forge W1 (no hand-waving — WDF-003)"
+      }
+    },
+    "generated_at": "2026-06-13T04:51:52.101Z"
+  },
+  "compiled": {
+    "schema": "one-tree-compiled-v1",
+    "writer": "one-tree-converge",
+    "membership": "real",
+    "depth_level": "L4",
+    "rung": "PROVEN",
+    "depth_class": "THIN",
+    "green": true,
+    "faces": {
+      "declared": 11,
+      "served": true,
+      "proof_via": "htr-cert"
+    },
+    "composed_from": "fleet-maturity",
+    "run": "2026-07-07"
   }
 }
