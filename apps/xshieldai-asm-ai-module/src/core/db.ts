@@ -96,6 +96,50 @@ function migrate(db: Database) {
   db.run(
     `CREATE INDEX IF NOT EXISTS idx_lrk_attestations_customer ON lrk_attestations(customer_id, issued_at DESC)`
   );
+
+  // Ed25519 notarization certs — side table so attestation rows stay immutable (ASMAI-S-007)
+  // @rule:ASMAI-P2-001 — pack stored verbatim for byte-identical re-verification
+  db.run(`CREATE TABLE IF NOT EXISTS lrk_attestation_notarizations (
+    attestation_id TEXT PRIMARY KEY REFERENCES lrk_attestations(id),
+    notary_id TEXT NOT NULL,
+    notarized_at TEXT NOT NULL,
+    pack TEXT NOT NULL,
+    pack_sha256 TEXT NOT NULL,
+    record_json TEXT NOT NULL,
+    signature_b64 TEXT NOT NULL,
+    pubkey_fingerprint TEXT NOT NULL
+  )`);
+
+  // Ownership challenge lifecycle — replaces the bare asserted boolean
+  // @rule:ASMAI-P2-003 — proof_method + observation recorded, not just a flag
+  db.run(`CREATE TABLE IF NOT EXISTS lrk_ownership_challenges (
+    id TEXT PRIMARY KEY,
+    endpoint_id TEXT NOT NULL REFERENCES lrk_endpoints(id),
+    token TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending'
+      CHECK(status IN ('pending','verified','failed','expired')),
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    verified_at TEXT,
+    proof_method TEXT CHECK(proof_method IN ('dns_txt','http_well_known','fleet_internal')),
+    proof_detail TEXT
+  )`);
+  db.run(
+    `CREATE INDEX IF NOT EXISTS idx_lrk_challenges_endpoint ON lrk_ownership_challenges(endpoint_id, created_at DESC)`
+  );
+
+  // Additive columns on existing tables (never destructive)
+  ensureColumn(db, 'lrk_endpoints', 'ownership_method', 'ownership_method TEXT');
+  ensureColumn(db, 'lrk_endpoints', 'ownership_verified_at', 'ownership_verified_at TEXT');
+  ensureColumn(db, 'lrk_endpoints', 'endpoint_url_sha256', 'endpoint_url_sha256 TEXT');
+}
+
+// Additive migration helper — ALTER TABLE ADD only when the column is missing
+function ensureColumn(db: Database, table: string, column: string, ddl: string) {
+  const cols = db.query(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.run(`ALTER TABLE ${table} ADD COLUMN ${ddl}`);
+  }
 }
 
 // ── ID generator ─────────────────────────────────────────────────────────────
@@ -104,8 +148,10 @@ function genId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
 
-// Simple SHA-256-like hash stub — avoids storing raw response snippets
-function hashSnippet(snippet: string): string {
+// Simple SHA-256-like hash stub — avoids storing raw response snippets.
+// Exported: ownership verification uses it as a prove-you-know-the-URL check
+// (the raw endpoint URL is never stored). @rule:ASMAI-P2-003
+export function hashSnippet(snippet: string): string {
   let hash = 0;
   for (let i = 0; i < snippet.length; i++) {
     const char = snippet.charCodeAt(i);
@@ -117,6 +163,8 @@ function hashSnippet(snippet: string): string {
 
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 
+export type OwnershipMethod = 'dns_txt' | 'http_well_known' | 'fleet_internal' | 'legacy_asserted';
+
 export interface LrkEndpoint {
   id: string;
   customer_id: string;
@@ -124,6 +172,8 @@ export interface LrkEndpoint {
   endpoint_label: string;
   api_type: 'openai' | 'anthropic' | 'azure' | 'ankr_proxy';
   ownership_verified: boolean;
+  ownership_method: OwnershipMethod | null;
+  ownership_verified_at: string | null;
   roe_signed: boolean;
   registered_at: string;
   status: 'active' | 'suspended' | 'retired';
@@ -142,9 +192,11 @@ export function registerEndpoint(opts: {
   const now = new Date().toISOString();
   const url_hash = hashSnippet(opts.endpoint_url);
 
+  // @rule:ASMAI-P2-003 — a caller-asserted boolean is honestly labeled legacy_asserted;
+  // a proven method is only ever set by the ownership challenge flow.
   db.run(
-    `INSERT INTO lrk_endpoints(id,customer_id,endpoint_url_hash,endpoint_label,api_type,ownership_verified,roe_signed,registered_at,status)
-     VALUES(?,?,?,?,?,?,?,?,'active')`,
+    `INSERT INTO lrk_endpoints(id,customer_id,endpoint_url_hash,endpoint_label,api_type,ownership_verified,ownership_method,ownership_verified_at,roe_signed,registered_at,status)
+     VALUES(?,?,?,?,?,?,?,?,?,?,'active')`,
     [
       id,
       opts.customer_id,
@@ -152,12 +204,26 @@ export function registerEndpoint(opts: {
       opts.endpoint_label,
       opts.api_type,
       opts.ownership_verified ? 1 : 0,
+      opts.ownership_verified ? 'legacy_asserted' : null,
+      opts.ownership_verified ? now : null,
       opts.roe_signed ? 1 : 0,
       now,
     ]
   );
 
   return getEndpoint(id)!;
+}
+
+export function markEndpointOwnershipVerified(
+  endpoint_id: string,
+  method: OwnershipMethod,
+  endpoint_url_sha256: string
+): void {
+  const db = getDb();
+  db.run(
+    `UPDATE lrk_endpoints SET ownership_verified=1, ownership_method=?, ownership_verified_at=?, endpoint_url_sha256=? WHERE id=?`,
+    [method, new Date().toISOString(), endpoint_url_sha256, endpoint_id]
+  );
 }
 
 export function getEndpoint(id: string): LrkEndpoint | null {
@@ -170,6 +236,9 @@ export function getEndpoint(id: string): LrkEndpoint | null {
   return {
     ...row,
     ownership_verified: row['ownership_verified'] === 1,
+    // Pre-P2 rows carry a bare verified flag — grandfathered as legacy_asserted
+    ownership_method:
+      row['ownership_method'] ?? (row['ownership_verified'] === 1 ? 'legacy_asserted' : null),
     roe_signed: row['roe_signed'] === 1,
   } as LrkEndpoint;
 }
@@ -399,6 +468,133 @@ export function listAttestationsByEndpoint(endpoint_id: string): LrkAttestation[
       )
       .all(endpoint_id) as Record<string, unknown>[]
   ).map((r) => ({ ...r, revoked: false }) as LrkAttestation);
+}
+
+// ── Notarizations (Ed25519, side table — attestation rows stay immutable) ─────
+
+export interface LrkNotarization {
+  attestation_id: string;
+  notary_id: string;
+  notarized_at: string;
+  pack: string;
+  pack_sha256: string;
+  record_json: string;
+  signature_b64: string;
+  pubkey_fingerprint: string;
+}
+
+// @rule:ASMAI-P2-001 — insert-once; a notarization is never overwritten
+export function saveNotarization(n: LrkNotarization): boolean {
+  const db = getDb();
+  if (getNotarization(n.attestation_id)) return false;
+  db.run(
+    `INSERT INTO lrk_attestation_notarizations(attestation_id,notary_id,notarized_at,pack,pack_sha256,record_json,signature_b64,pubkey_fingerprint)
+     VALUES(?,?,?,?,?,?,?,?)`,
+    [
+      n.attestation_id,
+      n.notary_id,
+      n.notarized_at,
+      n.pack,
+      n.pack_sha256,
+      n.record_json,
+      n.signature_b64,
+      n.pubkey_fingerprint,
+    ]
+  );
+  return true;
+}
+
+export function getNotarization(attestation_id: string): LrkNotarization | null {
+  const db = getDb();
+  return db
+    .query('SELECT * FROM lrk_attestation_notarizations WHERE attestation_id=?')
+    .get(attestation_id) as LrkNotarization | null;
+}
+
+// ── Ownership challenges ──────────────────────────────────────────────────────
+
+export interface LrkOwnershipChallenge {
+  id: string;
+  endpoint_id: string;
+  token: string;
+  status: 'pending' | 'verified' | 'failed' | 'expired';
+  created_at: string;
+  expires_at: string;
+  verified_at: string | null;
+  proof_method: 'dns_txt' | 'http_well_known' | 'fleet_internal' | null;
+  proof_detail: string | null;
+}
+
+const CHALLENGE_TTL_MS = 24 * 60 * 60 * 1000;
+
+export function createOwnershipChallenge(
+  endpoint_id: string,
+  token: string
+): LrkOwnershipChallenge {
+  const db = getDb();
+  const id = genId('LRK-OWN');
+  const now = new Date();
+  const challenge: LrkOwnershipChallenge = {
+    id,
+    endpoint_id,
+    token,
+    status: 'pending',
+    created_at: now.toISOString(),
+    expires_at: new Date(now.getTime() + CHALLENGE_TTL_MS).toISOString(),
+    verified_at: null,
+    proof_method: null,
+    proof_detail: null,
+  };
+  db.run(
+    `INSERT INTO lrk_ownership_challenges(id,endpoint_id,token,status,created_at,expires_at)
+     VALUES(?,?,?,'pending',?,?)`,
+    [id, endpoint_id, token, challenge.created_at, challenge.expires_at]
+  );
+  return challenge;
+}
+
+// Latest pending challenge; expired ones are marked as such on read
+export function getOpenChallenge(endpoint_id: string): LrkOwnershipChallenge | null {
+  const db = getDb();
+  const row = db
+    .query(
+      `SELECT * FROM lrk_ownership_challenges WHERE endpoint_id=? AND status='pending' ORDER BY created_at DESC LIMIT 1`
+    )
+    .get(endpoint_id) as LrkOwnershipChallenge | null;
+  if (!row) return null;
+  if (new Date(row.expires_at).getTime() < Date.now()) {
+    db.run(`UPDATE lrk_ownership_challenges SET status='expired' WHERE id=?`, [row.id]);
+    return null;
+  }
+  return row;
+}
+
+export function resolveChallenge(
+  id: string,
+  status: 'verified' | 'failed',
+  proof_method: 'dns_txt' | 'http_well_known' | 'fleet_internal' | null,
+  proof_detail: string
+): void {
+  const db = getDb();
+  db.run(
+    `UPDATE lrk_ownership_challenges SET status=?, verified_at=?, proof_method=?, proof_detail=? WHERE id=?`,
+    [
+      status,
+      status === 'verified' ? new Date().toISOString() : null,
+      proof_method,
+      proof_detail,
+      id,
+    ]
+  );
+}
+
+export function getChallengeHistory(endpoint_id: string, limit = 10): LrkOwnershipChallenge[] {
+  const db = getDb();
+  return db
+    .query(
+      `SELECT * FROM lrk_ownership_challenges WHERE endpoint_id=? ORDER BY created_at DESC LIMIT ?`
+    )
+    .all(endpoint_id, limit) as LrkOwnershipChallenge[];
 }
 
 // ── Stats ─────────────────────────────────────────────────────────────────────

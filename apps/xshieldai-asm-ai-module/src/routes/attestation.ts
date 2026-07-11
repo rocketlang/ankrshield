@@ -1,5 +1,7 @@
 // LakshmanRekha — Attestation issuance routes
 // @rule:ASMAI-S-004 — attestation must carry signed_by field; immutable post-issue
+// @rule:ASMAI-P2-001 — attestations notarized via Evidence Notary (Ed25519), best-effort (FP-010)
+// @rule:ASMAI-P2-002 — attestations independently verifiable via /verify + notary pubkey
 // @rule:CA-001 — large bundles > 50KB return overflow_granthx_ref
 // @rule:CA-004 — _meta on all responses
 
@@ -7,11 +9,15 @@ import type { FastifyInstance } from 'fastify';
 
 import {
   getAttestation,
+  getNotarization,
   getScanJob,
   issueAttestation,
   listAttestationsByEndpoint,
   listProbeResults,
+  saveNotarization,
 } from '../core/db.js';
+import type { LrkAttestation } from '../core/db.js';
+import { canonical, notarizePack, notaryBase, verifyPack } from '../core/notary.js';
 import { getProbe } from '../probes/registry.js';
 
 const GRANTHX_URL = process.env['GRANTHX_URL'] ?? 'http://localhost:4130';
@@ -46,6 +52,53 @@ function buildFrameworkGaps(
   }
 
   return gaps;
+}
+
+// @rule:ASMAI-P2-001 — the notarized pack is canonical({schema, attestation}): the
+// immutable attestation row IS the signed fact; derived summaries are not in the pack,
+// so the pack is rebuildable byte-identically from the row for late notarization.
+function buildNotaryPack(att: LrkAttestation): string {
+  return canonical({ schema: 'lakshmanrekha-attestation-v1', attestation: att });
+}
+
+async function notarizeAttestation(att: LrkAttestation) {
+  const pack = buildNotaryPack(att);
+  const cert = await notarizePack(pack, {
+    attestation_id: att.id,
+    service: 'xshieldai-asm-ai-module',
+    type: 'lrk-attestation',
+  });
+  if (!cert.notarized) return { notarized: false as const, notary_error: cert.notary_error };
+  saveNotarization({
+    attestation_id: att.id,
+    notary_id: cert.record.notaryId,
+    notarized_at: cert.record.ts,
+    pack,
+    pack_sha256: cert.record.packSha256,
+    record_json: JSON.stringify(cert.record),
+    signature_b64: cert.signature,
+    pubkey_fingerprint: cert.pubkey_fingerprint,
+  });
+  return {
+    notarized: true as const,
+    notary_id: cert.record.notaryId,
+    notarized_at: cert.record.ts,
+    pack_sha256: cert.record.packSha256,
+    signature: cert.signature,
+    pubkey_fingerprint: cert.pubkey_fingerprint,
+  };
+}
+
+function notarizationSummary(attestation_id: string) {
+  const n = getNotarization(attestation_id);
+  if (!n) return { notarized: false as const };
+  return {
+    notarized: true as const,
+    notary_id: n.notary_id,
+    notarized_at: n.notarized_at,
+    pack_sha256: n.pack_sha256,
+    pubkey_fingerprint: n.pubkey_fingerprint,
+  };
 }
 
 export async function attestationRoutes(app: FastifyInstance) {
@@ -108,6 +161,10 @@ export async function attestationRoutes(app: FastifyInstance) {
       signed_by: signed_by ?? 'lakshmanrekha-auto',
     });
 
+    // @rule:ASMAI-P2-001 — notarize best-effort; issuance is the floor (FP-010).
+    // Failure is loud (_meta.notarized:false + notary_error), never a 5xx.
+    const notarization = await notarizeAttestation(att);
+
     const bundle = {
       schema: 'lakshmanrekha-attestation-v1',
       attestation: att,
@@ -115,6 +172,7 @@ export async function attestationRoutes(app: FastifyInstance) {
       grade,
       failing_probes: failingProbeIds,
       framework_gaps: frameworkGaps,
+      notarization,
       probe_results_summary: probe_results.map((r) => ({
         probe_id: r.probe_id,
         probe_name: r.probe_name,
@@ -123,6 +181,10 @@ export async function attestationRoutes(app: FastifyInstance) {
         duration_ms: r.duration_ms,
       })),
     };
+
+    const notaryMeta = notarization.notarized
+      ? { notarized: true }
+      : { notarized: false, notary_error: notarization.notary_error };
 
     // @rule:CA-001 — overflow escape for large bundles
     const approxBytes = JSON.stringify(bundle).length;
@@ -133,10 +195,12 @@ export async function attestationRoutes(app: FastifyInstance) {
         attestation_id: att.id,
         overall_grade: grade,
         pass_rate,
+        notarization,
         _meta: {
           computed_at: new Date().toISOString(),
           duration_ms: Date.now() - t0,
           trust_mask_applied: 1,
+          ...notaryMeta,
         },
       });
     }
@@ -147,8 +211,84 @@ export async function attestationRoutes(app: FastifyInstance) {
         computed_at: new Date().toISOString(),
         duration_ms: Date.now() - t0,
         trust_mask_applied: 1,
+        ...notaryMeta,
       },
     });
+  });
+
+  // POST /api/v1/lrk/attestation/:id/notarize — late notarization (notary-down recovery)
+  // @rule:ASMAI-P2-001 — insert-once; 409 if already notarized
+  app.post<{ Params: { id: string } }>(
+    '/api/v1/lrk/attestation/:id/notarize',
+    async (req, reply) => {
+      const t0 = Date.now();
+      const att = getAttestation(req.params.id);
+      if (!att) return reply.status(404).send({ error: 'attestation not found' });
+      if (getNotarization(att.id)) {
+        return reply.status(409).send({
+          error: 'attestation already notarized',
+          notarization: notarizationSummary(att.id),
+        });
+      }
+      const notarization = await notarizeAttestation(att);
+      return reply.status(notarization.notarized ? 201 : 502).send({
+        attestation_id: att.id,
+        notarization,
+        _meta: {
+          computed_at: new Date().toISOString(),
+          duration_ms: Date.now() - t0,
+          trust_mask_applied: 1,
+          notarized: notarization.notarized,
+        },
+      });
+    }
+  );
+
+  // GET /api/v1/lrk/attestation/:id/verify — cryptographic re-verification
+  // @rule:ASMAI-P2-002 — compute/quote/null: verdict null when notary unreachable or
+  // never notarized; verify_independently lets a third party check without trusting us.
+  app.get<{ Params: { id: string } }>('/api/v1/lrk/attestation/:id/verify', async (req, reply) => {
+    const t0 = Date.now();
+    const att = getAttestation(req.params.id);
+    if (!att) return reply.status(404).send({ error: 'attestation not found' });
+
+    const n = getNotarization(att.id);
+    if (!n) {
+      return {
+        attestation_id: att.id,
+        verdict: null,
+        reasons: ['never notarized'],
+        retry: `POST /api/v1/lrk/attestation/${att.id}/notarize`,
+        _meta: {
+          computed_at: new Date().toISOString(),
+          duration_ms: Date.now() - t0,
+          trust_mask_applied: 1,
+        },
+      };
+    }
+
+    const record = JSON.parse(n.record_json) as Record<string, unknown>;
+    const result = await verifyPack(record, n.signature_b64, n.pack);
+    const base = notaryBase();
+    return {
+      attestation_id: att.id,
+      verdict: result.verdict,
+      reasons: result.reasons,
+      notary_id: n.notary_id,
+      pubkey_fingerprint: n.pubkey_fingerprint,
+      verify_independently: {
+        pubkey_url: base ? `${base}/pubkey` : null,
+        verify_url: base ? `${base}/verify` : null,
+        record,
+        signature: n.signature_b64,
+        pack_sha256: n.pack_sha256,
+      },
+      _meta: {
+        computed_at: new Date().toISOString(),
+        duration_ms: Date.now() - t0,
+        trust_mask_applied: 1,
+      },
+    };
   });
 
   // GET /api/v1/lrk/attestation/:id — get specific attestation
@@ -159,6 +299,8 @@ export async function attestationRoutes(app: FastifyInstance) {
 
     return {
       attestation: att,
+      // @rule:ASMAI-P2-002 — the fingerprint always rides with the attestation
+      notarization: notarizationSummary(att.id),
       _meta: {
         computed_at: new Date().toISOString(),
         duration_ms: Date.now() - t0,

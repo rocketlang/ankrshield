@@ -9,6 +9,7 @@ import Fastify from 'fastify';
 import { getDb } from './core/db.js';
 import { attestationRoutes } from './routes/attestation.js';
 import { forjaRoutes } from './routes/forja.js';
+import { ownershipRoutes } from './routes/ownership.js';
 import { scanRoutes } from './routes/scan.js';
 
 // @rule:ASMAI-S-009 — PORT must be injected by ankr-ctl, never hardcoded
@@ -31,6 +32,7 @@ await app.register(forjaRoutes, { prefix: '/api/v2/forja' });
 
 // Domain routes
 await app.register(scanRoutes);
+await app.register(ownershipRoutes);
 await app.register(attestationRoutes);
 
 app.get('/health', async () => ({

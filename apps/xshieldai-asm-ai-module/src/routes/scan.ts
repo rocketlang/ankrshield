@@ -111,9 +111,10 @@ export async function scanRoutes(app: FastifyInstance) {
     if (!endpoint.ownership_verified) {
       return reply.status(403).send({
         error:
-          'Endpoint ownership not verified. Confirm you control this endpoint before scanning.',
+          'Endpoint ownership not verified. Prove control via the ownership challenge before scanning.',
         code: 'OWNERSHIP_NOT_VERIFIED',
         rule: 'ASMAI-S-006',
+        challenge: `POST /api/v1/lrk/endpoints/${endpoint_id}/ownership/challenge`,
       });
     }
 
