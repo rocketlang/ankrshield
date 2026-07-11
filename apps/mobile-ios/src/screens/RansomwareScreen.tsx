@@ -16,6 +16,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
+import { DebugLog } from '../services/DebugLog';
+
 const { RansomwareWatcher } = NativeModules;
 
 interface RansomAlert {
@@ -50,9 +52,12 @@ export function RansomwareScreen() {
   const [alerts, setAlerts] = useState<RansomAlert[]>([]);
   const [watching, setWatching] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (Platform.OS !== 'android' || !RansomwareWatcher) return;
+    if (Platform.OS !== 'android' || !RansomwareWatcher) {
+      return;
+    }
 
     // Load existing alert history
     RansomwareWatcher.getAlertHistory()
@@ -88,18 +93,30 @@ export function RansomwareScreen() {
   }, []);
 
   async function handleToggle() {
-    if (!RansomwareWatcher || starting) return;
+    if (!RansomwareWatcher || starting) {
+      return;
+    }
     setStarting(true);
+    setLastError(null);
     try {
       if (watching) {
         await RansomwareWatcher.stopWatcher();
         setWatching(false);
       } else {
         await RansomwareWatcher.startWatcher();
-        setWatching(true);
+        // Re-read the real service state instead of assuming it started — on
+        // Android 14 the service can reject the foreground start.
+        const running = await RansomwareWatcher.isRunning().catch(() => true);
+        setWatching(running);
+        DebugLog.log(
+          'Ransomware',
+          running ? 'watcher started' : 'startWatcher returned not-running'
+        );
       }
-    } catch (_e) {
-      // Permission or service error — leave state unchanged
+    } catch (e: any) {
+      const msg = e?.message || String(e);
+      setLastError(msg);
+      DebugLog.error('Ransomware', 'toggle failed:', msg);
     } finally {
       setStarting(false);
     }
@@ -147,6 +164,15 @@ export function RansomwareScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Inline failure reason — so a tester sees WHY Start didn't take. */}
+      {lastError && (
+        <View style={s.errBox}>
+          <Text style={s.errTxt} selectable>
+            Couldn&apos;t start: {lastError}
+          </Text>
+        </View>
+      )}
 
       {/* How it works info */}
       <View style={s.infoRow}>
@@ -227,6 +253,16 @@ const s = StyleSheet.create({
   toggleOff: { backgroundColor: '#7f1d1d' },
   toggleTxt: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
+  errBox: {
+    marginHorizontal: 12,
+    marginTop: 10,
+    backgroundColor: '#2a0a0a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#7f1d1d',
+    padding: 10,
+  },
+  errTxt: { color: '#fca5a5', fontSize: 12, fontFamily: 'monospace' },
   infoRow: {
     padding: 12,
     gap: 4,

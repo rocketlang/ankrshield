@@ -11,7 +11,11 @@
   <!-- Android 12 and below — scoped to SDK 32 to avoid conflict with granular perms on 13+ -->
   <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-  <!-- Android 14+ requires explicit foreground service type permission -->
+  <!-- Android 14+ (API 34) REQUIRES a foreground-service TYPE on every service that
+       calls startForeground(), plus the matching FGS_* permission. Without it, the
+       first startForeground() call throws MissingForegroundServiceTypeException and
+       CRASHES the app. dataSync = long-running local file/DNS monitoring. -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
   <!-- Android 13+ — runtime permission for posting notifications -->
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.READ_CONTACTS"/>
@@ -80,10 +84,12 @@
       </intent-filter>
     </service>
 
-    <!-- WhatsApp Attachment Guard (foreground file watcher)
-         NO foregroundServiceType — plain FGS avoids Android 14 crash (no dataSync) -->
+    <!-- WhatsApp Attachment Guard (foreground file watcher).
+         Android 14 REQUIRES the type here — the service passes DATA_SYNC to
+         startForeground() and the manifest must match or the call throws. -->
     <service
       android:name=".WhatsAppGuardService"
+      android:foregroundServiceType="dataSync"
       android:exported="false"/>
 
     <!-- Boot receiver — restarts WhatsApp Guard after device reboot -->
@@ -116,15 +122,17 @@
       </intent-filter>
     </service>
 
-    <!-- xShield persistent foreground notification — plain FGS, NO foregroundServiceType -->
+    <!-- xShield persistent foreground notification — Android 14 needs the type. -->
     <service
       android:name=".ShieldNotificationService"
+      android:foregroundServiceType="dataSync"
       android:exported="false">
     </service>
 
-    <!-- Ransomware file-system watcher — plain FGS, no foregroundServiceType (Android 14 safe) -->
+    <!-- Ransomware file-system watcher — Android 14 needs the type or startForeground crashes. -->
     <service
       android:name=".RansomwareWatcherService"
+      android:foregroundServiceType="dataSync"
       android:exported="false">
     </service>
 

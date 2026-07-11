@@ -7,20 +7,24 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
+import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 
 /**
  * Persistent foreground notification service.
  * Shows "xShield active — N threats blocked today" in notification tray.
- * Plain FGS — NO foregroundServiceType (crashes Android 14+).
+ * Android 14 (API 34) requires the dataSync FGS type (declared in the manifest and
+ * passed to startForeground) or the call throws and crashes the app.
  */
 public class ShieldNotificationService extends Service {
     public static final String CHANNEL_ID = "xshield_protection";
     public static final int NOTIFICATION_ID = 1001;
     private static final String PREFS = "AnkrShieldPrefs";
+    private static final String TAG = "ShieldNotification";
 
     @Override
     public void onCreate() {
@@ -65,7 +69,18 @@ public class ShieldNotificationService extends Service {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build();
 
-        startForeground(NOTIFICATION_ID, notification);
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(NOTIFICATION_ID, notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "startForeground failed (" + e.getClass().getSimpleName() + "): " + e.getMessage());
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         return START_STICKY;
     }
 

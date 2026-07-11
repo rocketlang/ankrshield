@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.FileObserver;
 import android.os.IBinder;
@@ -103,8 +104,22 @@ public class RansomwareWatcherService extends Service {
     public void onCreate() {
         super.onCreate();
         createNotificationChannel();
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForeground(FOREGROUND_ID, buildNotification("Ransomware Watch", "Monitoring storage for encryption activity"));
+        // Android 14 (API 34) requires the FGS type to be passed explicitly and to match
+        // the manifest. An uncaught throw here kills the whole process (looked like the
+        // app "folding shut" when the user tapped Start), so guard it and stopSelf cleanly.
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                startForeground(FOREGROUND_ID,
+                    buildNotification("Ransomware Watch", "Monitoring storage for encryption activity"),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForeground(FOREGROUND_ID,
+                    buildNotification("Ransomware Watch", "Monitoring storage for encryption activity"));
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "startForeground failed (" + e.getClass().getSimpleName() + "): " + e.getMessage());
+            stopSelf();
+            return;
         }
         startWatching();
         Log.i(TAG, "RansomwareWatcherService started");

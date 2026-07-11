@@ -449,6 +449,16 @@ export function SettingsScreen({ navigation }: any) {
           </View>
           <Text style={styles.settingValue}>&gt;</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity style={styles.settingRow} onPress={() => navigation.navigate('Logs')}>
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>🩺 Diagnostic Log</Text>
+            <Text style={styles.settingDescription}>
+              See exactly what happened when a tool didn&apos;t enable — then Share it to us
+            </Text>
+          </View>
+          <Text style={styles.settingValue}>&gt;</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Bitwarden Password Manager (Android only) */}

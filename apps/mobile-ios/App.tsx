@@ -46,6 +46,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { iOSPermissionAuditScreen } from './src/screens/iOSPermissionAuditScreen';
 import { LinkScannerScreen } from './src/screens/LinkScannerScreen';
 import { LiveThreatsScreen } from './src/screens/LiveThreatsScreen';
+import { LogScreen } from './src/screens/LogScreen';
 import { NetworkBehaviorScreen } from './src/screens/NetworkBehaviorScreen';
 import { OnboardingScreen, ONBOARDING_KEY } from './src/screens/OnboardingScreen';
 import { PermissionChangeScreen } from './src/screens/PermissionChangeScreen';
@@ -63,6 +64,11 @@ import { ThreatAlertsScreen } from './src/screens/ThreatAlertsScreen';
 import { UpiGuardScreen } from './src/screens/UpiGuardScreen';
 import { WarriorScreen } from './src/screens/WarriorScreen';
 import { WhatsAppGuardScreen } from './src/screens/WhatsAppGuardScreen';
+import { installDebugLog } from './src/services/DebugLog';
+
+// Start capturing console.error/warn + uncaught JS errors into the in-app
+// Diagnostic Log (Settings → Diagnostic Log) as early as possible.
+installDebugLog();
 
 function eb(Component: React.ComponentType<any>, name: string) {
   return (props: any) => (
@@ -446,6 +452,11 @@ function App(): React.JSX.Element {
             name="Settings"
             component={eb(SettingsScreen, 'Settings')}
             options={{ title: 'Settings' }}
+          />
+          <Stack.Screen
+            name="Logs"
+            component={eb(LogScreen, 'Logs')}
+            options={{ title: 'Diagnostic Log' }}
           />
           <Stack.Screen
             name="Warrior"
