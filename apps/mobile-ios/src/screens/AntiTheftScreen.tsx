@@ -17,6 +17,8 @@ import {
   View,
 } from 'react-native';
 
+import { DebugLog } from '../services/DebugLog';
+
 const { AntiTheft } = NativeModules;
 
 interface LocationResult {
@@ -28,9 +30,15 @@ interface LocationResult {
 }
 
 function formatAge(ms: number): string {
-  if (ms < 60_000) return 'just now';
-  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m ago`;
-  if (ms < 86_400_000) return `${Math.floor(ms / 3_600_000)}h ago`;
+  if (ms < 60_000) {
+    return 'just now';
+  }
+  if (ms < 3_600_000) {
+    return `${Math.floor(ms / 60_000)}m ago`;
+  }
+  if (ms < 86_400_000) {
+    return `${Math.floor(ms / 3_600_000)}h ago`;
+  }
   return `${Math.floor(ms / 86_400_000)}d ago`;
 }
 
@@ -48,13 +56,17 @@ export function AntiTheftScreen() {
   const [actionInProgress, setActionInProgress] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!AntiTheft) return;
+    if (!AntiTheft) {
+      return;
+    }
     const active: boolean = await AntiTheft.isDeviceAdminActive().catch(() => false);
     setAdminActive(active);
   }, []);
 
   const fetchLocation = useCallback(async () => {
-    if (!AntiTheft) return;
+    if (!AntiTheft) {
+      return;
+    }
     setLocLoading(true);
     try {
       const loc: LocationResult | null = await AntiTheft.getLastLocation();
@@ -69,10 +81,22 @@ export function AntiTheftScreen() {
     fetchLocation();
   }, [refresh, fetchLocation]);
 
-  const handleActivate = useCallback(() => {
-    AntiTheft?.requestAdminActivation?.();
-    // Re-check status after a short delay (user may have just activated)
-    setTimeout(refresh, 3000);
+  const handleActivate = useCallback(async () => {
+    try {
+      DebugLog.log('AntiTheft', 'opening Device Admin activation screen');
+      await AntiTheft?.requestAdminActivation?.();
+    } catch (e: any) {
+      const msg = e?.message ?? 'Could not open the Device Admin screen.';
+      DebugLog.error('AntiTheft', 'activation failed:', msg);
+      Alert.alert(
+        'Could not open Device Admin',
+        `${msg}\n\nYou can enable it manually: Settings → Security → Device admin apps → AnkrShield.`
+      );
+    }
+    // Re-check status a few times (user may return after activating in Settings).
+    setTimeout(refresh, 2000);
+    setTimeout(refresh, 5000);
+    setTimeout(refresh, 10000);
   }, [refresh]);
 
   const handleLock = useCallback(() => {
@@ -100,7 +124,9 @@ export function AntiTheftScreen() {
   }, []);
 
   const handleWipe = useCallback(() => {
-    if (wipeConfirmText.trim().toUpperCase() !== 'WIPE') return;
+    if (wipeConfirmText.trim().toUpperCase() !== 'WIPE') {
+      return;
+    }
     Alert.alert(
       '⚠️ Final Confirmation',
       'This will PERMANENTLY erase all data on this device. It cannot be undone. Are you absolutely sure?',

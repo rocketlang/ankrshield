@@ -54,7 +54,10 @@ const PROTECTION_TOOLS: {
 }[] = [
   // India-specific threats first
   { icon: '💳', name: 'UPI Guard', desc: 'Payment fraud check', route: 'UpiGuard', dep: 'none' },
-  { icon: '💬', name: 'SMS Shield', desc: 'Fraud SMS scanner', route: 'SmsShield', dep: 'sms' },
+  // SMS Shield opens a paste-and-analyze fraud checker — no permission needed, so
+  // it's honestly "Ready" (works on tap), not "Enable". (Live auto-SMS scanning is a
+  // separate OtpGuard feature with its own flow; this tile never gated it.)
+  { icon: '💬', name: 'SMS Shield', desc: 'Fraud SMS scanner', route: 'SmsShield', dep: 'none' },
   {
     icon: '📞',
     name: 'Call Shield',

@@ -76,20 +76,38 @@ public class AntiTheftModule extends ReactContextBaseJavaModule {
 
     /**
      * Opens the Android system screen for the user to activate Device Admin.
-     * Non-blocking — does not wait for the user's choice.
+     * Launches from the CURRENT ACTIVITY when available (the reliable path — an
+     * app-context start with NEW_TASK is silently dropped by some OEMs). Resolves
+     * true once the system screen is launched; rejects with the reason if it can't,
+     * so the JS side can show the failure instead of a dead button.
      */
     @ReactMethod
-    public void requestAdminActivation() {
+    public void requestAdminActivation(Promise promise) {
         try {
+            if (getDpm().isAdminActive(getAdminComponent())) {
+                // Already active — nothing to open.
+                promise.resolve(true);
+                return;
+            }
             Intent intent = new Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
             intent.putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, getAdminComponent());
             intent.putExtra(
                 DevicePolicyManager.EXTRA_ADD_EXPLANATION,
                 "AnkrShield uses Device Admin to lock your phone and remotely wipe it if lost or stolen."
             );
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            getReactApplicationContext().startActivity(intent);
-        } catch (Exception ignored) {}
+            android.app.Activity activity = getCurrentActivity();
+            if (activity != null) {
+                activity.startActivity(intent);
+            } else {
+                // No foreground activity — fall back to app context (needs NEW_TASK).
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getReactApplicationContext().startActivity(intent);
+            }
+            promise.resolve(true);
+        } catch (Exception e) {
+            promise.reject("ADMIN_ACTIVATION_FAILED",
+                e.getClass().getSimpleName() + ": " + e.getMessage(), e);
+        }
     }
 
     /**
