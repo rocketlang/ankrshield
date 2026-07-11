@@ -78,6 +78,7 @@
     "overrides": {
       "typescript": "^5.9.3",
       "chalk": "^4.1.2",
+      "lint-staged>chalk": "^5.4.1",
       "react-native-screens": "3.29.0",
       "react-native-safe-area-context": "4.8.2",
       "react-native-svg": "14.1.0",
