@@ -63,12 +63,16 @@ export function CaughtInActScreen({ navigation }: any) {
       const nameOf = (pkg: string) =>
         installed.find((a) => a.packageName === pkg.split(',')[0])?.appName ?? pkg.split(',')[0];
       setCards(
-        rows.map((r) => ({
-          ...r,
-          appName: nameOf(r.app),
-          expanded: false,
-          receipts: null,
-        }))
+        rows
+          // Most recent screen-off contact first — reads as an overnight timeline.
+          .slice()
+          .sort((a, b) => (b.lastTs || 0) - (a.lastTs || 0))
+          .map((r) => ({
+            ...r,
+            appName: nameOf(r.app),
+            expanded: false,
+            receipts: null,
+          }))
       );
     } catch (_e) {
       setCards([]);

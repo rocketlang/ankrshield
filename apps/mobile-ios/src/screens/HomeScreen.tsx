@@ -146,9 +146,11 @@ const PROTECTION_TOOLS: {
 ];
 
 // Badge visuals per honest state. `ready` = no permission needed (works on tap).
+// off → "Enable" (not a dead "Off"): the tile is tappable and its screen is where
+// you grant the permission / start the service. An amber call-to-action, not a status.
 const BADGE: Record<TileState, { dot: string; label: string; color: string }> = {
   active: { dot: '#22c55e', label: 'On', color: '#4ade80' },
-  off: { dot: '#f59e0b', label: 'Off', color: '#fbbf24' },
+  off: { dot: '#f59e0b', label: 'Enable', color: '#fbbf24' },
   ready: { dot: '#3b82f6', label: 'Ready', color: '#60a5fa' },
 };
 
@@ -496,7 +498,7 @@ export function HomeScreen({ navigation }: any) {
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: BADGE.off.dot }]} />
-              <Text style={styles.legendTxt}>Off</Text>
+              <Text style={styles.legendTxt}>Enable</Text>
             </View>
             <View style={styles.legendItem}>
               <View style={[styles.legendDot, { backgroundColor: BADGE.ready.dot }]} />
