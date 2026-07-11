@@ -184,7 +184,6 @@ export function registerEndpoint(opts: {
   endpoint_url: string;
   endpoint_label: string;
   api_type: 'openai' | 'anthropic' | 'azure' | 'ankr_proxy';
-  ownership_verified: boolean;
   roe_signed: boolean;
 }): LrkEndpoint {
   const db = getDb();
@@ -192,20 +191,17 @@ export function registerEndpoint(opts: {
   const now = new Date().toISOString();
   const url_hash = hashSnippet(opts.endpoint_url);
 
-  // @rule:ASMAI-P2-003 — a caller-asserted boolean is honestly labeled legacy_asserted;
-  // a proven method is only ever set by the ownership challenge flow.
+  // @rule:ASMAI-P2-003 + founder ruling 2026-07-11 — caller assertions are NOT honored;
+  // ownership_verified is only ever set by the proven challenge flow (no legacy pass).
   db.run(
     `INSERT INTO lrk_endpoints(id,customer_id,endpoint_url_hash,endpoint_label,api_type,ownership_verified,ownership_method,ownership_verified_at,roe_signed,registered_at,status)
-     VALUES(?,?,?,?,?,?,?,?,?,?,'active')`,
+     VALUES(?,?,?,?,?,0,NULL,NULL,?,?,'active')`,
     [
       id,
       opts.customer_id,
       url_hash,
       opts.endpoint_label,
       opts.api_type,
-      opts.ownership_verified ? 1 : 0,
-      opts.ownership_verified ? 'legacy_asserted' : null,
-      opts.ownership_verified ? now : null,
       opts.roe_signed ? 1 : 0,
       now,
     ]

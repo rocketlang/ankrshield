@@ -46,17 +46,21 @@ export async function scanRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: `api_type must be one of: ${validTypes.join(', ')}` });
     }
 
+    // @rule:ASMAI-P2-003 — asserted ownership is never honored (founder ruling 2026-07-11)
     const endpoint = registerEndpoint({
       customer_id,
       endpoint_url,
       endpoint_label,
       api_type,
-      ownership_verified: ownership_verified ?? false,
       roe_signed: roe_signed ?? false,
     });
 
     return reply.status(201).send({
       endpoint,
+      ...(ownership_verified !== undefined && {
+        note: 'ownership_verified is ignored — prove control via the ownership challenge',
+        challenge: `POST /api/v1/lrk/endpoints/${endpoint.id}/ownership/challenge`,
+      }),
       _meta: {
         computed_at: new Date().toISOString(),
         duration_ms: Date.now() - t0,
@@ -103,16 +107,19 @@ export async function scanRoutes(app: FastifyInstance) {
       });
     }
 
-    // @rule:ASMAI-S-006 — ownership check gate
+    // @rule:ASMAI-S-006 — ownership must be PROVEN (dns_txt / http_well_known / fleet_internal).
+    // Founder ruling 2026-07-11: no legacy pass — pre-P2 asserted rows must re-verify.
     const endpoint = getEndpoint(endpoint_id);
     if (!endpoint) {
       return reply.status(404).send({ error: 'endpoint not found' });
     }
-    if (!endpoint.ownership_verified) {
+    if (!endpoint.ownership_verified || endpoint.ownership_method === 'legacy_asserted') {
       return reply.status(403).send({
         error:
-          'Endpoint ownership not verified. Prove control via the ownership challenge before scanning.',
-        code: 'OWNERSHIP_NOT_VERIFIED',
+          endpoint.ownership_method === 'legacy_asserted'
+            ? 'Endpoint ownership was asserted, not proven. Re-verify via the ownership challenge before scanning.'
+            : 'Endpoint ownership not proven. Prove control via the ownership challenge before scanning.',
+        code: 'OWNERSHIP_NOT_PROVEN',
         rule: 'ASMAI-S-006',
         challenge: `POST /api/v1/lrk/endpoints/${endpoint_id}/ownership/challenge`,
       });
