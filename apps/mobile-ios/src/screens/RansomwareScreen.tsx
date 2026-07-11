@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 
+import { RemedyCard, type Severity } from '../components/RemedyCard';
 import { DebugLog } from '../services/DebugLog';
 
 const { RansomwareWatcher } = NativeModules;
@@ -23,32 +24,27 @@ const { RansomwareWatcher } = NativeModules;
 interface RansomAlert {
   id: string;
   type: 'ransom_note' | 'encrypted_file' | 'burst';
+  severity: Severity;
   filePath: string;
   details: string;
   ts: number;
 }
 
-const ALERT_META: Record<string, { icon: string; color: string; title: string }> = {
-  ransom_note: {
-    icon: '📄',
-    color: '#ef4444',
-    title: 'Ransom Note Detected',
-  },
-  encrypted_file: {
-    icon: '🔒',
-    color: '#f97316',
-    title: 'Encrypted File Extension',
-  },
-  burst: {
-    icon: '⚡',
-    color: '#eab308',
-    title: 'Rapid Encryption Burst',
-  },
+const ALERT_META: Record<string, { icon: string; title: string }> = {
+  ransom_note: { icon: '📄', title: 'Ransom Note Detected' },
+  encrypted_file: { icon: '🔒', title: 'Encrypted File Extension' },
+  burst: { icon: '⚡', title: 'Rapid Encryption Burst' },
 };
+
+// A file's parent directory — what "Ignore this folder" silences.
+function parentDir(path: string): string {
+  const i = path.lastIndexOf('/');
+  return i > 0 ? path.slice(0, i) : path;
+}
 
 let _alertId = 0;
 
-export function RansomwareScreen() {
+export function RansomwareScreen({ navigation }: any) {
   const [alerts, setAlerts] = useState<RansomAlert[]>([]);
   const [watching, setWatching] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -65,6 +61,7 @@ export function RansomwareScreen() {
         const loaded = (history ?? []).map((h: any) => ({
           id: String(++_alertId),
           type: h.type ?? 'encrypted_file',
+          severity: (h.severity ?? 'critical') as Severity,
           filePath: h.filePath ?? '',
           details: h.details ?? '',
           ts: h.ts ?? Date.now(),
@@ -82,6 +79,7 @@ export function RansomwareScreen() {
       const alert: RansomAlert = {
         id: String(++_alertId),
         type: ev.type ?? 'encrypted_file',
+        severity: (ev.severity ?? 'critical') as Severity,
         filePath: ev.filePath ?? '',
         details: ev.details ?? '',
         ts: Date.now(),
@@ -89,8 +87,41 @@ export function RansomwareScreen() {
       setAlerts((prev) => [alert, ...prev]);
     });
 
-    return () => sub.remove();
+    // A remedy applied from the notification (app was closed) — reconcile the feed.
+    const remedySub = emitter.addListener('RansomwareRemedyApplied', (ev: any) => {
+      if (ev?.remedy === 'ignore_dir' && ev.dir) {
+        setAlerts((prev) => prev.filter((a) => !a.filePath.startsWith(ev.dir)));
+      }
+    });
+
+    return () => {
+      sub.remove();
+      remedySub.remove();
+    };
   }, []);
+
+  // ── Remedies (founder law: every alert carries an action) ──────────────────
+  async function ignoreFolder(a: RansomAlert) {
+    const dir = parentDir(a.filePath);
+    try {
+      await RansomwareWatcher.ignoreDir(dir);
+      // Drop every alert under that folder from the feed.
+      setAlerts((prev) => prev.filter((x) => !x.filePath.startsWith(dir)));
+      DebugLog.log('Ransomware', `ignored folder ${dir}`);
+    } catch (e: any) {
+      DebugLog.error('Ransomware', 'ignoreDir failed:', e?.message || String(e));
+    }
+  }
+
+  function reviewApps() {
+    // We can't attribute the writing app from a file event — hand the user the
+    // installed-app list where they can force-stop / uninstall a culprit.
+    navigation?.navigate?.('AndroidMonitor');
+  }
+
+  function dismiss(a: RansomAlert) {
+    setAlerts((prev) => prev.filter((x) => x.id !== a.id));
+  }
 
   async function handleToggle() {
     if (!RansomwareWatcher || starting) {
@@ -200,23 +231,36 @@ export function RansomwareScreen() {
             </Text>
             {alerts.map((a) => {
               const meta = ALERT_META[a.type] ?? ALERT_META.encrypted_file;
+              // Every alert carries a remedy. Advisory (benign path): ignore or
+              // dismiss. Critical: ignore the folder or go review installed apps.
+              const remedies =
+                a.severity === 'advisory'
+                  ? [
+                      {
+                        label: 'Ignore this folder',
+                        kind: 'primary' as const,
+                        onPress: () => ignoreFolder(a),
+                      },
+                      { label: 'Dismiss', kind: 'neutral' as const, onPress: () => dismiss(a) },
+                    ]
+                  : [
+                      { label: 'Review apps', kind: 'primary' as const, onPress: reviewApps },
+                      {
+                        label: 'Ignore this folder',
+                        kind: 'neutral' as const,
+                        onPress: () => ignoreFolder(a),
+                      },
+                    ];
               return (
-                <View key={a.id} style={[s.alertCard, { borderLeftColor: meta.color }]}>
-                  <View style={s.alertHeader}>
-                    <Text style={s.alertIcon}>{meta.icon}</Text>
-                    <Text style={[s.alertTitle, { color: meta.color }]}>{meta.title}</Text>
-                    <Text style={s.alertTime}>
-                      {new Date(a.ts).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                  </View>
-                  <Text style={s.alertDetails}>{a.details}</Text>
-                  <Text style={s.alertPath} numberOfLines={2}>
-                    {a.filePath}
-                  </Text>
-                </View>
+                <RemedyCard
+                  key={a.id}
+                  icon={meta.icon}
+                  title={meta.title}
+                  severity={a.severity}
+                  detail={a.details}
+                  subPath={a.filePath}
+                  remedies={remedies}
+                />
               );
             })}
           </>
@@ -286,21 +330,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 8,
   },
-  alertCard: {
-    marginHorizontal: 12,
-    marginBottom: 10,
-    backgroundColor: '#1a0a0a',
-    borderRadius: 10,
-    borderLeftWidth: 4,
-    padding: 12,
-  },
-  alertHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  alertIcon: { fontSize: 18 },
-  alertTitle: { flex: 1, fontSize: 13, fontWeight: '700' },
-  alertTime: { color: '#4b5563', fontSize: 11 },
-  alertDetails: { color: '#d1d5db', fontSize: 12, marginBottom: 4 },
-  alertPath: { color: '#4b5563', fontSize: 10, fontFamily: 'monospace' },
-
   noticeBox: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   noticeIcon: { fontSize: 48, marginBottom: 16 },
   noticeText: { color: '#555', fontSize: 13, textAlign: 'center', lineHeight: 20 },

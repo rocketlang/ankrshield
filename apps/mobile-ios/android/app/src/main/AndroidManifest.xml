@@ -115,6 +115,15 @@
       </intent-filter>
     </receiver>
 
+    <!-- Ransomware remedy receiver — handles "Ignore this folder" from notifications -->
+    <receiver
+      android:name=".RansomwareActionReceiver"
+      android:exported="false">
+      <intent-filter>
+        <action android:name="com.ankr.shield.ACTION_RANSOM_IGNORE_DIR"/>
+      </intent-filter>
+    </receiver>
+
     <!-- xShield Quick Settings Tile (Android 7+) -->
     <service
       android:name=".QuickShieldTile"

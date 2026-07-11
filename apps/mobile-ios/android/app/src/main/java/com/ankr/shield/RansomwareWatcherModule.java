@@ -29,17 +29,21 @@ import com.facebook.react.modules.core.DeviceEventManagerModule;
 public class RansomwareWatcherModule extends ReactContextBaseJavaModule {
 
     private static volatile boolean running = false;
+    // Exposed so RansomwareActionReceiver can emit remedy events without holding a module ref.
+    public static volatile ReactApplicationContext reactContext = null;
 
     public RansomwareWatcherModule(@NonNull ReactApplicationContext ctx) {
         super(ctx);
+        reactContext = ctx;
 
         // Wire service detections → JS events
-        RansomwareWatcherService.listener = (type, filePath, details) -> {
+        RansomwareWatcherService.listener = (type, severity, filePath, details) -> {
             try {
                 ReactApplicationContext rctx = getReactApplicationContext();
                 if (!rctx.hasActiveCatalystInstance()) return;
                 WritableMap m = Arguments.createMap();
                 m.putString("type", type);
+                m.putString("severity", severity);
                 m.putString("filePath", filePath);
                 m.putString("details", details);
                 m.putDouble("ts", System.currentTimeMillis());
@@ -94,6 +98,7 @@ public class RansomwareWatcherModule extends ReactContextBaseJavaModule {
                     : RansomwareWatcherService.alertHistory) {
                 WritableMap m = Arguments.createMap();
                 m.putString("type", alert.type);
+                m.putString("severity", alert.severity);
                 m.putString("filePath", alert.filePath);
                 m.putString("details", alert.details);
                 m.putDouble("ts", alert.ts);
@@ -102,6 +107,40 @@ public class RansomwareWatcherModule extends ReactContextBaseJavaModule {
             promise.resolve(arr);
         } catch (Exception e) {
             promise.reject("HISTORY_ERROR", e.getMessage(), e);
+        }
+    }
+
+    // ── Folder-ignore remedy (triage) ───────────────────────────────────────
+    @ReactMethod
+    public void ignoreDir(String dir, Promise promise) {
+        try {
+            ShieldPrefs.setRansomIgnoreDir(getReactApplicationContext(), dir, true);
+            promise.resolve(true);
+        } catch (Exception e) {
+            promise.reject("IGNORE_ERROR", e.getMessage(), e);
+        }
+    }
+
+    @ReactMethod
+    public void unignoreDir(String dir, Promise promise) {
+        try {
+            ShieldPrefs.setRansomIgnoreDir(getReactApplicationContext(), dir, false);
+            promise.resolve(true);
+        } catch (Exception e) {
+            promise.reject("UNIGNORE_ERROR", e.getMessage(), e);
+        }
+    }
+
+    @ReactMethod
+    public void getIgnoredDirs(Promise promise) {
+        try {
+            WritableArray arr = Arguments.createArray();
+            for (String d : ShieldPrefs.getRansomIgnoreDirs(getReactApplicationContext())) {
+                arr.pushString(d);
+            }
+            promise.resolve(arr);
+        } catch (Exception e) {
+            promise.reject("IGNORED_ERROR", e.getMessage(), e);
         }
     }
 

@@ -41,6 +41,13 @@ class MainActivity : ReactActivity() {
       newIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
       setIntent(newIntent)
     }
+    // Notification tap deep-links (e.g. the ransomware alert body) arrive as VIEW
+    // intents with an ankrshield:// URI. Keep the intent so RN Linking routes it.
+    else if (intent?.action == Intent.ACTION_VIEW &&
+             intent.data?.scheme == "ankrshield") {
+      intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+      setIntent(intent)
+    }
   }
 
   /**

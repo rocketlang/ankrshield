@@ -44,6 +44,7 @@ final class ShieldPrefs {
     private static final String KEY_CLIP_HYG   = "clipboard_hygiene";
     private static final String KEY_BANK_STOP  = "bank_auto_stop";
     private static final String KEY_WAS_RUNNING = "shield_was_running";
+    private static final String KEY_RANSOM_IGNORE = "ransom_ignore_dirs";
 
     private ShieldPrefs() {}
 
@@ -185,6 +186,25 @@ final class ShieldPrefs {
         Set<String> a = getAllowDomains(ctx);
         if (allow) a.add(d); else a.remove(d);
         prefs(ctx).edit().putStringSet(KEY_ALLOW, a).apply();
+    }
+
+    // ── Ransomware folder-ignore (triage remedy) ─────────────────────────────
+    // Absolute directory paths the ransomware watcher must not alert on. The
+    // "Ignore this folder" remedy adds the alerting file's parent dir here; a
+    // file whose path starts with any ignored dir is skipped in checkFile().
+    // Seeded with known-benign system paths so the .thumbnails-style false alarm
+    // (thumbnailer rewriting cache) is advisory, not a MAX-priority scare.
+
+    static Set<String> getRansomIgnoreDirs(Context ctx) {
+        return new HashSet<>(prefs(ctx).getStringSet(KEY_RANSOM_IGNORE, Collections.emptySet()));
+    }
+
+    static void setRansomIgnoreDir(Context ctx, String dir, boolean ignore) {
+        if (dir == null || dir.trim().isEmpty()) return;
+        String d = dir.trim();
+        Set<String> s = getRansomIgnoreDirs(ctx);
+        if (ignore) s.add(d); else s.remove(d);
+        prefs(ctx).edit().putStringSet(KEY_RANSOM_IGNORE, s).apply();
     }
 
     /** Effective set the VPN should exclude, given the current mode. */

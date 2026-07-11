@@ -3,9 +3,11 @@ package com.ankr.shield;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.net.Uri;
 import android.os.Build;
 import android.os.FileObserver;
 import android.os.IBinder;
@@ -67,6 +69,15 @@ public class RansomwareWatcherService extends Service {
         "files_encrypted", "help_decrypt", "cryptolocker"
     );
 
+    // Known-benign path fragments. A rename BURST confined to these is the OS doing
+    // housekeeping (thumbnail regen, trash, app cache), not encryption — so it's
+    // downgraded to "advisory" (FP-018: cite why, don't cry wolf). An encrypted
+    // extension or ransom note anywhere is still "critical".
+    private static final String[] BENIGN_PATH_FRAGMENTS = {
+        "/.thumbnails/", "/.trashed", "/cache/", "/.cache/",
+        "/android/data/", "/android/media/", "/.tmp"
+    };
+
     // Rapid rename burst tracking: timestamp list (last N renames)
     private static final List<Long> RENAME_TIMESTAMPS = new CopyOnWriteArrayList<>();
     private static final int BURST_WINDOW_MS = 30_000;  // 30 seconds
@@ -74,7 +85,7 @@ public class RansomwareWatcherService extends Service {
 
     // Event listener for React Native bridge
     public interface RansomwareListener {
-        void onRansomwareDetected(String type, String filePath, String details);
+        void onRansomwareDetected(String type, String severity, String filePath, String details);
     }
     public static volatile RansomwareListener listener = null;
 
@@ -83,12 +94,14 @@ public class RansomwareWatcherService extends Service {
 
     public static class RansomwareAlert {
         public final String type;       // "ransom_note" | "encrypted_file" | "burst"
+        public final String severity;   // "critical" | "advisory"
         public final String filePath;
         public final String details;
         public final long ts;
 
-        RansomwareAlert(String type, String filePath, String details) {
+        RansomwareAlert(String type, String severity, String filePath, String details) {
             this.type = type;
+            this.severity = severity;
             this.filePath = filePath;
             this.details = details;
             this.ts = System.currentTimeMillis();
@@ -182,48 +195,57 @@ public class RansomwareWatcherService extends Service {
     private void checkFile(File f) {
         if (!f.exists() || !f.isFile()) return;
 
+        String absPath = f.getAbsolutePath();
+        // Folder-ignore remedy: the user (or the seed) marked this dir benign.
+        if (isIgnored(absPath)) return;
+
         String name = f.getName().toLowerCase();
         String ext = extension(name);
         String nameLower = name;
 
-        // 1. Encrypted extension
+        // 1. Encrypted extension — a real ransomware signal, always critical
         if (RANSOM_EXTENSIONS.contains(ext)) {
-            emitAlert("encrypted_file", f.getAbsolutePath(),
+            emitAlert("encrypted_file", "critical", absPath,
                 "File with ransomware extension detected: ." + ext);
             return;
         }
 
-        // 2. Ransom note by filename
+        // 2. Ransom note by filename — always critical
         for (String notePrefix : RANSOM_NOTE_NAMES) {
             if (nameLower.startsWith(notePrefix) || nameLower.contains(notePrefix)) {
-                emitAlert("ransom_note", f.getAbsolutePath(),
+                emitAlert("ransom_note", "critical", absPath,
                     "Possible ransom note: " + f.getName());
                 return;
             }
         }
 
-        // 3. Rapid rename burst tracking
+        // 3. Rapid rename burst — corroboration gate: a burst confined to a
+        // known-benign system path is advisory (housekeeping), else critical.
         long now = System.currentTimeMillis();
         RENAME_TIMESTAMPS.add(now);
-        // Purge old entries outside window
         RENAME_TIMESTAMPS.removeIf(ts -> (now - ts) > BURST_WINDOW_MS);
         if (RENAME_TIMESTAMPS.size() >= BURST_THRESHOLD) {
             RENAME_TIMESTAMPS.clear(); // reset to avoid repeated alerts
-            emitAlert("burst", f.getAbsolutePath(),
-                BURST_THRESHOLD + " file changes in " + (BURST_WINDOW_MS / 1000) + "s — possible encryption burst");
+            boolean benign = isBenignPath(absPath);
+            String details = benign
+                ? BURST_THRESHOLD + " file changes in " + (BURST_WINDOW_MS / 1000)
+                    + "s in a system folder — likely thumbnails/cache, not ransomware"
+                : BURST_THRESHOLD + " file changes in " + (BURST_WINDOW_MS / 1000)
+                    + "s — possible encryption burst";
+            emitAlert("burst", benign ? "advisory" : "critical", absPath, details);
         }
     }
 
-    private void emitAlert(String type, String filePath, String details) {
-        RansomwareAlert alert = new RansomwareAlert(type, filePath, details);
+    private void emitAlert(String type, String severity, String filePath, String details) {
+        RansomwareAlert alert = new RansomwareAlert(type, severity, filePath, details);
         alertHistory.add(0, alert);
         if (alertHistory.size() > 50) alertHistory.remove(alertHistory.size() - 1);
 
         RansomwareListener l = listener;
-        if (l != null) l.onRansomwareDetected(type, filePath, details);
+        if (l != null) l.onRansomwareDetected(type, severity, filePath, details);
 
         fireNotification(alert);
-        Log.w(TAG, "RANSOMWARE ALERT [" + type + "]: " + details);
+        Log.w(TAG, "RANSOMWARE ALERT [" + severity + "/" + type + "]: " + details);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -233,20 +255,75 @@ public class RansomwareWatcherService extends Service {
         return (dot >= 0 && dot < filename.length() - 1) ? filename.substring(dot + 1) : "";
     }
 
+    private static boolean isBenignPath(String absPath) {
+        String p = absPath.toLowerCase();
+        for (String frag : BENIGN_PATH_FRAGMENTS) {
+            if (p.contains(frag)) return true;
+        }
+        return false;
+    }
+
+    /** True if the file sits under any user-ignored directory. */
+    private boolean isIgnored(String absPath) {
+        for (String dir : ShieldPrefs.getRansomIgnoreDirs(this)) {
+            if (dir != null && !dir.isEmpty() && absPath.startsWith(dir)) return true;
+        }
+        return false;
+    }
+
+    static String parentDir(String absPath) {
+        if (absPath == null) return null;
+        int slash = absPath.lastIndexOf('/');
+        return slash > 0 ? absPath.substring(0, slash) : absPath;
+    }
+
     private void fireNotification(RansomwareAlert alert) {
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm == null) return;
-        String title = alert.type.equals("ransom_note") ? "⚠️ Possible ransom note found"
+
+        boolean advisory = "advisory".equals(alert.severity);
+        String title = advisory ? "ℹ️ Storage activity — likely not ransomware"
+                     : alert.type.equals("ransom_note") ? "⚠️ Possible ransom note found"
                      : alert.type.equals("burst")       ? "🚨 Suspicious file encryption burst"
                      : "🚨 Encrypted file extension detected";
-        Notification n = new NotificationCompat.Builder(this, CHANNEL_ID)
+
+        int thisId = notifId.incrementAndGet();
+
+        int piFlags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+            ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            : PendingIntent.FLAG_UPDATE_CURRENT;
+
+        // Tap the body → open the ransomware feed (RemedyCards), not Home.
+        Intent openIntent = new Intent(this, MainActivity.class)
+            .setAction(Intent.ACTION_VIEW)
+            .setData(Uri.parse("ankrshield://ransomware"))
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent openPi = PendingIntent.getActivity(this, thisId, openIntent, piFlags);
+
+        // "Ignore this folder" — one-tap triage remedy, no app open (mirrors
+        // WhatsAppGuard's "Delete Now"). Fires RansomwareActionReceiver.
+        String parent = parentDir(alert.filePath);
+        Intent ignoreIntent = new Intent(this, RansomwareActionReceiver.class)
+            .setAction(RansomwareActionReceiver.ACTION_IGNORE_DIR)
+            .putExtra(RansomwareActionReceiver.EXTRA_DIR, parent)
+            .putExtra(RansomwareActionReceiver.EXTRA_NOTIF_ID, thisId);
+        PendingIntent ignorePi = PendingIntent.getBroadcast(this, thisId, ignoreIntent, piFlags);
+
+        NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle(title)
             .setContentText(alert.details)
-            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setPriority(advisory ? NotificationCompat.PRIORITY_DEFAULT : NotificationCompat.PRIORITY_MAX)
             .setAutoCancel(true)
-            .build();
-        nm.notify(notifId.incrementAndGet(), n);
+            .setContentIntent(openPi)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Ignore this folder", ignorePi);
+
+        // Critical alerts also offer a direct route to review installed apps.
+        if (!advisory) {
+            b.addAction(android.R.drawable.ic_menu_manage, "Review apps", openPi);
+        }
+
+        nm.notify(thisId, b.build());
     }
 
     private Notification buildNotification(String title, String text) {

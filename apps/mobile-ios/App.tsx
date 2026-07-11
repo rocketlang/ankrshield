@@ -102,6 +102,12 @@ function handleDeepLink(url: string | null) {
           { url: decodeURIComponent(textParam) } as never
         );
       }
+      return;
+    }
+    // ankrshield://ransomware → Ransomware feed (tapped a ransomware alert)
+    if (url.startsWith('ankrshield://ransomware')) {
+      navigationRef.navigate('Ransomware' as never);
+      return;
     }
   } catch (_) {
     /* ignore */
