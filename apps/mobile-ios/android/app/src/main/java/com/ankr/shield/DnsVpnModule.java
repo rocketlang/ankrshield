@@ -271,6 +271,19 @@ public class DnsVpnModule extends ReactContextBaseJavaModule implements Activity
         promise.resolve(ShieldPrefs.isClipboardHygiene(getReactApplicationContext()));
     }
 
+    /** Bank auto-stop: tear down the VPN for a banking app in foreground, resume on
+     *  leave (needs the accessibility service to detect the foreground app). */
+    @ReactMethod
+    public void setBankAutoStop(boolean enabled, Promise promise) {
+        ShieldPrefs.setBankAutoStop(getReactApplicationContext(), enabled);
+        promise.resolve(null);
+    }
+
+    @ReactMethod
+    public void getBankAutoStop(Promise promise) {
+        promise.resolve(ShieldPrefs.isBankAutoStop(getReactApplicationContext()));
+    }
+
     // ─── Network quarantine — trojan containment (ASCT-T6) ──────────────────
 
     /** Contain a red-flagged app: every DNS query from it → NXDOMAIN. Persists. */

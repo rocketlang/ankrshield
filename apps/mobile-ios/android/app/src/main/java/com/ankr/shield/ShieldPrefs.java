@@ -42,6 +42,7 @@ final class ShieldPrefs {
     private static final String KEY_TAMED      = "tamed_set";
     private static final String KEY_ALLOW      = "allow_domains";
     private static final String KEY_CLIP_HYG   = "clipboard_hygiene";
+    private static final String KEY_BANK_STOP  = "bank_auto_stop";
 
     private ShieldPrefs() {}
 
@@ -56,6 +57,17 @@ final class ShieldPrefs {
 
     static void setClipboardHygiene(Context ctx, boolean enabled) {
         prefs(ctx).edit().putBoolean(KEY_CLIP_HYG, enabled).apply();
+    }
+
+    // Bank auto-stop: when a banking app comes to the foreground, tear down the VPN
+    // interface so the bank (which refuses to run under any VPN) works, then resume
+    // when it leaves. Default ON — a bank you can't use is worse than a brief gap.
+    static boolean isBankAutoStop(Context ctx) {
+        return prefs(ctx).getBoolean(KEY_BANK_STOP, true);
+    }
+
+    static void setBankAutoStop(Context ctx, boolean enabled) {
+        prefs(ctx).edit().putBoolean(KEY_BANK_STOP, enabled).apply();
     }
 
     static String getMode(Context ctx) {

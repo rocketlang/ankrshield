@@ -61,6 +61,7 @@ export function SettingsScreen({ navigation }: any) {
   const [protectionMode, setProtectionModeState] = useState<ProtectionMode>('smart');
   const [simpleMode, setSimpleMode] = useState(false);
   const [clipHygiene, setClipHygiene] = useState(true);
+  const [bankAutoStop, setBankAutoStop] = useState(true);
 
   useEffect(() => {
     MdmStorage.getItem('@ankrshield/mode')
@@ -70,11 +71,20 @@ export function SettingsScreen({ navigation }: any) {
       .getClipboardHygiene()
       .then(setClipHygiene)
       .catch(() => {});
+    vpnService
+      .getBankAutoStop()
+      .then(setBankAutoStop)
+      .catch(() => {});
   }, []);
 
   async function handleClipHygieneToggle(v: boolean) {
     setClipHygiene(v);
     await vpnService.setClipboardHygiene(v).catch(() => {});
+  }
+
+  async function handleBankAutoStopToggle(v: boolean) {
+    setBankAutoStop(v);
+    await vpnService.setBankAutoStop(v).catch(() => {});
   }
 
   function handleLangChange(lang: Lang) {
@@ -396,6 +406,24 @@ export function SettingsScreen({ navigation }: any) {
           <Switch
             value={clipHygiene}
             onValueChange={handleClipHygieneToggle}
+            disabled={Platform.OS !== 'android'}
+            trackColor={{ false: '#333', true: '#4CAF50' }}
+            thumbColor="#fff"
+          />
+        </View>
+
+        <View style={styles.settingRow}>
+          <View style={styles.settingInfo}>
+            <Text style={styles.settingLabel}>🏦 Banking Compatibility</Text>
+            <Text style={styles.settingDescription}>
+              Pause the shield automatically when a banking/UPI app is open — many banks refuse to
+              run while any VPN is active — then resume the moment you leave it. Needs the
+              accessibility guard on.
+            </Text>
+          </View>
+          <Switch
+            value={bankAutoStop}
+            onValueChange={handleBankAutoStopToggle}
             disabled={Platform.OS !== 'android'}
             trackColor={{ false: '#333', true: '#4CAF50' }}
             thumbColor="#fff"

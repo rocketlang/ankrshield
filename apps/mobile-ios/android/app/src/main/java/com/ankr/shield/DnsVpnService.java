@@ -87,6 +87,13 @@ public class DnsVpnService extends VpnService {
     static volatile boolean paused       = false;
     static volatile long    pauseUntilMs = 0;  // 0 = indefinite (call-driven)
 
+    // Bank suspend — the tun interface is torn down (so a banking app that refuses
+    // to run while ANY VPN is present sees no tun0), but the service stays alive and
+    // auto-resumes when the banking app leaves the foreground. Distinct from pause
+    // (which keeps tun0 up and only stops blocking). Driven by the accessibility
+    // service's foreground-app detection. running stays true throughout.
+    static volatile boolean bankSuspended = false;
+
 
     // Split-tunnel bypass: package names in this set bypass DNS filtering (VPN excluded)
     static final Set<String> bypassPackages = Collections.synchronizedSet(new HashSet<>());
@@ -161,6 +168,14 @@ public class DnsVpnService extends VpnService {
                     }
                 }
             }
+            return START_STICKY;
+        }
+        if ("BANK_SUSPEND".equals(action)) {
+            bankSuspend();
+            return START_STICKY;
+        }
+        if ("BANK_RESUME".equals(action)) {
+            bankResume();
             return START_STICKY;
         }
         if ("REBUILD".equals(action)) {
@@ -258,6 +273,46 @@ public class DnsVpnService extends VpnService {
 
         stopSelf();
         Log.i(TAG, "AnkrShield DNS VPN stopped");
+    }
+
+    /**
+     * Tear down the tun interface for a banking app WITHOUT stopping the service.
+     * The bank sees no VPN interface; the service stays alive (and foreground) so it
+     * can re-establish instantly when the bank leaves. No-op unless actively running.
+     */
+    private synchronized void bankSuspend() {
+        if (!running || bankSuspended) return;
+        bankSuspended = true;
+        shouldStop.set(true);
+        if (packetThread != null) {
+            packetThread.interrupt();
+            packetThread = null;
+        }
+        try {
+            if (vpnInterface != null) {
+                vpnInterface.close();
+                vpnInterface = null;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "bank suspend: close interface: " + e.getMessage());
+        }
+        Log.i(TAG, "Shield suspended for banking app — tun torn down, service alive");
+    }
+
+    /** Re-establish the tun interface + packet loop after the banking app leaves. */
+    private synchronized void bankResume() {
+        if (!running || !bankSuspended) return;
+        try {
+            shouldStop.set(false);
+            establishVpnInterface();
+            packetThread = new Thread(this::runPacketLoop, "ankr-dns-vpn");
+            packetThread.setDaemon(true);
+            packetThread.start();
+            bankSuspended = false;
+            Log.i(TAG, "Shield resumed after banking app left foreground");
+        } catch (Exception e) {
+            Log.e(TAG, "bank resume failed — leaving suspended: " + e.getMessage(), e);
+        }
     }
 
     // ─── Screen state (caught-in-act witness) ─────────────────────────────────

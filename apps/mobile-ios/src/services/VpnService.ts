@@ -387,6 +387,22 @@ class AnkrShieldVpn {
     return DnsVpn.getAllowedDomains() as Promise<string[]>;
   }
 
+  /** Bank auto-stop: pause the shield while a banking app is in the foreground (banks
+   *  refuse to run under any VPN), resume on leave. Needs the accessibility service. */
+  async setBankAutoStop(enabled: boolean): Promise<void> {
+    if (Platform.OS !== 'android' || !DnsVpn || !DnsVpn.setBankAutoStop) {
+      return;
+    }
+    await DnsVpn.setBankAutoStop(enabled);
+  }
+
+  async getBankAutoStop(): Promise<boolean> {
+    if (Platform.OS !== 'android' || !DnsVpn || !DnsVpn.getBankAutoStop) {
+      return true;
+    }
+    return DnsVpn.getBankAutoStop() as Promise<boolean>;
+  }
+
   /** Wipe the on-device scope ledger (user right; nothing ever left the phone). */
   async clearScopeLedger(): Promise<void> {
     if (Platform.OS !== 'android' || !DnsVpn) {

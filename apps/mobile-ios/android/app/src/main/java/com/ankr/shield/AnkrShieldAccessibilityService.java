@@ -170,6 +170,11 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
     private String lastForegroundPkg = "";
     private long lastOverlayAlertTs = 0;
 
+    // Bank auto-stop: true while WE suspended the shield because a banking app is
+    // in front, so we know to resume it when the user leaves that app.
+    private boolean bankAutoStopped = false;
+    private static final String BANK_CHANNEL = "bank_auto_stop";
+
     // Current call state
     private boolean callActive = false;
 
@@ -263,6 +268,7 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
             // Only update foreground if this is a real Activity (not SystemUI / overlay)
             if (!pkg.equals("com.android.systemui") && !pkg.isEmpty()) {
                 lastForegroundPkg = pkg;
+                handleBankAutoStop(pkg);
             }
         }
 
@@ -380,6 +386,86 @@ public class AnkrShieldAccessibilityService extends AccessibilityService {
         emitOverlayAlert(alert);
         sendOverlayNotification(alert);
         Log.w(TAG, "OVERLAY ATTACK: " + overlayPkg + " over " + appWindowPkg);
+    }
+
+    // ── Bank auto-stop ────────────────────────────────────────────────────────
+    // Many banking apps refuse to run while ANY VPN interface (tun0) exists — they
+    // detect it and show "disable VPN". Per-app bypass doesn't help (the interface
+    // still exists). So when a banking app comes to the foreground we tear the tun
+    // down entirely, and rebuild it the moment the user leaves. Keyboards/system UI
+    // are ignored so typing inside the bank app doesn't flap the shield.
+
+    private void handleBankAutoStop(String pkg) {
+        if (pkg == null || pkg.isEmpty() || pkg.equals("com.ankr.shield")) return;
+        if (isKnownSafeOverlay(pkg)) return;                       // keyboard/systemui/settings
+        if (!ShieldPrefs.isBankAutoStop(getApplicationContext())) return;
+
+        boolean isBank = FinancialApps.CURATED.contains(pkg);
+        if (isBank) {
+            if (DnsVpnService.running && !DnsVpnService.bankSuspended) {
+                sendVpnAction("BANK_SUSPEND");
+                bankAutoStopped = true;
+                sendBankNotification(pkg);
+            }
+        } else if (bankAutoStopped) {
+            // Left the banking app — bring the shield back.
+            if (DnsVpnService.running && DnsVpnService.bankSuspended) {
+                sendVpnAction("BANK_RESUME");
+            }
+            bankAutoStopped = false;
+            cancelBankNotification();
+        }
+    }
+
+    private void sendVpnAction(String action) {
+        try {
+            android.content.Intent i = new android.content.Intent(this, DnsVpnService.class);
+            i.setAction(action);
+            startService(i);
+            Log.i(TAG, "bank auto-stop → " + action);
+        } catch (Exception e) {
+            Log.w(TAG, "bank auto-stop sendVpnAction(" + action + ") failed: " + e.getMessage());
+        }
+    }
+
+    private void sendBankNotification(String bankPkg) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                NotificationChannel ch = new NotificationChannel(
+                    BANK_CHANNEL, "Banking Compatibility", NotificationManager.IMPORTANCE_LOW);
+                ch.setDescription("Tells you when the shield paused itself so a banking app works");
+                NotificationManager nmc =
+                    (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                if (nmc != null) nmc.createNotificationChannel(ch);
+            }
+            NotificationManager nm =
+                (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            Notification n = new NotificationCompat.Builder(this, BANK_CHANNEL)
+                .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+                .setContentTitle("🛡 Shield paused for your bank")
+                .setContentText("Your banking app blocks VPNs, so AnkrShield paused itself. "
+                    + "It turns back on automatically when you leave the app.")
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(
+                    "Your banking app refuses to run while a VPN is active, so AnkrShield "
+                    + "paused itself for it. Protection resumes automatically the moment you "
+                    + "leave the banking app. (Turn this off in AnkrShield → Settings.)"))
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setOngoing(true)
+                .setColor(0xFF3B82F6)
+                .build();
+            nm.notify(9600, n);
+        } catch (Exception e) {
+            Log.w(TAG, "bank notification failed: " + e.getMessage());
+        }
+    }
+
+    private void cancelBankNotification() {
+        try {
+            NotificationManager nm =
+                (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(9600);
+        } catch (Exception ignored) {}
     }
 
     private static final String[] FINANCIAL_PKGS = {
