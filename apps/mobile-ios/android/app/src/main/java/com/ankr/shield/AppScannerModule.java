@@ -122,6 +122,29 @@ public class AppScannerModule extends ReactContextBaseJavaModule {
     }
 
     /**
+     * Launch an installed app by its package (its main/launcher activity).
+     * Resolves true if launched, false if the app isn't installed / has no
+     * launcher (so JS can fall back to a web URL). Never throws to the UI.
+     */
+    @ReactMethod
+    public void openApp(String packageName, Promise promise) {
+        try {
+            Intent intent = getReactApplicationContext()
+                .getPackageManager()
+                .getLaunchIntentForPackage(packageName);
+            if (intent == null) {
+                promise.resolve(false); // not installed / no launcher
+                return;
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getReactApplicationContext().startActivity(intent);
+            promise.resolve(true);
+        } catch (Exception e) {
+            promise.resolve(false); // never crash the caller — JS falls back
+        }
+    }
+
+    /**
      * Launch the Android uninstall dialog for a specific app.
      * Android shows a system confirmation — we never force-uninstall.
      */

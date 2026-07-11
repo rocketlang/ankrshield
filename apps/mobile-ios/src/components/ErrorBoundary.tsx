@@ -56,6 +56,15 @@ export class ErrorBoundary extends React.Component<Props, State> {
             : 'This screen ran into a problem.'}
           {'\n'}AnkrShield is still protecting your device.
         </Text>
+        {/* Show the actual error so a tester can screenshot it — beta diagnostic. */}
+        {this.state.errorMessage ? (
+          <View style={styles.errBox}>
+            <Text selectable style={styles.errText}>
+              {this.props.name ? `[${this.props.name}] ` : ''}
+              {this.state.errorMessage}
+            </Text>
+          </View>
+        ) : null}
         <TouchableOpacity style={styles.retryBtn} onPress={this.handleRetry}>
           <Text style={styles.retryTxt}>Try again</Text>
         </TouchableOpacity>
@@ -75,6 +84,16 @@ const styles = StyleSheet.create({
   icon: { fontSize: 48, marginBottom: 16 },
   title: { color: '#fff', fontSize: 18, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
   sub: { color: '#555', fontSize: 13, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  errBox: {
+    backgroundColor: '#1a0d0d',
+    borderWidth: 1,
+    borderColor: '#4a1d1d',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+    maxWidth: '100%',
+  },
+  errText: { color: '#f87171', fontSize: 11, fontFamily: 'monospace', lineHeight: 16 },
   retryBtn: {
     backgroundColor: '#1a2a1a',
     borderWidth: 1,

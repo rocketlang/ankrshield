@@ -25,7 +25,19 @@ import {
   View,
 } from 'react-native';
 
-const { OtpGuard, LinkedDevices, SimSwap } = NativeModules;
+const { OtpGuard, LinkedDevices, SimSwap, AppScanner } = NativeModules;
+
+// Real package names → so we can LAUNCH the actual app (reliable), instead of
+// guessing at per-app "security settings" deep links that mostly don't exist.
+const APP_PACKAGES: Record<string, string> = {
+  whatsapp: 'com.whatsapp',
+  phonepe: 'com.phonepe.app',
+  paytm: 'net.one97.paytm',
+  gmail: 'com.google.android.gm',
+  instagram: 'com.instagram.android',
+  bhim: 'in.org.npci.upiapp',
+  facebook: 'com.facebook.katana',
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -236,13 +248,24 @@ export default function AccountGuardScreen() {
   }, [loadSignals]);
 
   const openSecuritySettings = useCallback(async (card: AccountCard) => {
+    const pkg = APP_PACKAGES[card.id];
     const deepLink = SECURITY_DEEPLINKS[card.id];
     const fallback = FALLBACK_URLS[card.id];
     try {
-      const canOpen = deepLink && (await Linking.canOpenURL(deepLink));
-      if (canOpen) {
+      // 1. Try a real security deep link if the app actually handles it.
+      if (deepLink && (await Linking.canOpenURL(deepLink))) {
         await Linking.openURL(deepLink);
-      } else if (fallback) {
+        return;
+      }
+      // 2. Otherwise LAUNCH the app itself — reliable, takes you into it.
+      if (pkg && AppScanner?.openApp) {
+        const opened = await AppScanner.openApp(pkg);
+        if (opened) {
+          return;
+        }
+      }
+      // 3. App not installed → its security webpage.
+      if (fallback) {
         await Linking.openURL(fallback);
       }
     } catch (_err) {
@@ -253,20 +276,28 @@ export default function AccountGuardScreen() {
   }, []);
 
   const secureAll = useCallback(async () => {
+    // Only the accounts that actually need attention — opening all 7 apps in a
+    // row is jarring and pointless. If everything's safe, say so.
+    const needAttention = accounts.filter((a) => a.status !== 'safe' && a.status !== 'unknown');
+    if (needAttention.length === 0) {
+      Alert.alert('All secure', 'No account needs attention right now — nothing to open.');
+      return;
+    }
     Alert.alert(
-      'Secure All Accounts',
-      "This will open each app's security settings so you can review linked sessions. Continue?",
+      'Review flagged accounts',
+      `Open ${needAttention.length} app${needAttention.length > 1 ? 's' : ''} that need${
+        needAttention.length > 1 ? '' : 's'
+      } a look, one at a time?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Open All',
+          text: 'Open',
           onPress: async () => {
-            for (const acc of accounts) {
-              const deepLink = SECURITY_DEEPLINKS[acc.id];
-              const canOpen = deepLink && (await Linking.canOpenURL(deepLink));
-              if (canOpen) {
-                await Linking.openURL(deepLink);
-                await new Promise((r) => setTimeout(r, 2000));
+            for (const acc of needAttention) {
+              const pkg = APP_PACKAGES[acc.id];
+              if (pkg && AppScanner?.openApp) {
+                await AppScanner.openApp(pkg);
+                await new Promise((r) => setTimeout(r, 2500));
               }
             }
           },
