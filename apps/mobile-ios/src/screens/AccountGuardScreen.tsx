@@ -41,7 +41,11 @@ const APP_PACKAGES: Record<string, string> = {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type AccountStatus = 'safe' | 'warning' | 'danger' | 'unknown';
+// 'unknown' = signals still loading (genuinely transient — a spinner is honest).
+// 'unmonitored' = AnkrShield has NO live signal for this app and never will from
+// the current sensors (A10/A11/A12). A permanent null — must NOT show a spinner
+// (FP-018: don't imply work-in-progress that never completes).
+type AccountStatus = 'safe' | 'warning' | 'danger' | 'unknown' | 'unmonitored';
 
 interface AccountCard {
   id: string;
@@ -95,6 +99,7 @@ const STATUS_COLOR: Record<AccountStatus, string> = {
   warning: C.amber,
   danger: C.red,
   unknown: C.muted,
+  unmonitored: C.muted,
 };
 
 const STATUS_LABEL: Record<AccountStatus, string> = {
@@ -102,6 +107,7 @@ const STATUS_LABEL: Record<AccountStatus, string> = {
   warning: 'Check',
   danger: 'At Risk',
   unknown: 'Checking...',
+  unmonitored: 'Not monitored',
 };
 
 const STATUS_ICON: Record<AccountStatus, string> = {
@@ -109,6 +115,9 @@ const STATUS_ICON: Record<AccountStatus, string> = {
   warning: '⚠️',
   danger: '🚨',
   unknown: '⏳',
+  // Neutral, static — NOT a spinner. This app has no live signal; saying so is
+  // the honest null, not a promise that a result is coming.
+  unmonitored: '○',
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -187,7 +196,7 @@ export default function AccountGuardScreen() {
           id: 'gmail',
           name: 'Gmail',
           icon: '📧',
-          status: 'unknown',
+          status: 'unmonitored',
           detail: 'Not monitored — AnkrShield has no live signal for this app',
           deepLink: 'gmail',
         },
@@ -195,7 +204,7 @@ export default function AccountGuardScreen() {
           id: 'instagram',
           name: 'Instagram',
           icon: '📷',
-          status: 'unknown',
+          status: 'unmonitored',
           detail: 'Not monitored — AnkrShield has no live signal for this app',
           deepLink: 'instagram',
         },
@@ -211,7 +220,7 @@ export default function AccountGuardScreen() {
           id: 'facebook',
           name: 'Facebook',
           icon: '👥',
-          status: 'unknown',
+          status: 'unmonitored',
           detail: 'Not monitored — AnkrShield has no live signal for this app',
           deepLink: 'facebook',
         },
@@ -278,7 +287,7 @@ export default function AccountGuardScreen() {
   const secureAll = useCallback(async () => {
     // Only the accounts that actually need attention — opening all 7 apps in a
     // row is jarring and pointless. If everything's safe, say so.
-    const needAttention = accounts.filter((a) => a.status !== 'safe' && a.status !== 'unknown');
+    const needAttention = accounts.filter((a) => a.status === 'warning' || a.status === 'danger');
     if (needAttention.length === 0) {
       Alert.alert('All secure', 'No account needs attention right now — nothing to open.');
       return;
@@ -322,6 +331,8 @@ export default function AccountGuardScreen() {
       ]
     );
   }, [loadSignals]);
+
+  const unmonitoredCount = accounts.filter((a) => a.status === 'unmonitored').length;
 
   const overallStatus: AccountStatus = accounts.some((a) => a.status === 'danger')
     ? 'danger'
@@ -371,7 +382,10 @@ export default function AccountGuardScreen() {
             <Text style={s.bannerSub}>
               {overallStatus === 'danger' && 'Tap the affected account for details'}
               {overallStatus === 'warning' && 'Some accounts need your attention'}
-              {overallStatus === 'safe' && 'No active threats in the last 24 hours'}
+              {overallStatus === 'safe' &&
+                (unmonitoredCount > 0
+                  ? `${accounts.length - unmonitoredCount} monitored, no threats in 24h · ${unmonitoredCount} not monitored`
+                  : 'No active threats in the last 24 hours')}
             </Text>
           </View>
         </View>

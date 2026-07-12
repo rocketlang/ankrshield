@@ -226,7 +226,7 @@ function Hero() {
             </a>
           </div>
           <div style={{ color: MUTED, fontSize: 12, marginTop: 12 }}>
-            Enable "Install from unknown sources" in Android settings · v1.4.0
+            Enable "Install from unknown sources" in Android settings · v1.9.0
           </div>
         </div>
 
@@ -668,7 +668,7 @@ function DownloadSection() {
                 marginTop: 8,
               }}
             >
-              ↓ Download AnkrShield v1.4.0
+              ↓ Download AnkrShield v1.9.0
             </a>
             <div style={{ color: MUTED, fontSize: 11, marginTop: 8, textAlign: 'center' }}>
               Apache 2.0 · Open source · No telemetry · 14 MB
@@ -879,7 +879,7 @@ function Footer() {
           )}
         </div>
         <div style={{ color: MUTED + '88', fontSize: 11 }}>
-          © 2026 Powerp Box IT Solutions Pvt Ltd · Apache 2.0 Open Source · v1.4.0
+          © 2026 Powerp Box IT Solutions Pvt Ltd · Apache 2.0 Open Source · v1.9.0
         </div>
       </div>
     </footer>
