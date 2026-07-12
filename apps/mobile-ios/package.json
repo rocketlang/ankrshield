@@ -12,6 +12,9 @@
     "test": "jest",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "guard:version": "node scripts/version-lockstep-guard.mjs",
+    "guard:spinners": "node scripts/spinner-reset-scan.mjs",
+    "guard": "node scripts/version-lockstep-guard.mjs && node scripts/spinner-reset-scan.mjs",
     "build:trackers": "node android/build-tracker-db.js  # regenerates the 203k on-device blocklist (needs better-sqlite3)"
   },
   "dependencies": {

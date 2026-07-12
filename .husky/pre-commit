@@ -2,3 +2,9 @@
 . "$(dirname -- "$0")/_/husky.sh"
 
 pnpm exec lint-staged --quiet
+
+# Compiled lessons → guards (feedback_lessons_become_guards_not_memory):
+# block a commit that ships a lying version string or a never-resetting spinner.
+# Both resolve their own paths, so cwd here (repo root) is fine; fast + no deps.
+node apps/mobile-ios/scripts/version-lockstep-guard.mjs || exit 1
+node apps/mobile-ios/scripts/spinner-reset-scan.mjs || exit 1
