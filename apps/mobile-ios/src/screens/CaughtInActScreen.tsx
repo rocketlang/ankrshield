@@ -95,12 +95,18 @@ export function CaughtInActScreen({ navigation }: any) {
     setCards((prev) => prev.map((c, i) => (i === idx ? { ...c, expanded: !c.expanded } : c)));
     const card = cards[idx];
     if (card && card.receipts === null) {
-      const receipts = await vpnService.getScopeDetail(card.app);
-      // only the trackers (beyond-scope), worst first
-      const trackers = receipts
-        .filter((r) => r.category && r.category !== 'clean')
-        .sort((a, b) => b.risk - a.risk || b.blocked + b.allowed - (a.blocked + a.allowed));
-      setCards((prev) => prev.map((c, i) => (i === idx ? { ...c, receipts: trackers } : c)));
+      try {
+        const receipts = await vpnService.getScopeDetail(card.app);
+        // only the trackers (beyond-scope), worst first
+        const trackers = receipts
+          .filter((r) => r.category && r.category !== 'clean')
+          .sort((a, b) => b.risk - a.risk || b.blocked + b.allowed - (a.blocked + a.allowed));
+        setCards((prev) => prev.map((c, i) => (i === idx ? { ...c, receipts: trackers } : c)));
+      } catch (_e) {
+        // Resolve to an empty set rather than spinning forever — the row then
+        // reads "No cited tracker rows" (FP-018: no perpetual spinner).
+        setCards((prev) => prev.map((c, i) => (i === idx ? { ...c, receipts: [] } : c)));
+      }
     }
   };
 

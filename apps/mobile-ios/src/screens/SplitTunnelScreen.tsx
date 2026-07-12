@@ -67,12 +67,17 @@ const COLORS = {
 export default function SplitTunnelScreen() {
   const [apps, setApps] = useState<InstalledApp[]>([]);
   const [loading, setLoading] = useState(true);
+  const [unsupported, setUnsupported] = useState(false);
   const [query, setQuery] = useState('');
   const [passiveMode, setPassiveMode] = useState(false);
   const [savingPkg, setSavingPkg] = useState<string | null>(null);
 
   const loadApps = useCallback(async () => {
     if (Platform.OS !== 'android' || !DnsVpn) {
+      // Per-app split tunnelling needs Android's VpnService. Settle to a static
+      // "not available" state, never a perpetual "Loading…" spinner (FP-018).
+      setUnsupported(true);
+      setLoading(false);
       return;
     }
     setLoading(true);
@@ -216,6 +221,12 @@ export default function SplitTunnelScreen() {
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={COLORS.accent} />
           <Text style={[styles.passiveSub, { marginTop: 12 }]}>Loading installed apps…</Text>
+        </View>
+      ) : unsupported ? (
+        <View style={styles.centered}>
+          <Text style={[styles.passiveSub, { marginTop: 12, textAlign: 'center' }]}>
+            Split tunnelling needs Android's per-app VPN — not available on this device.
+          </Text>
         </View>
       ) : (
         <FlatList

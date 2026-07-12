@@ -172,7 +172,9 @@ export function ScopeReportScreen() {
     }
     setExpanded(v.packageName);
     if (!receipts[v.packageName] && v.status !== 'UNWITNESSED') {
-      const rows = await getReceipts(v.packageName);
+      // Resolve to [] on failure so the row settles to its empty state rather
+      // than spinning forever (FP-018: no perpetual spinner).
+      const rows = await getReceipts(v.packageName).catch(() => []);
       setReceipts((prev) => ({ ...prev, [v.packageName]: rows }));
     }
   };

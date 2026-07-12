@@ -81,7 +81,9 @@ export function AvScannerScreen() {
   const emitterRef = useRef<NativeEventEmitter | null>(null);
 
   useEffect(() => {
-    if (Platform.OS !== 'android' || !AvScanner) return;
+    if (Platform.OS !== 'android' || !AvScanner) {
+      return;
+    }
     emitterRef.current = new NativeEventEmitter(AvScanner);
 
     const subProgress = emitterRef.current.addListener('AvScanProgress', (ev: ScanProgress) =>
@@ -100,13 +102,22 @@ export function AvScannerScreen() {
   }, []);
 
   const startScan = useCallback(async () => {
-    if (!AvScanner) return;
+    if (!AvScanner) {
+      return;
+    }
     setScanning(true);
     setResults([]);
     setProgress({ current: 0, total: 0, appName: 'Initialising…' });
     try {
       const raw: ScanResult[] = await AvScanner.startScan(vtApiKey.trim() || null);
       setResults(raw);
+      // The promise resolving IS scan-complete — settle here rather than relying
+      // solely on the AvScanComplete event, which may not fire (zero apps / race)
+      // and would leave a perpetual progress bar (FP-018). The event is now just
+      // an early optimisation; this is idempotent with it.
+      setScanning(false);
+      setProgress(null);
+      setScannedOnce(true);
     } catch (_) {
       setScanning(false);
     }
@@ -114,6 +125,9 @@ export function AvScannerScreen() {
 
   const cancelScan = useCallback(() => {
     AvScanner?.cancelScan?.();
+    // Settle the UI immediately — don't wait on a native event that may not come.
+    setScanning(false);
+    setProgress(null);
   }, []);
 
   if (Platform.OS !== 'android') {

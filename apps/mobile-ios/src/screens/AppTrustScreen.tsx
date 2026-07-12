@@ -70,54 +70,63 @@ export function AppTrustScreen({ navigation: _navigation }: any) {
   const [totalInstalled, setTotalInstalled] = useState(0);
 
   async function load() {
-    await Promise.all([trustEngine.init(), behaviorTracker.init()]);
+    try {
+      await Promise.all([trustEngine.init(), behaviorTracker.init()]);
 
-    // 1. Real installed apps from native module (Android only)
-    let installedPkgs: string[] = [];
-    if (Platform.OS === 'android' && AppScanner) {
-      try {
-        const raw = (await AppScanner.getInstalledApps()) as Array<{
-          packageName: string;
-          isSystemApp: boolean;
-        }>;
-        // Skip pure system apps with no user-visible name
-        installedPkgs = raw.filter((a) => !a.isSystemApp).map((a) => a.packageName);
-        setTotalInstalled(installedPkgs.length);
-      } catch {
+      // 1. Real installed apps from native module (Android only)
+      let installedPkgs: string[] = [];
+      if (Platform.OS === 'android' && AppScanner) {
+        try {
+          const raw = (await AppScanner.getInstalledApps()) as Array<{
+            packageName: string;
+            isSystemApp: boolean;
+          }>;
+          // Skip pure system apps with no user-visible name
+          installedPkgs = raw.filter((a) => !a.isSystemApp).map((a) => a.packageName);
+          setTotalInstalled(installedPkgs.length);
+        } catch {
+          installedPkgs = FALLBACK_PACKAGES;
+        }
+      } else {
         installedPkgs = FALLBACK_PACKAGES;
       }
-    } else {
-      installedPkgs = FALLBACK_PACKAGES;
+
+      // 2. Merge with tracked packages (may include apps seen in VPN feed not in installed list)
+      const trackedPkgs = behaviorTracker.getTrackedPackages();
+      const allPkgs = [...new Set([...installedPkgs, ...trackedPkgs])];
+
+      const rows: AppRow[] = allPkgs.map((pkg) => {
+        const record = trustEngine.classifyApp(pkg);
+        const stats = behaviorTracker.getAppStats(pkg);
+        return {
+          packageName: pkg,
+          displayName: record.displayName,
+          autoTier: record.autoTier,
+          effectiveTier: record.effectiveTier,
+          userTier: record.userTier,
+          stats,
+        };
+      });
+
+      // Sort: highest safe zone score first (most concerning at top)
+      // Then alpha within same score
+      rows.sort((a, b) => {
+        const scoreDiff = b.stats.safeZoneScore - a.stats.safeZoneScore;
+        if (scoreDiff !== 0) {
+          return scoreDiff;
+        }
+        return a.displayName.localeCompare(b.displayName);
+      });
+
+      setApps(rows);
+    } catch {
+      // An init/classify failure must still settle the screen — show an empty
+      // list rather than a perpetual "Analysing your apps…" (FP-018).
+      setApps([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
-
-    // 2. Merge with tracked packages (may include apps seen in VPN feed not in installed list)
-    const trackedPkgs = behaviorTracker.getTrackedPackages();
-    const allPkgs = [...new Set([...installedPkgs, ...trackedPkgs])];
-
-    const rows: AppRow[] = allPkgs.map((pkg) => {
-      const record = trustEngine.classifyApp(pkg);
-      const stats = behaviorTracker.getAppStats(pkg);
-      return {
-        packageName: pkg,
-        displayName: record.displayName,
-        autoTier: record.autoTier,
-        effectiveTier: record.effectiveTier,
-        userTier: record.userTier,
-        stats,
-      };
-    });
-
-    // Sort: highest safe zone score first (most concerning at top)
-    // Then alpha within same score
-    rows.sort((a, b) => {
-      const scoreDiff = b.stats.safeZoneScore - a.stats.safeZoneScore;
-      if (scoreDiff !== 0) return scoreDiff;
-      return a.displayName.localeCompare(b.displayName);
-    });
-
-    setApps(rows);
-    setLoading(false);
-    setRefreshing(false);
   }
 
   useEffect(() => {
@@ -134,7 +143,9 @@ export function AppTrustScreen({ navigation: _navigation }: any) {
     // Refresh rows
     setApps((prev) =>
       prev.map((app) => {
-        if (app.packageName !== packageName) return app;
+        if (app.packageName !== packageName) {
+          return app;
+        }
         return {
           ...app,
           userTier: tier,
@@ -144,7 +155,9 @@ export function AppTrustScreen({ navigation: _navigation }: any) {
     );
     // Also update selected app if sheet is open
     setSelectedApp((prev) => {
-      if (!prev || prev.packageName !== packageName) return prev;
+      if (!prev || prev.packageName !== packageName) {
+        return prev;
+      }
       return { ...prev, userTier: tier, effectiveTier: tier };
     });
   }

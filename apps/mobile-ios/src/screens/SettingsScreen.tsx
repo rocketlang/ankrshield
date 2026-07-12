@@ -147,6 +147,12 @@ export function SettingsScreen({ navigation }: any) {
           setBwName(s.managerName || '');
         })
         .catch(() => setBwInstalled(false));
+    } else if (Platform.OS === 'android') {
+      // Card renders on all Android builds, but only the native bridge can
+      // detect a manager. If it didn't register, resolve to a definite state
+      // ("None detected") instead of a perpetual "Checking…" (FP-018: no
+      // spinner that never resolves).
+      setBwInstalled(false);
     }
 
     return () => clearInterval(interval);
